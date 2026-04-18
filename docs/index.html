@@ -1,88 +1,41 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Dashboard - KILL THE BILL</title>
-  <link rel="stylesheet" href="../styles.css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kill the Bill — Design Documentation</title>
+    <meta name="description" content="Design documentation for Kill the Bill — a procedural immersive sim about toppling an oligarchy.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <nav id="sidebar"></nav>
-  
-  <main class="content">
-    <div id="breadcrumbs"></div>
-    <h1>KILL THE BILL: Documentation Database</h1>
-    <p>Welcome to the Lead Architect's systemic database. This portal contains all technical schemas, variables, and interaction logic for the Godot 4 simulation engine. The game is a 3D isometric immersive sim where the player manipulates a dynamic economy, exploits a PR & Reputation Engine, and recruits persistent NPCs as agents to topple a corporate oligarchy.</p>
-    
-    <h2>Project Snapshot</h2>
-    <div class="grid">
-      <div class="card">
-        <h3><span class="badge gold">ACTIVE</span> Phase 3: Core Systems</h3>
-        <p>LLM Network Manager with 6-provider fallback (Gemini → Local). NetFeed event streaming. NPC Nature/Nurture evolution. Relationship & Agent system.</p>
-      </div>
-      <div class="card">
-        <h3><span class="badge green">40</span> Persistent NPCs</h3>
-        <p>Randomized roster per playthrough. 6 intrinsic traits, 56+ quirks, behavioral profiling. Each NPC evolves uniquely through the same world events.</p>
-      </div>
-      <div class="card">
-        <h3><span class="badge red">3</span> Victory Paths</h3>
-        <p>Direct Action (Assassination), Systemic Collapse (Economic Hacking), Political Revolution (NPC Persuasion). All tracked simultaneously.</p>
-      </div>
+    <div class="app">
+        <header class="header">
+            <a class="brand" href="#/README.md">
+                <span class="brand-mark"></span>
+                <span class="brand-text">KILL THE <em>BILL</em></span>
+            </a>
+            <div class="ticker">
+                <div id="ticker-track" class="ticker-track"></div>
+            </div>
+            <button id="menu-toggle" class="menu-toggle" aria-label="Toggle navigation">MENU</button>
+        </header>
+
+        <aside id="sidenav" class="sidenav">
+            <div id="sidenav-inner"></div>
+        </aside>
+
+        <main id="content" class="main"></main>
+
+        <aside class="toc">
+            <div id="toc-inner"></div>
+        </aside>
     </div>
 
-    <h2>Architecture Overview</h2>
-    <div class="grid" style="grid-template-columns: 1fr;">
-      <div class="card">
-        <table style="width:100%; border-collapse: collapse;">
-          <tr style="border-bottom: 1px solid var(--border);">
-            <th style="text-align:left; padding: 0.5rem;">Singleton</th>
-            <th style="text-align:left; padding: 0.5rem;">Role</th>
-            <th style="text-align:left; padding: 0.5rem;">Script</th>
-          </tr>
-          <tr style="border-bottom: 1px solid var(--border);">
-            <td style="padding: 0.5rem;"><a href="core/world-director.html" style="color: var(--accent-toxic);">WorldDirector</a></td>
-            <td style="padding: 0.5rem;">Global economy, Butterfly Effect, PR Engine, NetFeed cycle</td>
-            <td style="padding: 0.5rem;"><code>src/core/WorldDirector.gd</code></td>
-          </tr>
-          <tr style="border-bottom: 1px solid var(--border);">
-            <td style="padding: 0.5rem;"><a href="core/player-manager.html" style="color: var(--accent-toxic);">PlayerManager</a></td>
-            <td style="padding: 0.5rem;">Archetype, traits, roguelite succession</td>
-            <td style="padding: 0.5rem;"><code>src/core/PlayerManager.gd</code></td>
-          </tr>
-          <tr style="border-bottom: 1px solid var(--border);">
-            <td style="padding: 0.5rem;"><a href="core/population-director.html" style="color: var(--accent-toxic);">PopulationDirector</a></td>
-            <td style="padding: 0.5rem;">Persistent NPC roster, quirks, evolution cycle</td>
-            <td style="padding: 0.5rem;"><code>src/core/PopulationDirector.gd</code></td>
-          </tr>
-          <tr>
-            <td style="padding: 0.5rem;"><a href="core/llm-manager.html" style="color: var(--accent-toxic);">LLMManager</a></td>
-            <td style="padding: 0.5rem;">Multi-provider LLM API wrapper, NetFeed generation</td>
-            <td style="padding: 0.5rem;"><code>src/core/LLMManager.gd</code></td>
-          </tr>
-        </table>
-      </div>
-    </div>
-
-    <h2>Quick Links</h2>
-    <div class="grid">
-      <div class="card">
-        <h3>Entities</h3>
-        <ul>
-          <li><a href="entities/npc-ai.html" style="color: var(--accent-toxic);">NPC Nature & Nurture</a> — Intrinsic traits, behavioral profiles</li>
-          <li><a href="entities/relationships.html" style="color: var(--accent-toxic);">Relationships & Agents</a> — Bond tiers, trust, objectives</li>
-          <li><a href="entities/social-fabric.html" style="color: var(--accent-toxic);">Social Fabric</a> — Crowd psychology, pressure cycle</li>
-        </ul>
-      </div>
-      <div class="card">
-        <h3>Systems</h3>
-        <ul>
-          <li><a href="systems/netfeed.html" style="color: var(--accent-toxic);">NetFeed & Events</a> — LLM conjecture, event types</li>
-          <li><a href="systems/heat-evasion.html" style="color: var(--accent-toxic);">Heat & Evasion</a> — Crime tiers, escalation</li>
-          <li><a href="systems/combat.html" style="color: var(--accent-toxic);">Combat Mechanics</a> — Weapons, noise, stealth</li>
-          <li><a href="systems/victory-conditions.html" style="color: var(--accent-toxic);">Victory Conditions</a> — Three collapse paths</li>
-        </ul>
-      </div>
-    </div>
-  </main>
-  <script src="../nav.js"></script>
+    <script src="assets/app.js"></script>
 </body>
 </html>
