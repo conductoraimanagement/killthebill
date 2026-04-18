@@ -60,6 +60,18 @@ var _victory_title_label: Label
 var _victory_flavor_label: Label
 var _victory_kind_label: Label
 
+# Save world modal (F5 or from victory modal)
+var _save_root: Control
+var _save_name_input: LineEdit
+var _save_desc_input: LineEdit
+var _save_status_label: Label
+
+# Load world modal (F9 or from victory modal)
+var _load_root: Control
+var _load_list: VBoxContainer
+var _load_paste_input: TextEdit
+var _load_status_label: Label
+
 
 func _ready() -> void:
 	layer = 10
@@ -70,6 +82,8 @@ func _ready() -> void:
 	_build_prompt_panel()
 	_build_modal()
 	_build_victory_modal()
+	_build_save_modal()
+	_build_load_modal()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
 	WorldDirector.netfeed_event_generated.connect(_on_netfeed_event)
@@ -651,7 +665,20 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed:
 		return
 
-	# Victory modal swallows everything
+	# Save/load modals: ESC closes
+	if _save_root and _save_root.visible:
+		if event.keycode == KEY_ESCAPE:
+			hide_save_modal()
+			get_viewport().set_input_as_handled()
+		return
+	if _load_root and _load_root.visible:
+		if event.keycode == KEY_ESCAPE:
+			hide_load_modal()
+			get_viewport().set_input_as_handled()
+		return
+
+	# Victory modal swallows everything except the save/load shortcuts,
+	# but those have their own buttons on the panel, so just absorb.
 	if _victory_root and _victory_root.visible:
 		return
 
@@ -662,10 +689,17 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 
-	# P toggles the politicians roster
-	if event.keycode == KEY_P:
-		_toggle_politicians()
-		get_viewport().set_input_as_handled()
+	# Global keybinds when nothing is up
+	match event.keycode:
+		KEY_P:
+			_toggle_politicians()
+			get_viewport().set_input_as_handled()
+		KEY_F5:
+			show_save_modal()
+			get_viewport().set_input_as_handled()
+		KEY_F9:
+			show_load_modal()
+			get_viewport().set_input_as_handled()
 
 
 # -------------------------------------------------------------
@@ -752,36 +786,48 @@ func _build_victory_modal() -> void:
 	_victory_flavor_label.offset_bottom = PANEL_PAD + 250
 	panel.add_child(_victory_flavor_label)
 
-	# Buttons
-	var restart := Button.new()
-	restart.text = "RESTART PLAYTHROUGH"
-	restart.anchor_left = 0.5
-	restart.anchor_top = 1.0
-	restart.anchor_right = 0.5
-	restart.anchor_bottom = 1.0
-	restart.offset_left = -200
-	restart.offset_top = -64
-	restart.offset_right = -20
-	restart.offset_bottom = -20
-	restart.add_theme_color_override("font_color", COL_ACCENT)
-	restart.add_theme_color_override("font_hover_color", COL_FG)
+	# Buttons — 4 across, bottom-centered
+	var save_btn := _make_modal_button("SAVE WORLD", COL_COOL, -340, -180)
+	save_btn.pressed.connect(_on_victory_save)
+	panel.add_child(save_btn)
+
+	var load_btn := _make_modal_button("LOAD WORLD…", COL_COOL, -170, -10)
+	load_btn.pressed.connect(_on_victory_load)
+	panel.add_child(load_btn)
+
+	var restart := _make_modal_button("RESTART", COL_ACCENT, 10, 170)
 	restart.pressed.connect(_restart_playthrough)
 	panel.add_child(restart)
 
-	var continue_btn := Button.new()
-	continue_btn.text = "CONTINUE (sandbox)"
-	continue_btn.anchor_left = 0.5
-	continue_btn.anchor_top = 1.0
-	continue_btn.anchor_right = 0.5
-	continue_btn.anchor_bottom = 1.0
-	continue_btn.offset_left = 20
-	continue_btn.offset_top = -64
-	continue_btn.offset_right = 200
-	continue_btn.offset_bottom = -20
-	continue_btn.add_theme_color_override("font_color", COL_DIM)
-	continue_btn.add_theme_color_override("font_hover_color", COL_FG)
+	var continue_btn := _make_modal_button("CONTINUE (sandbox)", COL_DIM, 180, 340)
 	continue_btn.pressed.connect(_dismiss_victory)
 	panel.add_child(continue_btn)
+
+
+func _make_modal_button(text: String, color: Color, left: float, right: float) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.anchor_left = 0.5
+	b.anchor_top = 1.0
+	b.anchor_right = 0.5
+	b.anchor_bottom = 1.0
+	b.offset_left = left
+	b.offset_top = -44
+	b.offset_right = right
+	b.offset_bottom = -20
+	b.add_theme_color_override("font_color", color)
+	b.add_theme_color_override("font_hover_color", COL_FG)
+	return b
+
+
+func _on_victory_save() -> void:
+	_victory_root.visible = false
+	show_save_modal()
+
+
+func _on_victory_load() -> void:
+	_victory_root.visible = false
+	show_load_modal()
 
 
 func _on_victory(kind: String, title: String, flavor: String) -> void:
@@ -804,6 +850,442 @@ func _restart_playthrough() -> void:
 	# re-initialize their state via WorldDirector.initialize_playthrough()
 	# on the new Main._ready().
 	get_tree().reload_current_scene()
+
+
+# -------------------------------------------------------------
+# Save modal (F5 / victory modal → SAVE button)
+# -------------------------------------------------------------
+func _build_save_modal() -> void:
+	_save_root = Control.new()
+	_save_root.anchor_left = 0.0
+	_save_root.anchor_top = 0.0
+	_save_root.anchor_right = 1.0
+	_save_root.anchor_bottom = 1.0
+	_save_root.visible = false
+	_save_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_save_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_save_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.6)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_save_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -240
+	panel.offset_top = -150
+	panel.offset_right = 240
+	panel.offset_bottom = 150
+	_save_root.add_child(panel)
+
+	var title := _make_label("// SAVE WORLD", COL_ACCENT, 15, true)
+	title.offset_left = PANEL_PAD + 4
+	title.offset_top = PANEL_PAD
+	title.offset_right = 480 - PANEL_PAD
+	title.offset_bottom = PANEL_PAD + 20
+	panel.add_child(title)
+
+	var sub := _make_label("A world config captures regions, oligarchs, politicians, and citizens. Shareable.", COL_DIM, 11, false)
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub.offset_left = PANEL_PAD + 4
+	sub.offset_top = PANEL_PAD + 24
+	sub.offset_right = 480 - PANEL_PAD - 4
+	sub.offset_bottom = PANEL_PAD + 58
+	panel.add_child(sub)
+
+	var name_label := _make_label("NAME", COL_COOL, 11, true)
+	name_label.offset_left = PANEL_PAD + 4
+	name_label.offset_top = PANEL_PAD + 66
+	name_label.offset_right = 200
+	name_label.offset_bottom = PANEL_PAD + 82
+	panel.add_child(name_label)
+
+	_save_name_input = LineEdit.new()
+	_save_name_input.placeholder_text = "world name"
+	_save_name_input.anchor_left = 0.0
+	_save_name_input.anchor_right = 1.0
+	_save_name_input.offset_left = PANEL_PAD + 4
+	_save_name_input.offset_top = PANEL_PAD + 84
+	_save_name_input.offset_right = -PANEL_PAD - 4
+	_save_name_input.offset_bottom = PANEL_PAD + 116
+	panel.add_child(_save_name_input)
+
+	var desc_label := _make_label("DESCRIPTION (optional)", COL_COOL, 11, true)
+	desc_label.offset_left = PANEL_PAD + 4
+	desc_label.offset_top = PANEL_PAD + 122
+	desc_label.offset_right = 260
+	desc_label.offset_bottom = PANEL_PAD + 138
+	panel.add_child(desc_label)
+
+	_save_desc_input = LineEdit.new()
+	_save_desc_input.placeholder_text = "why is this world worth keeping?"
+	_save_desc_input.anchor_left = 0.0
+	_save_desc_input.anchor_right = 1.0
+	_save_desc_input.offset_left = PANEL_PAD + 4
+	_save_desc_input.offset_top = PANEL_PAD + 140
+	_save_desc_input.offset_right = -PANEL_PAD - 4
+	_save_desc_input.offset_bottom = PANEL_PAD + 172
+	panel.add_child(_save_desc_input)
+
+	_save_status_label = _make_label("", COL_DIM, 11, true)
+	_save_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_save_status_label.anchor_right = 1.0
+	_save_status_label.offset_left = PANEL_PAD + 4
+	_save_status_label.offset_top = PANEL_PAD + 180
+	_save_status_label.offset_right = -PANEL_PAD - 4
+	_save_status_label.offset_bottom = PANEL_PAD + 230
+	panel.add_child(_save_status_label)
+
+	var save_btn := Button.new()
+	save_btn.text = "SAVE"
+	save_btn.anchor_left = 1.0
+	save_btn.anchor_top = 1.0
+	save_btn.anchor_right = 1.0
+	save_btn.anchor_bottom = 1.0
+	save_btn.offset_left = -110
+	save_btn.offset_top = -44
+	save_btn.offset_right = -PANEL_PAD
+	save_btn.offset_bottom = -PANEL_PAD
+	save_btn.add_theme_color_override("font_color", COL_ACCENT)
+	save_btn.add_theme_color_override("font_hover_color", COL_FG)
+	save_btn.pressed.connect(_on_save_confirmed)
+	panel.add_child(save_btn)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "CANCEL (Esc)"
+	cancel_btn.anchor_left = 0.0
+	cancel_btn.anchor_top = 1.0
+	cancel_btn.anchor_right = 0.0
+	cancel_btn.anchor_bottom = 1.0
+	cancel_btn.offset_left = PANEL_PAD
+	cancel_btn.offset_top = -44
+	cancel_btn.offset_right = 140
+	cancel_btn.offset_bottom = -PANEL_PAD
+	cancel_btn.add_theme_color_override("font_color", COL_DIM)
+	cancel_btn.add_theme_color_override("font_hover_color", COL_FG)
+	cancel_btn.pressed.connect(hide_save_modal)
+	panel.add_child(cancel_btn)
+
+
+func show_save_modal() -> void:
+	var cfg_mgr = get_node_or_null("/root/WorldConfigManager")
+	if cfg_mgr:
+		_save_name_input.text = cfg_mgr.suggest_name()
+	else:
+		_save_name_input.text = "Untitled World"
+	_save_desc_input.text = ""
+	_save_status_label.text = ""
+	_save_status_label.add_theme_color_override("font_color", COL_DIM)
+	_save_root.visible = true
+	get_tree().paused = true
+	_save_name_input.grab_focus()
+
+
+func hide_save_modal() -> void:
+	_save_root.visible = false
+	get_tree().paused = false
+
+
+func _on_save_confirmed() -> void:
+	var cfg_mgr = get_node_or_null("/root/WorldConfigManager")
+	if cfg_mgr == null:
+		_save_status_label.text = "WorldConfigManager not loaded."
+		_save_status_label.add_theme_color_override("font_color", COL_HOT)
+		return
+	var nm: String = _save_name_input.text.strip_edges()
+	if nm == "":
+		_save_status_label.text = "Name required."
+		_save_status_label.add_theme_color_override("font_color", COL_HOT)
+		return
+	var filepath: String = cfg_mgr.save_current(nm, _save_desc_input.text.strip_edges())
+	if filepath == "":
+		_save_status_label.text = "Save failed. Check console."
+		_save_status_label.add_theme_color_override("font_color", COL_HOT)
+		return
+	var global: String = ProjectSettings.globalize_path(filepath)
+	_save_status_label.text = "Saved. File: %s" % global
+	_save_status_label.add_theme_color_override("font_color", COL_COOL)
+
+
+# -------------------------------------------------------------
+# Load modal (F9 / victory modal → LOAD button)
+# -------------------------------------------------------------
+func _build_load_modal() -> void:
+	_load_root = Control.new()
+	_load_root.anchor_right = 1.0
+	_load_root.anchor_bottom = 1.0
+	_load_root.visible = false
+	_load_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_load_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_load_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.6)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_load_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -360
+	panel.offset_top = -260
+	panel.offset_right = 360
+	panel.offset_bottom = 260
+	_load_root.add_child(panel)
+
+	var title := _make_label("// LOAD WORLD", COL_ACCENT, 15, true)
+	title.offset_left = PANEL_PAD + 4
+	title.offset_top = PANEL_PAD
+	title.offset_right = 720 - PANEL_PAD
+	title.offset_bottom = PANEL_PAD + 20
+	panel.add_child(title)
+
+	var sub := _make_label("Saved configs on this machine — or paste JSON someone shared with you.", COL_DIM, 11, false)
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub.offset_left = PANEL_PAD + 4
+	sub.offset_top = PANEL_PAD + 24
+	sub.offset_right = 720 - PANEL_PAD - 4
+	sub.offset_bottom = PANEL_PAD + 42
+	panel.add_child(sub)
+
+	# Section 1: saved list (top half of panel)
+	var saved_label := _make_label("SAVED WORLDS", COL_COOL, 11, true)
+	saved_label.offset_left = PANEL_PAD + 4
+	saved_label.offset_top = PANEL_PAD + 52
+	saved_label.offset_right = 300
+	saved_label.offset_bottom = PANEL_PAD + 68
+	panel.add_child(saved_label)
+
+	var scroll := ScrollContainer.new()
+	scroll.anchor_right = 1.0
+	scroll.offset_left = PANEL_PAD
+	scroll.offset_top = PANEL_PAD + 72
+	scroll.offset_right = -PANEL_PAD
+	scroll.offset_bottom = PANEL_PAD + 262
+	panel.add_child(scroll)
+
+	_load_list = VBoxContainer.new()
+	_load_list.anchor_right = 1.0
+	_load_list.add_theme_constant_override("separation", 6)
+	scroll.add_child(_load_list)
+
+	# Section 2: paste-to-import (bottom half)
+	var paste_label := _make_label("PASTE JSON", COL_COOL, 11, true)
+	paste_label.offset_left = PANEL_PAD + 4
+	paste_label.offset_top = PANEL_PAD + 272
+	paste_label.offset_right = 300
+	paste_label.offset_bottom = PANEL_PAD + 288
+	panel.add_child(paste_label)
+
+	_load_paste_input = TextEdit.new()
+	_load_paste_input.placeholder_text = "paste a shared world config JSON here"
+	_load_paste_input.anchor_right = 1.0
+	_load_paste_input.offset_left = PANEL_PAD
+	_load_paste_input.offset_top = PANEL_PAD + 292
+	_load_paste_input.offset_right = -PANEL_PAD - 140
+	_load_paste_input.offset_bottom = PANEL_PAD + 420
+	panel.add_child(_load_paste_input)
+
+	var import_btn := Button.new()
+	import_btn.text = "IMPORT"
+	import_btn.anchor_left = 1.0
+	import_btn.anchor_right = 1.0
+	import_btn.offset_left = -130
+	import_btn.offset_top = PANEL_PAD + 292
+	import_btn.offset_right = -PANEL_PAD
+	import_btn.offset_bottom = PANEL_PAD + 334
+	import_btn.add_theme_color_override("font_color", COL_ACCENT)
+	import_btn.add_theme_color_override("font_hover_color", COL_FG)
+	import_btn.pressed.connect(_on_paste_import)
+	panel.add_child(import_btn)
+
+	_load_status_label = _make_label("", COL_DIM, 11, true)
+	_load_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_load_status_label.anchor_right = 1.0
+	_load_status_label.offset_left = PANEL_PAD + 4
+	_load_status_label.offset_top = PANEL_PAD + 426
+	_load_status_label.offset_right = -PANEL_PAD - 4
+	_load_status_label.offset_bottom = PANEL_PAD + 460
+	panel.add_child(_load_status_label)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "CANCEL (Esc)"
+	cancel_btn.anchor_left = 0.0
+	cancel_btn.anchor_top = 1.0
+	cancel_btn.anchor_right = 0.0
+	cancel_btn.anchor_bottom = 1.0
+	cancel_btn.offset_left = PANEL_PAD
+	cancel_btn.offset_top = -44
+	cancel_btn.offset_right = 140
+	cancel_btn.offset_bottom = -PANEL_PAD
+	cancel_btn.add_theme_color_override("font_color", COL_DIM)
+	cancel_btn.add_theme_color_override("font_hover_color", COL_FG)
+	cancel_btn.pressed.connect(hide_load_modal)
+	panel.add_child(cancel_btn)
+
+
+func show_load_modal() -> void:
+	_refresh_load_list()
+	_load_paste_input.text = ""
+	_load_status_label.text = ""
+	_load_status_label.add_theme_color_override("font_color", COL_DIM)
+	_load_root.visible = true
+	get_tree().paused = true
+
+
+func hide_load_modal() -> void:
+	_load_root.visible = false
+	get_tree().paused = false
+
+
+func _refresh_load_list() -> void:
+	for child in _load_list.get_children():
+		child.queue_free()
+
+	var cfg_mgr = get_node_or_null("/root/WorldConfigManager")
+	if cfg_mgr == null:
+		var err := Label.new()
+		err.text = "WorldConfigManager not loaded."
+		err.add_theme_color_override("font_color", COL_HOT)
+		_load_list.add_child(err)
+		return
+
+	var saved: Array = cfg_mgr.list_saved()
+	if saved.is_empty():
+		var empty := Label.new()
+		empty.text = "No saved worlds yet. Press F5 mid-game to save one."
+		empty.add_theme_color_override("font_color", COL_DIM)
+		_load_list.add_child(empty)
+		return
+
+	for entry in saved:
+		_load_list.add_child(_build_load_row(entry))
+
+
+func _build_load_row(entry: Dictionary) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation", 2)
+	var nm := Label.new()
+	nm.text = str(entry.get("name", "(unnamed)"))
+	nm.add_theme_color_override("font_color", COL_FG)
+	nm.add_theme_font_size_override("font_size", 14)
+	info.add_child(nm)
+
+	var meta := Label.new()
+	var region_count: int = int(entry.get("region_count", 0))
+	var oligarch_count: int = int(entry.get("oligarch_count", 0))
+	var politician_count: int = int(entry.get("politician_count", 0))
+	meta.text = "%d regions · %d oligarchs · %d politicians · %s" % [
+		region_count, oligarch_count, politician_count,
+		str(entry.get("created_at", "")),
+	]
+	meta.add_theme_color_override("font_color", COL_DIM)
+	meta.add_theme_font_size_override("font_size", 10)
+	info.add_child(meta)
+
+	if entry.get("description", "") != "":
+		var desc := Label.new()
+		desc.text = str(entry.get("description", ""))
+		desc.add_theme_color_override("font_color", COL_COOL)
+		desc.add_theme_font_size_override("font_size", 11)
+		desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.add_child(desc)
+
+	row.add_child(info)
+
+	var filepath: String = str(entry.get("filepath", ""))
+
+	var load_btn := Button.new()
+	load_btn.text = "LOAD"
+	load_btn.add_theme_color_override("font_color", COL_ACCENT)
+	load_btn.pressed.connect(_on_load_pick.bind(filepath))
+	row.add_child(load_btn)
+
+	var copy_btn := Button.new()
+	copy_btn.text = "COPY"
+	copy_btn.add_theme_color_override("font_color", COL_COOL)
+	copy_btn.pressed.connect(_on_copy_json.bind(filepath))
+	row.add_child(copy_btn)
+
+	var del_btn := Button.new()
+	del_btn.text = "DELETE"
+	del_btn.add_theme_color_override("font_color", COL_HOT)
+	del_btn.pressed.connect(_on_delete_config.bind(filepath))
+	row.add_child(del_btn)
+
+	return row
+
+
+func _on_load_pick(filepath: String) -> void:
+	var cfg_mgr = get_node_or_null("/root/WorldConfigManager")
+	if cfg_mgr == null:
+		return
+	var config: Dictionary = cfg_mgr.load_from_file(filepath)
+	if config.is_empty():
+		_load_status_label.text = "Could not load file. Check console."
+		_load_status_label.add_theme_color_override("font_color", COL_HOT)
+		return
+	# Unpause before reload so the new scene starts fresh.
+	get_tree().paused = false
+	cfg_mgr.apply_and_restart(config)
+
+
+func _on_copy_json(filepath: String) -> void:
+	if not FileAccess.file_exists(filepath):
+		return
+	var f := FileAccess.open(filepath, FileAccess.READ)
+	if f == null:
+		return
+	var text := f.get_as_text()
+	f.close()
+	DisplayServer.clipboard_set(text)
+	_load_status_label.text = "JSON copied to clipboard — paste it anywhere to share."
+	_load_status_label.add_theme_color_override("font_color", COL_COOL)
+
+
+func _on_delete_config(filepath: String) -> void:
+	var cfg_mgr = get_node_or_null("/root/WorldConfigManager")
+	if cfg_mgr == null:
+		return
+	if cfg_mgr.delete_config(filepath):
+		_load_status_label.text = "Deleted."
+		_load_status_label.add_theme_color_override("font_color", COL_DIM)
+		_refresh_load_list()
+	else:
+		_load_status_label.text = "Could not delete file."
+		_load_status_label.add_theme_color_override("font_color", COL_HOT)
+
+
+func _on_paste_import() -> void:
+	var cfg_mgr = get_node_or_null("/root/WorldConfigManager")
+	if cfg_mgr == null:
+		return
+	var text := _load_paste_input.text.strip_edges()
+	if text == "":
+		_load_status_label.text = "Paste a JSON world config first."
+		_load_status_label.add_theme_color_override("font_color", COL_HOT)
+		return
+	var config: Dictionary = cfg_mgr.load_from_string(text)
+	if config.is_empty():
+		_load_status_label.text = "Invalid config. Check the JSON."
+		_load_status_label.add_theme_color_override("font_color", COL_HOT)
+		return
+	get_tree().paused = false
+	cfg_mgr.apply_and_restart(config)
 
 
 # -------------------------------------------------------------

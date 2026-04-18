@@ -61,7 +61,7 @@ func _ready():
 # PLAYTHROUGH INITIALIZATION
 # =============================================================
 
-func initialize_playthrough() -> void:
+func initialize_playthrough(preloaded_config: Dictionary = {}) -> void:
 	# Reset all playthrough state so this is idempotent across restarts.
 	global_economy = {
 		"food_price": 100,
@@ -82,6 +82,13 @@ func initialize_playthrough() -> void:
 		senate.active_bill = {}
 		senate.bill_history.clear()
 		senate.politicians = []
+
+	# If the user loaded a saved world config, inject it directly and skip
+	# LLM generation entirely. Otherwise fall through to the async generator
+	# chain that hits LLMManager (with offline fallback).
+	if not preloaded_config.is_empty():
+		_apply_preloaded_config(preloaded_config)
+		return
 
 	# 1. World Geography (Asynchronous)
 	if has_node("/root/RegionGenerator"):
@@ -211,6 +218,62 @@ func _on_politicians_generated(data: Array) -> void:
 func _finish_setup() -> void:
 	playthrough_setup_complete.emit()
 	print("WorldDirector: Playthrough setup complete.")
+
+
+# =============================================================
+# PRELOADED CONFIG PATH — used when a saved world is loaded
+# =============================================================
+
+func _apply_preloaded_config(config: Dictionary) -> void:
+	var cfg_mgr = get_node_or_null("/root/WorldConfigManager")
+	if cfg_mgr == null:
+		push_error("WorldConfigManager missing; cannot apply preloaded config.")
+		_finish_setup()
+		return
+
+	# Regions — drop them straight into RegionGenerator.
+	if has_node("/root/RegionGenerator"):
+		var region_gen = get_node("/root/RegionGenerator")
+		region_gen.regions.clear()
+		for r_dict in config.get("regions", []):
+			region_gen.regions.append(r_dict.duplicate(true))
+		region_gen.starting_region = str(config.get("starting_region_name", ""))
+		if region_gen.starting_region == "" and region_gen.regions.size() > 0:
+			# Fallback: first slum unlocks as start.
+			for r in region_gen.regions:
+				if r.get("type", "") == "URBAN_SLUM":
+					region_gen.starting_region = r["name"]
+					r["unlocked"] = true
+					break
+		current_region = region_gen.starting_region
+
+	# Oligarchs
+	oligarchs.clear()
+	for o_dict in config.get("oligarchs", []):
+		oligarchs.append(cfg_mgr.rehydrate_oligarch(o_dict))
+
+	# Politicians
+	politicians.clear()
+	for p_dict in config.get("politicians", []):
+		politicians.append(cfg_mgr.rehydrate_politician(p_dict))
+	if has_node("/root/SenateDirector"):
+		get_node("/root/SenateDirector").register_politicians(politicians)
+
+	# NPCs
+	if has_node("/root/PopulationDirector"):
+		var pop_dir = get_node("/root/PopulationDirector")
+		pop_dir.roster.clear()
+		for n_dict in config.get("npcs", []):
+			pop_dir.roster.append(cfg_mgr.rehydrate_npc(n_dict))
+
+	print("WorldDirector: loaded world '%s' (%d regions, %d oligarchs, %d politicians, %d NPCs)." % [
+		str(config.get("name", "unknown")),
+		(config.get("regions", []) as Array).size(),
+		(config.get("oligarchs", []) as Array).size(),
+		(config.get("politicians", []) as Array).size(),
+		(config.get("npcs", []) as Array).size(),
+	])
+	_finish_setup()
 
 func _assign_oligarch_territories(region_gen) -> void:
 	# Link oligarchs to regions matching their sector type

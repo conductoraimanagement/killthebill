@@ -50,13 +50,23 @@ func _ready() -> void:
 	# Bridge HUD modal picks → WorldDirector ripples
 	_hud.oligarch_picked.connect(_on_oligarch_picked)
 
-	# Kick off procedural generation — will finish asynchronously.
-	_hud.show_loading("> generating world…  oligarchs, regions, citizens, senate")
+	# Pick up a pending loaded config, if any (set when the user picks one
+	# from the Load Modal — WorldConfigManager calls reload_current_scene).
+	var preloaded: Dictionary = {}
+	var cfg_mgr = get_node_or_null("/root/WorldConfigManager")
+	if cfg_mgr and not cfg_mgr.pending_config.is_empty():
+		preloaded = cfg_mgr.pending_config
+		cfg_mgr.pending_config = {}
+
+	if preloaded.is_empty():
+		_hud.show_loading("> generating world…  oligarchs, regions, citizens, senate")
+	else:
+		_hud.show_loading("> loading saved world: %s" % str(preloaded.get("name", "unknown")))
 
 	if not WorldDirector.playthrough_setup_complete.is_connected(_on_playthrough_ready):
 		WorldDirector.playthrough_setup_complete.connect(_on_playthrough_ready)
 
-	WorldDirector.initialize_playthrough()
+	WorldDirector.initialize_playthrough(preloaded)
 
 	print("Main scene ready. Region=%s. Click to move. E to interact." % REGION_NAME)
 
