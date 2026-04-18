@@ -1,10 +1,10 @@
 # Landscapes
 
-> **Status:** Design spec + stub. See [src/core/LandscapeGenerator.gd](../../src/core/LandscapeGenerator.gd). 3D geometry generation is a later phase; this doc defines the data layer that will drive it.
+> **Status:** Implemented. See [src/core/LandscapeGenerator.gd](../../src/core/LandscapeGenerator.gd).
 
 A [region](regions.md) is the *logical* slice of the world — its type, its economy modifiers, its Oligarch. A **landscape** is the *physical* slice — the biome, the skyline, the street the player actually walks down.
 
-Every region gets one landscape, generated at playthrough start, persistent for the run.
+Every region gets one landscape, generated at playthrough start, persistent for the run. Geometry is deterministic — the same region name + biome seed produces the same map on any machine, which is why [world configs](../05-systems/save-and-share.md) can be shared.
 
 ---
 
@@ -88,24 +88,71 @@ Landmark names are LLM-seeded with flavor: *"The Gutter"*, *"Old Brine's Garage"
 
 ---
 
-## Generation algorithm
+## Generation algorithm (current implementation)
+
+`LandscapeGenerator.generate(region_data)` is called by Main once [WorldDirector](../../src/core/WorldDirector.gd) signals `playthrough_setup_complete`. The flow:
 
 ```
-for each region in regions:
-    pick biome_seed from RegionGenerator
-    lookup palette, skyline, tileset, density from biome library
-    weather ← random(weather_pool[region.type])
-    verticality ← type-appropriate range
-    landmark_count ← clamp(3 + randi(3), 3, 5)
-    for i in landmark_count:
-        kind ← weighted_pick(landmark_pools[region.type])
-        name ← LLM or fallback pool for kind
-        danger ← derived from region.security_modifier + kind baseline
-        utility ← kind-defined
-    attach descriptor to region
+1. Look up REGION_CONFIGS[region.type]          # base config per region type
+2. _apply_biome_variant(region.visual_biome)    # lightweight overrides
+3. seed ← hash(region.name + region.visual_biome)
+4. Build NavigationRegion3D + ground plane
+5. Build per-biome environment (sun, fog, ambient light)
+6. For each grid cell:
+     skip if on a street row (every 4th x or z)
+     roll against building_density
+     if hit: spawn a two-box stacked building at cell center (jittered)
+            height = randi(height_range) × 3m, colors from palette
+7. Reserve two empty cells for food depot + datashard terminal
+8. Choose a safe center-ish empty cell for player spawn
+9. Scatter per-biome props (barrel fires, planters, smoke stacks, etc.)
+10. Bake the navigation mesh
+11. Emit landscape_ready(self) with player_spawn + landmark_spawns
 ```
 
-Geometry generation (later phase): each tile-set renders the descriptor into 3D CSG geometry at the region's coordinates. Until then, the descriptor drives 2D map UI and event text.
+Deterministic: the same region name + biome seed always produces the same layout. Shared [world configs](../05-systems/save-and-share.md) therefore reproduce identical geometry across machines, without having to transmit mesh data.
+
+### Per-region-type base config (current)
+
+| Region type | Map size | Cell | Density | Height range (stories) | Prop |
+|---|---|---|---|---|---|
+| `URBAN_SLUM` | 160 × 160 | 7.5m | 0.58 | 2–6 | `barrel_fire` |
+| `URBAN_ELITE` | 150 × 150 | 10m | 0.28 | 7–14 | `planter` |
+| `INDUSTRIAL` | 170 × 170 | 10m | 0.42 | 2–7 | `smoke_stack` |
+| `AGRICULTURAL` | 180 × 180 | 9m | 0.22 | 1–3 | `grow_lamp` |
+| `ISLAND_RETREAT` | 110 × 110 | 9m | 0.14 | 2–5 | `palm` |
+| `TRANSIT` | 200 × 100 | 8m | 0.24 | 2–4 | `warning_beacon` |
+
+### Biome variants
+
+Each biome seed nudges the base config — density, heights, palette, fog, accent color — so the 36 biome variants read as distinct without needing 36 full configs. See `_apply_biome_variant()` for the full list. Examples:
+
+- `container_favela` → density `0.66`, heights `2–5`
+- `glass_spire` → heights `10–18`, density `0.22`
+- `molten_core` → accent color blood-orange, fog orange-brown
+- `arctic_retreat` → ground + fog both pale blue-white
+- `open_steppe` → density `0.10`, prop count `40`
+
+### Landmark & spawn resolution
+
+`LandscapeGenerator` reserves grid cells for the food depot and the datashard terminal, and picks a safe spawn for the player near the center. Main reads them off the generator after `landscape_ready`:
+
+```gdscript
+func _on_landscape_ready(landscape: LandscapeGenerator) -> void:
+    _spawn_player(landscape.player_spawn)
+    _spawn_depot(landscape.landmark_spawns["food_depot"], landscape.region)
+    _spawn_terminal(landscape.landmark_spawns["datashard_terminal"])
+```
+
+---
+
+## What's still *not* in the implementation
+
+- Full tile-set / modular geometry library (buildings are stacked box prims for now).
+- Region-level landmark taxonomy beyond `food_depot` + `datashard_terminal` (the doc's landmark kinds table remains aspirational).
+- Biome-specific detail props (only one prop kind per region type is scattered today).
+- Weather + ambient audio layers.
+- Transit edges linking regions — every playthrough is still one playable region.
 
 ---
 

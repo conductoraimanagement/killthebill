@@ -45,6 +45,7 @@ The loop the human drives.
 
 ### 5. [Systems](05-systems/)
 The tech underneath.
+- [Save and Share](05-systems/save-and-share.md) — world configs: save the generated world, share it, reproduce it *(new, implemented)*
 - [Architecture](05-systems/architecture.md) — singletons, data flow, dependency graph
 - [LLM Stack](05-systems/llm.md) — six-provider fallback, request types
 - [UI](05-systems/ui.md) — diegetic philosophy, terminals, NetFeed ticker
@@ -67,3 +68,4 @@ Where we are, where we're going.
 - **Class Seed** — the trait bundle assigned to a new avatar after death
 - **Cameo** — a pop-culture archetype that can appear in a run, sometimes briefly, sometimes world-alteringly
 - **Bill** — an LLM-generated Senate proposal; passes or fails each world cycle and mutates the economy
+- **World Config** — the captured procedural inputs of a playthrough (regions + oligarchs + politicians + NPCs). Save it, share it, replay the same world.
