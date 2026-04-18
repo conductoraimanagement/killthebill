@@ -6,36 +6,10 @@
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
-  <nav class="sidebar">
-    <h1>KILL THE BILL</h1>
-    <div class="nav-links">
-      <div class="nav-section">OVERVIEW</div>
-      <a href="../index.html">Dashboard</a>
-      <a href="../status.html">Project Status</a>
-      <div class="nav-section">ROADMAP</div>
-      <a href="../phases/phase1-architecture.html">Phase 1: Architecture</a>
-      <a href="../phases/phase2-prototyping.html">Phase 2: Prototyping</a>
-      <a href="../phases/phase3-core-systems.html">Phase 3: Core Systems</a>
-      <a href="../phases/phase4-gameplay.html">Phase 4: Gameplay</a>
-      <div class="nav-section">CORE SINGLETONS</div>
-      <a href="../core/world-director.html">WorldDirector</a>
-      <a href="../core/player-manager.html">PlayerManager</a>
-      <a href="../core/population-director.html">PopulationDirector</a>
-      <a href="../core/llm-manager.html">LLMManager</a>
-      <div class="nav-section">ENTITIES</div>
-      <a href="npc-ai.html">NPC: Nature & Nurture</a>
-      <a href="relationships.html" class="active">Relationships & Agents</a>
-      <a href="social-fabric.html">Social Fabric Engine</a>
-      <div class="nav-section">SYSTEMS</div>
-      <a href="../systems/netfeed.html">NetFeed & Events</a>
-      <a href="../systems/heat-evasion.html">Heat & Evasion</a>
-      <a href="../systems/combat.html">Combat Mechanics</a>
-      <a href="../systems/macro-world.html">Regions & Travel</a>
-      <a href="../systems/victory-conditions.html">Victory Conditions</a>
-    </div>
-  </nav>
+  <nav id="sidebar"></nav>
   
   <main class="content">
+    <div id="breadcrumbs"></div>
     <h1>Relationships & Agent System</h1>
     <p>The player's most powerful tool is not a weapon — it's people. By investing time and actions into building relationships with persistent NPCs, the player can recruit them as <strong>agents</strong> who execute objectives on their behalf. Relationships range from casual acquaintance to romantic partner or loyal operative.</p>
 
@@ -182,5 +156,6 @@ willingness = clamp(base_willingness, 0.0, 1.0)
       <p>This ensures the LLM voices bonded NPCs with appropriate intimacy, loyalty, or resentment depending on the relationship state.</p>
     </div>
   </main>
+  <script src="../nav.js"></script>
 </body>
 </html>

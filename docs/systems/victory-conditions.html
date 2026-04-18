@@ -6,36 +6,10 @@
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
-  <nav class="sidebar">
-    <h1>KILL THE BILL</h1>
-    <div class="nav-links">
-      <div class="nav-section">OVERVIEW</div>
-      <a href="../index.html">Dashboard</a>
-      <a href="../status.html">Project Status</a>
-      <div class="nav-section">ROADMAP</div>
-      <a href="../phases/phase1-architecture.html">Phase 1: Architecture</a>
-      <a href="../phases/phase2-prototyping.html">Phase 2: Prototyping</a>
-      <a href="../phases/phase3-core-systems.html">Phase 3: Core Systems</a>
-      <a href="../phases/phase4-gameplay.html">Phase 4: Gameplay</a>
-      <div class="nav-section">CORE SINGLETONS</div>
-      <a href="../core/world-director.html">WorldDirector</a>
-      <a href="../core/player-manager.html">PlayerManager</a>
-      <a href="../core/population-director.html">PopulationDirector</a>
-      <a href="../core/llm-manager.html">LLMManager</a>
-      <div class="nav-section">ENTITIES</div>
-      <a href="../entities/npc-ai.html">NPC: Nature & Nurture</a>
-      <a href="../entities/relationships.html">Relationships & Agents</a>
-      <a href="../entities/social-fabric.html">Social Fabric Engine</a>
-      <div class="nav-section">SYSTEMS</div>
-      <a href="netfeed.html">NetFeed & Events</a>
-      <a href="heat-evasion.html">Heat & Evasion</a>
-      <a href="combat.html">Combat Mechanics</a>
-      <a href="macro-world.html">Regions & Travel</a>
-      <a href="victory-conditions.html" class="active">Victory Conditions</a>
-    </div>
-  </nav>
+  <nav id="sidebar"></nav>
   
   <main class="content">
+    <div id="breadcrumbs"></div>
     <h1>Victory Conditions</h1>
     <p>The game does not have a linear ending. Instead, the <code>WorldDirector</code> continuously monitors three <strong>Collapse Meters</strong>. Reaching critical mass in any meter triggers a unique endgame sequence. The player can pursue multiple paths simultaneously or commit fully to one.</p>
 
@@ -94,5 +68,6 @@
       <p>If the player dies or is arrested before triggering any victory condition, the game does <strong>not</strong> end. Time skips forward. The player spawns as a <strong>new citizen</strong> with a new Class Seed. However, the <code>WorldDirector</code> state persists — all economic damage, NPC evolution, and Oligarch deaths carry over. The new character inherits the consequences of the old one.</p>
     </div>
   </main>
+  <script src="../nav.js"></script>
 </body>
 </html>

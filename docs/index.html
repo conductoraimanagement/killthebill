@@ -3,39 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <title>Dashboard - KILL THE BILL</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
-  <nav class="sidebar">
-    <h1>KILL THE BILL</h1>
-    <div class="nav-links">
-      <div class="nav-section">OVERVIEW</div>
-      <a href="index.html" class="active">Dashboard</a>
-      <a href="status.html">Project Status</a>
-      <div class="nav-section">ROADMAP</div>
-      <a href="phases/phase1-architecture.html">Phase 1: Architecture</a>
-      <a href="phases/phase2-prototyping.html">Phase 2: Prototyping</a>
-      <a href="phases/phase3-core-systems.html">Phase 3: Core Systems</a>
-      <a href="phases/phase4-gameplay.html">Phase 4: Gameplay</a>
-      <div class="nav-section">CORE SINGLETONS</div>
-      <a href="core/world-director.html">WorldDirector</a>
-      <a href="core/player-manager.html">PlayerManager</a>
-      <a href="core/population-director.html">PopulationDirector</a>
-      <a href="core/llm-manager.html">LLMManager</a>
-      <div class="nav-section">ENTITIES</div>
-      <a href="entities/npc-ai.html">NPC: Nature & Nurture</a>
-      <a href="entities/relationships.html">Relationships & Agents</a>
-      <a href="entities/social-fabric.html">Social Fabric Engine</a>
-      <div class="nav-section">SYSTEMS</div>
-      <a href="systems/netfeed.html">NetFeed & Events</a>
-      <a href="systems/heat-evasion.html">Heat & Evasion</a>
-      <a href="systems/combat.html">Combat Mechanics</a>
-      <a href="systems/macro-world.html">Regions & Travel</a>
-      <a href="systems/victory-conditions.html">Victory Conditions</a>
-    </div>
-  </nav>
+  <nav id="sidebar"></nav>
   
   <main class="content">
+    <div id="breadcrumbs"></div>
     <h1>KILL THE BILL: Documentation Database</h1>
     <p>Welcome to the Lead Architect's systemic database. This portal contains all technical schemas, variables, and interaction logic for the Godot 4 simulation engine. The game is a 3D isometric immersive sim where the player manipulates a dynamic economy, exploits a PR & Reputation Engine, and recruits persistent NPCs as agents to topple a corporate oligarchy.</p>
     
@@ -109,5 +83,6 @@
       </div>
     </div>
   </main>
+  <script src="../nav.js"></script>
 </body>
 </html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RegionGenerator - KILL THE BILL</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <nav id="sidebar"></nav>
+  <main class="content">
+    <div id="breadcrumbs"></div>
+    <h1>RegionGenerator</h1>
+    <p>The procedural world map builder. At playthrough start, generates 6-10 unique regions with random names, properties, and visual biomes. No two playthroughs have the same geography. Replaces all hardcoded sector names.</p>
+
+    <h2>Region Types</h2>
+    <div class="grid">
+      <div class="card" style="border-color: var(--accent-neon);">
+        <h3><span class="badge red">URBAN_SLUM</span> 2-3 Generated</h3>
+        <p>Dense brutalist slums. High tension, low security. Names like <em>"Rust Hollow"</em>, <em>"Ash Sprawl"</em>, <em>"Smog Warren"</em>.</p>
+        <p><strong>Targets:</strong> Water Treatment, Power Relay, Comm Array, Food Depot, Clinic</p>
+        <p><strong>Biomes:</strong> brutalist_fog, neon_rain, concrete_decay, toxic_sprawl</p>
+      </div>
+      <div class="card" style="border-color: var(--accent-gold);">
+        <h3><span class="badge gold">URBAN_ELITE</span> 1-2 Generated</h3>
+        <p>Pristine corporate plazas. Low tension, high security. Names like <em>"Crystal Heights"</em>, <em>"Ivory Pinnacle"</em>.</p>
+        <p><strong>Targets:</strong> Financial Server, Senate Hall, Luxury Mall, Private Hangar</p>
+        <p><strong>Biomes:</strong> glass_spire, garden_terrace, white_brutalism, floating_plaza</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge accent">INDUSTRIAL</span> 1-2 Generated</h3>
+        <p>Factories and refineries. Medium tension. Names like <em>"Foundry Basin"</em>, <em>"Slag Works"</em>.</p>
+        <p><strong>Targets:</strong> Refinery, Assembly Line, Waste Processor, Mining Shaft, Rail Depot</p>
+        <p><strong>Biomes:</strong> smoke_stack, rust_canyon, molten_core, warehouse_grid</p>
+      </div>
+      <div class="card" style="border-color: var(--accent-toxic);">
+        <h3><span class="badge green">AGRICULTURAL</span> 1-2 Generated</h3>
+        <p>Underground farms and food production. Low population. Names like <em>"Substrate Fields"</em>, <em>"Root Vaults"</em>.</p>
+        <p><strong>Targets:</strong> Hydroponic Vault, Grain Silo, Livestock Dome, Seed Bank, Irrigation Hub</p>
+        <p><strong>Biomes:</strong> underground_green, terraced_cavern, dome_farm, strip_field</p>
+      </div>
+      <div class="card" style="border-color: var(--accent-blue);">
+        <h3><span class="badge blue">ISLAND_RETREAT</span> 0-1 Generated</h3>
+        <p>Maximum security Oligarch compounds. Names like <em>"Haven Cay"</em>, <em>"Obsidian Atoll"</em>.</p>
+        <p><strong>Targets:</strong> Private Dock, Oligarch Villa, Escape Vessel, Comm Jammer</p>
+        <p><strong>Biomes:</strong> tropical_fortress, volcanic_bunker, arctic_retreat, ocean_platform</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge accent">TRANSIT</span> 1-2 Generated</h3>
+        <p>Border zones and checkpoints. Smuggling opportunities. Names like <em>"Checkpoint Nexus"</em>, <em>"Passage Lock"</em>.</p>
+        <p><strong>Targets:</strong> Checkpoint Scanner, Cargo Bay, Smuggler Tunnel, ID Forge</p>
+        <p><strong>Biomes:</strong> highway_corridor, rail_junction, border_wall, underground_passage</p>
+      </div>
+    </div>
+
+    <h2>Name Generation</h2>
+    <div class="card">
+      <p>Each region type has a pool of 10 prefixes and 10 suffixes. At generation, all pools are shuffled and names are composed as <code>prefix + " " + suffix</code>. This produces ~100 unique names per type, ensuring no two playthroughs share the same geography.</p>
+    </div>
+
+    <h2>Region Properties</h2>
+    <div class="card">
+      <table>
+        <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+        <tr><td><code>security_modifier</code></td><td>int</td><td>Added to global <code>security_presence</code> for local checks</td></tr>
+        <tr><td><code>tension_modifier</code></td><td>int</td><td>Added to global <code>public_tension</code> for local NPC behavior</td></tr>
+        <tr><td><code>population_density</code></td><td>float (0-1)</td><td>Affects NPC encounter frequency and crowd sizes</td></tr>
+        <tr><td><code>infrastructure_targets</code></td><td>Array</td><td>2-3 sabotage-able facilities randomly picked from type pool</td></tr>
+        <tr><td><code>visual_biome</code></td><td>String</td><td>Controls environment theming for level generator</td></tr>
+        <tr><td><code>connected_oligarch</code></td><td>String</td><td>ID of the Oligarch who controls this region (if any)</td></tr>
+        <tr><td><code>unlocked</code></td><td>bool</td><td>Whether the player can currently travel here</td></tr>
+      </table>
+    </div>
+
+    <h2>Source File</h2>
+    <div class="card">
+      <p><strong>Script:</strong> <code>src/core/RegionGenerator.gd</code></p>
+      <p><strong>Type:</strong> Node (class_name RegionGenerator, Autoload Singleton)</p>
+      <p><strong>Called by:</strong> <code>WorldDirector.initialize_playthrough()</code></p>
+    </div>
+  </main>
+  <script src="../nav.js"></script>
+</body>
+</html>

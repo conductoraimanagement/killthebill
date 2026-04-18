@@ -6,38 +6,10 @@
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
-  <nav class="sidebar">
-    <h1>KILL THE BILL</h1>
-    <div class="nav-links">
-      <div class="nav-section">OVERVIEW</div>
-      <a href="../index.html">Dashboard</a>
-      <a href="../status.html">Project Status</a>
-      
-      <div class="nav-section">ROADMAP</div>
-      <a href="../phases/phase1-architecture.html">Phase 1: Architecture</a>
-      <a href="../phases/phase2-prototyping.html">Phase 2: Prototyping</a>
-      <a href="../phases/phase3-core-systems.html">Phase 3: Core Systems</a>
-      <a href="../phases/phase4-gameplay.html">Phase 4: Gameplay</a>
-      
-      <div class="nav-section">CORE SINGLETONS</div>
-      <a href="../core/world-director.html">WorldDirector</a>
-      <a href="../core/player-manager.html">PlayerManager</a>
-      <a href="../core/population-director.html">PopulationDirector</a>
-      <a href="../core/llm-manager.html">LLMManager</a>
-      
-      <div class="nav-section">ENTITIES</div>
-      <a href="../entities/npc-ai.html">NPC State & LLM</a>
-      <a href="../entities/social-fabric.html"><a href="../entities/relationships.html">Relationships &amp; Agents</a>
-      Social Fabric Engine</a>
-      
-      <div class="nav-section">SYSTEMS</div>
-      <a href="heat-evasion.html">Heat & Evasion</a>
-      <a href="combat.html">Combat Mechanics</a>
-      <a href="macro-world.html" class="active">Regions & Travel</a>
-    </div>
-  </nav>
+  <nav id="sidebar"></nav>
   
   <main class="content">
+    <div id="breadcrumbs"></div>
     <h1>Macro-World & Procedural Generation</h1>
     <p>The game world is not a single city, but a sprawling geographical area containing multiple Regions, each with distinct visual styles and economic functions. Travel between these regions carries significant risk and forms a core pillar of the Immersive Sim experience.</p>
     
@@ -62,5 +34,6 @@
       <p>Moving between Regions is not a simple loading screen. Players must bypass <strong>Border Checkpoints</strong>. If your Heat Level is high, or if you lack the proper corporate credentials, you must utilize your Intel, credits (bribes), or physical stealth (stowing away on cargo trains) to physically cross into the next map.</p>
     </div>
   </main>
+  <script src="../nav.js"></script>
 </body>
 </html>

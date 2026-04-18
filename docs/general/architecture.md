@@ -18,12 +18,12 @@
 5. **Three Victory Paths:** Assassination, Economic Hacking, or Political Revolution — all tracked simultaneously.
 
 ## High-Level Flow
-1. **Initialization:** `PlayerManager` assigns Class Seed (White Collar / Blue Collar). `PopulationDirector` generates a roster of 40 persistent NPCs with randomized intrinsic traits and quirks.
-2. **The Living World:** `WorldDirector` manages the global economy, Oligarch PR, and the NetFeed event stream. Each game cycle, it passes the economy state to the LLM which generates logical consequences and silent ripples.
-3. **NPC Evolution:** `PopulationDirector.evolve_all_npcs()` pushes the world state through each NPC's `process_world_pressure()`. The same crisis makes high-aggression NPCs radicalize and high-conformity NPCs submit.
-4. **Player Interaction:** The player builds relationships with NPCs (friendship, romantic, operative). Bonded NPCs become agents who can execute objectives. The Contextual Persuasion UI uses a hybrid of LLM-generated buttons and free-text input.
-5. **The Butterfly Effect:** Every action (sabotage, assassination, hacking) is reported to the WorldDirector, which calculates systemic ripples across the economy, PR, and NPC moods.
-6. **Victory:** The WorldDirector monitors three Collapse Meters. The first to hit critical mass triggers the corresponding endgame.
+1. **Initialization:** `PlayerManager` assigns Class Seed. `RegionGenerator` builds a unique world map (6-10 regions). `WorldDirector` generates 4-6 procedural Oligarchs with unique ambitions. `PopulationDirector` generates the NPC roster.
+2. **The Living World:** `WorldDirector` manages the global economy, the NetFeed, and the Oligarch evolution cycle. Each cycle, living Oligarchs take actions based on their ambitions and personality.
+3. **NPC Evolution:** `PopulationDirector.evolve_all_npcs()` pushes the world state through each NPC's personality filter.
+4. **Player Interaction:** The player builds relationships, recruits agents, and manipulates the simulation.
+5. **The Butterfly Effect:** Every action ripples through the economy, PR, and the behavior of both NPCs and Oligarchs.
+6. **Victory:** Tracked via three parallel Collapse Meters (Direct Action, Economic Hacking, Political Revolution).
 
 ## Directory Structure
 ```
@@ -37,14 +37,16 @@ killthebill/
 │   │   └── game-design.md   # Setting, narrative, core loop
 │   ├── backend/             # Technical backend docs
 │   │   ├── world-director.md
+│   │   ├── region-generator.md
 │   │   ├── llm-manager.md
 │   │   ├── population-director.md
 │   │   └── netfeed.md
 │   ├── frontend/            # Visual and UI docs
 │   │   ├── visuals.md
 │   │   └── ui-systems.md
-│   ├── entities/            # NPC and relationship docs
+│   ├── entities/            # Actor docs
 │   │   ├── npc-data.md
+│   │   ├── oligarch-data.md
 │   │   └── relationships.md
 │   ├── systems/             # Gameplay system docs
 │   │   ├── heat-evasion.md

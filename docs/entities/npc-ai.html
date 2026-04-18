@@ -6,39 +6,10 @@
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
-  <nav class="sidebar">
-    <h1>KILL THE BILL</h1>
-    <div class="nav-links">
-      <div class="nav-section">OVERVIEW</div>
-      <a href="../index.html">Dashboard</a>
-      <a href="../status.html">Project Status</a>
-      
-      <div class="nav-section">ROADMAP (PHASES)</div>
-      <a href="../phases/phase1-architecture.html">Phase 1: Architecture</a>
-      <a href="../phases/phase2-prototyping.html">Phase 2: Prototyping</a>
-      <a href="../phases/phase3-core-systems.html">Phase 3: Core Systems</a>
-      <a href="../phases/phase4-gameplay.html">Phase 4: Gameplay</a>
-      
-      <div class="nav-section">CORE SINGLETONS</div>
-      <a href="../core/world-director.html">WorldDirector</a>
-      <a href="../core/player-manager.html">PlayerManager</a>
-      <a href="../core/population-director.html">PopulationDirector</a>
-      <a href="../core/llm-manager.html">LLMManager</a>
-      
-      <div class="nav-section">ENTITIES</div>
-      <a href="npc-ai.html" class="active">NPC State & LLM</a>
-      <a href="relationships.html">Relationships &amp; Agents</a>
-      <a href="social-fabric.html">Social Fabric Engine</a>
-      
-      <div class="nav-section">SYSTEMS</div>
-      <a href="../systems/netfeed.html">NetFeed &amp; Events</a>
-      <a href="../systems/heat-evasion.html">Heat & Evasion</a>
-      <a href="../systems/combat.html">Combat Mechanics</a>
-      <a href="../systems/macro-world.html">Regions & Travel</a>
-    </div>
-  </nav>
+  <nav id="sidebar"></nav>
   
   <main class="content">
+    <div id="breadcrumbs"></div>
     <h1>NPC Persistent Characters & LLM Integration</h1>
     <p>NPCs are <strong>not disposable</strong>. At the start of each playthrough, the <code>PopulationDirector</code> generates a fixed roster of ~40 unique characters with randomized intrinsic personality traits. These NPCs persist for the <strong>entire run</strong> and evolve based on world pressure filtered through their immutable nature. No two NPCs react the same way to the same crisis.</p>
     
@@ -154,5 +125,6 @@
       <p><code>get_llm_context_string()</code> formats the NPC's full identity into a token-efficient prompt. It includes: name, class, behavioral profile, stress/hope/radicalization scores, personality adjectives (e.g., "aggressive, cynical, independent"), and the rolling <code>memories</code> array for narrative continuity.</p>
     </div>
   </main>
+  <script src="../nav.js"></script>
 </body>
 </html>

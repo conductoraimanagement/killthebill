@@ -6,38 +6,10 @@
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
-  <nav class="sidebar">
-    <h1>KILL THE BILL</h1>
-    <div class="nav-links">
-      <div class="nav-section">OVERVIEW</div>
-      <a href="../index.html">Dashboard</a>
-      <a href="../status.html">Project Status</a>
-      
-      <div class="nav-section">ROADMAP</div>
-      <a href="../phases/phase1-architecture.html">Phase 1: Architecture</a>
-      <a href="../phases/phase2-prototyping.html">Phase 2: Prototyping</a>
-      <a href="../phases/phase3-core-systems.html">Phase 3: Core Systems</a>
-      <a href="../phases/phase4-gameplay.html">Phase 4: Gameplay</a>
-      
-      <div class="nav-section">CORE SINGLETONS</div>
-      <a href="../core/world-director.html">WorldDirector</a>
-      <a href="../core/player-manager.html">PlayerManager</a>
-      <a href="../core/population-director.html">PopulationDirector</a>
-      <a href="../core/llm-manager.html">LLMManager</a>
-      
-      <div class="nav-section">ENTITIES</div>
-      <a href="../entities/npc-ai.html">NPC State & LLM</a>
-      <a href="../entities/social-fabric.html"><a href="../entities/relationships.html">Relationships &amp; Agents</a>
-      Social Fabric Engine</a>
-      
-      <div class="nav-section">SYSTEMS</div>
-      <a href="heat-evasion.html" class="active">Heat & Evasion</a>
-      <a href="combat.html">Combat Mechanics</a>
-      <a href="macro-world.html">Regions & Travel</a>
-    </div>
-  </nav>
+  <nav id="sidebar"></nav>
   
   <main class="content">
+    <div id="breadcrumbs"></div>
     <h1>The Heat System: Crime & Evasion</h1>
     <p>Doing something illegal (firing automatics, placing bombs, assaulting an Oligarch) generates a <code>CrimeEvent</code>. If you are caught on camera or spotted by a loyalist NPC, your Local Heat Level instantly spikes, triggering an escalating response from the Security Oligarch.</p>
     
@@ -67,5 +39,6 @@
       </ul>
     </div>
   </main>
+  <script src="../nav.js"></script>
 </body>
 </html>

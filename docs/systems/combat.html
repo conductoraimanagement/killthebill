@@ -6,38 +6,10 @@
   <link rel="stylesheet" href="../styles.css">
 </head>
 <body>
-  <nav class="sidebar">
-    <h1>KILL THE BILL</h1>
-    <div class="nav-links">
-      <div class="nav-section">OVERVIEW</div>
-      <a href="../index.html">Dashboard</a>
-      <a href="../status.html">Project Status</a>
-      
-      <div class="nav-section">ROADMAP</div>
-      <a href="../phases/phase1-architecture.html">Phase 1: Architecture</a>
-      <a href="../phases/phase2-prototyping.html">Phase 2: Prototyping</a>
-      <a href="../phases/phase3-core-systems.html">Phase 3: Core Systems</a>
-      <a href="../phases/phase4-gameplay.html">Phase 4: Gameplay</a>
-      
-      <div class="nav-section">CORE SINGLETONS</div>
-      <a href="../core/world-director.html">WorldDirector</a>
-      <a href="../core/player-manager.html">PlayerManager</a>
-      <a href="../core/population-director.html">PopulationDirector</a>
-      <a href="../core/llm-manager.html">LLMManager</a>
-      
-      <div class="nav-section">ENTITIES</div>
-      <a href="../entities/npc-ai.html">NPC State & LLM</a>
-      <a href="../entities/social-fabric.html"><a href="../entities/relationships.html">Relationships &amp; Agents</a>
-      Social Fabric Engine</a>
-      
-      <div class="nav-section">SYSTEMS</div>
-      <a href="heat-evasion.html">Heat & Evasion</a>
-      <a href="combat.html" class="active">Combat Mechanics</a>
-      <a href="macro-world.html">Regions & Travel</a>
-    </div>
-  </nav>
+  <nav id="sidebar"></nav>
   
   <main class="content">
+    <div id="breadcrumbs"></div>
     <h1>Combat & Weaponry (Direct Action)</h1>
     <p>While social manipulation is powerful, the game fully supports lethal "Direct Action." The combat system utilizes 3D isometric twin-stick or tactical point-and-click targeting. Weapons are highly systemic and interact directly with the game's economy and stealth mechanics.</p>
     
@@ -65,5 +37,6 @@
       <p>The availability and price of these weapons on the Black Market fluctuate based on the <code>WorldDirector</code>. If the Security Oligarch is highly paranoid, gun prices skyrocket, making crafted traps or a silent crossbow much more viable.</p>
     </div>
   </main>
+  <script src="../nav.js"></script>
 </body>
 </html>

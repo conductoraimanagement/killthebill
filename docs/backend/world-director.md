@@ -1,36 +1,19 @@
-# WorldDirector — Technical Reference
-
 ## Overview
-`WorldDirector.gd` is the central brain of the simulation. It operates as an Autoload Singleton, managing the global economy, Oligarch PR states, the Butterfly Effect matrix, and the NetFeed event stream. It runs independently of the visual scene, simulating the economy even for sectors the player is not in.
+`WorldDirector.gd` is the central brain of the simulation. It manages the global economy, procedural Oligarchs, generated regions, and the NetFeed event stream.
 
-**Script:** `src/core/WorldDirector.gd`  
-**Type:** Autoload Singleton (Node)
+## Procedural Oligarchs (`oligarchs: Array[OligarchData]`)
+4-6 billionaires are generated per playthrough. Each has intrinsic traits (Ruthlessness, Vanity, etc.) and specific Ambitions (Monopolize Supply, Build a Legacy, etc.). They take autonomous actions each world cycle.
 
-## Global Economy Dictionary (`global_economy`)
-| Variable | Type | Default | Description |
-|---|---|---|---|
-| `food_price` | int | 100 | Base cost of rations. Drives NPC survival needs. |
-| `tech_price` | int | 500 | Cost of hacking tools and black market weapons. |
-| `public_tension` | int | 50 | How close The Sinks are to riot (0-100). |
-| `security_presence` | int | 50 | Enforcer patrol frequency and response time (0-100). |
-| `senate_alignment` | int | 0 | Political control: -100 (Reformist) to 100 (Corporate). |
-
-## Oligarchs Dictionary (`oligarchs`)
-Each of the 4 Oligarchs (Tech, Food, Security, Media) is tracked with:
-| Variable | Type | Description |
-|---|---|---|
-| `wealth` | int | Current liquid assets. Drives economic decisions. |
-| `paranoia` | int | How fearful they are (0-100). Increases security spending. |
-| `public_image` | int | How loved/hated by the public (-100 to 100). |
-| `controversy_level` | int | How actively discussed (0-100). Multiplies PR event impact. |
-| `recent_scandals` | Array[String] | Rolling ledger of recent quotes/actions. |
+## Procedural Regions (`RegionGenerator`)
+The world map is generated at start. The `WorldDirector` tracks the `current_region` and applies local dynamics based on the global economy.
 
 ## Signal Bus
 | Signal | Payload | Description |
 |---|---|---|
-| `event_triggered(action, target)` | String, String | Fired when any node reports an action. |
-| `world_state_changed` | none | Fired after the Butterfly Effect resolves. |
-| `netfeed_event_generated(event)` | Dictionary | Fired for each NEWS_TICKER event for UI consumption. |
+| `event_triggered` | action_id, target | Fired when any node reports an action. |
+| `world_state_changed` | none | Fired after world evolution. |
+| `netfeed_event_generated` | event_data | Fired for NEWS_TICKER events. |
+| `oligarch_action_taken` | action | Fired when an oligarch takes an AI-driven step. |
 
 ## Butterfly Effect Matrix
 When `event_triggered` fires, the WorldDirector resolves systemic ripples:
