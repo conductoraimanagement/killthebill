@@ -7,6 +7,9 @@ class_name LLMManager
 signal llm_response_received(response_data: Dictionary)
 signal llm_error_occurred(error_message: String)
 signal netfeed_stream_received(events: Array)
+signal oligarchs_generated(oligarch_data: Array)
+signal npc_roster_generated(npc_data: Array)
+signal world_regions_generated(region_data: Array)
 
 # Tracks what type of request is active
 var current_request_type: String = ""
@@ -182,6 +185,150 @@ func request_netfeed_events(world_state: Dictionary, oligarchs: Dictionary) -> v
     if error != OK:
         llm_error_occurred.emit("Failed to send NetFeed Request.")
 
+func request_oligarch_generation(count: int) -> void:
+    if active_provider == "":
+        llm_error_occurred.emit("LLM Provider not initialized properly.")
+        return
+        
+    current_request_type = "oligarch_generation"
+    var headers = [
+        "Content-Type: application/json",
+        "Authorization: Bearer " + api_key
+    ]
+    if active_provider == "openrouter":
+        headers.append("HTTP-Referer: https://killthebill.game")
+        headers.append("X-Title: Kill The Bill")
+    elif active_provider == "claude":
+        headers.append("x-api-key: " + api_key)
+        headers.append("anthropic-version: 2023-06-01")
+        headers[1] = "Authorization: "
+        
+    var system_prompt = "You are the Architect for a systemic immersive sim called KILL THE BILL.\n"
+    system_prompt += "Generate " + str(count) + " unique corporate oligarchs for a 'Corporate Brutalist / Slum Cyberpunk' dystopia.\n"
+    system_prompt += "Each must be a fully realized character. Provide: first name, last name, title (e.g., CEO, Director), sector of influence (e.g., Food, Tech, Security, Media, BioTech, etc.), 2-3 unique ambitions, and 2-3 human quirks (habits, physical traits, or oddities).\n"
+    system_prompt += "Ensure high diversity in their backgrounds and personality profiles. Some should be ideological, others purely greedy, some paranoid, others vain.\n"
+    system_prompt += "Respond STRICTLY in JSON format with a single key 'oligarchs' containing an array of objects. Each object must have keys: 'first_name', 'last_name', 'title', 'sector', 'ambitions' (array of strings), and 'quirks' (array of strings)."
+    
+    var payload = {}
+    if active_provider == "claude":
+        payload = {
+            "model": active_model,
+            "max_tokens": 2048,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": "Generate the oligarch roster in JSON."}]
+        }
+    else:
+        payload = {
+            "model": active_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Generate the oligarch roster in JSON."}
+            ],
+            "response_format": { "type": "json_object" },
+            "temperature": 0.9
+        }
+        
+    var json_payload = JSON.stringify(payload)
+    var error = request(api_url, headers, HTTPClient.METHOD_POST, json_payload)
+    if error != OK:
+        llm_error_occurred.emit("Failed to send Oligarch Generation Request.")
+
+func request_npc_roster_generation(count: int) -> void:
+    if active_provider == "":
+        llm_error_occurred.emit("LLM Provider not initialized properly.")
+        return
+        
+    current_request_type = "npc_roster_generation"
+    var headers = [
+        "Content-Type: application/json",
+        "Authorization: Bearer " + api_key
+    ]
+    if active_provider == "openrouter":
+        headers.append("HTTP-Referer: https://killthebill.game")
+        headers.append("X-Title: Kill The Bill")
+    elif active_provider == "claude":
+        headers.append("x-api-key: " + api_key)
+        headers.append("anthropic-version: 2023-06-01")
+        headers[1] = "Authorization: "
+        
+    var system_prompt = "You are the Population Architect for KILL THE BILL.\n"
+    system_prompt += "Generate " + str(count) + " unique citizens for a cyberpunk dystopia. They live in 'The Sinks' or 'The Spire'.\n"
+    system_prompt += "For each, provide: first name, last name, and 2-3 human quirks (habits, physical traits, or backstories).\n"
+    system_prompt += "Avoid clichés. Make them feel like individuals with specific, grounded histories.\n"
+    system_prompt += "Respond STRICTLY in JSON format with a single key 'npcs' containing an array of objects. Each object must have keys: 'first_name', 'last_name', and 'quirks' (array of strings)."
+    
+    var payload = {}
+    if active_provider == "claude":
+        payload = {
+            "model": active_model,
+            "max_tokens": 4096,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": "Generate the population in JSON."}]
+        }
+    else:
+        payload = {
+            "model": active_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Generate the population in JSON."}
+            ],
+            "response_format": { "type": "json_object" },
+            "temperature": 1.0
+        }
+        
+    var json_payload = JSON.stringify(payload)
+    var error = request(api_url, headers, HTTPClient.METHOD_POST, json_payload)
+    if error != OK:
+        llm_error_occurred.emit("Failed to send NPC Roster Generation Request.")
+
+func request_world_regions_generation(distribution: Dictionary) -> void:
+    if active_provider == "":
+        llm_error_occurred.emit("LLM Provider not initialized properly.")
+        return
+        
+    current_request_type = "world_regions_generation"
+    var headers = [
+        "Content-Type: application/json",
+        "Authorization: Bearer " + api_key
+    ]
+    if active_provider == "openrouter":
+        headers.append("HTTP-Referer: https://killthebill.game")
+        headers.append("X-Title: Kill The Bill")
+    elif active_provider == "claude":
+        headers.append("x-api-key: " + api_key)
+        headers.append("anthropic-version: 2023-06-01")
+        headers[1] = "Authorization: "
+        
+    var system_prompt = "You are the World Architect for KILL THE BILL.\n"
+    system_prompt += "Generate unique region names for a cyberpunk dystopia based on the following count distribution:\n"
+    system_prompt += JSON.stringify(distribution) + "\n"
+    system_prompt += "Avoid clichés like 'Neon City' or 'Cyber-something'. Use atmospheric, gritty, or corporate-brutalist names (e.g., 'The Sinks', 'Crystalline Heights', 'Gutter Sprawl', 'Foundry Basin').\n"
+    system_prompt += "Respond STRICTLY in JSON format with a single key 'regions' containing an array of objects. Each object must have keys: 'name', 'type' (the string from the distribution), and 'short_description' (brief atmospheric snippet)."
+    
+    var payload = {}
+    if active_provider == "claude":
+        payload = {
+            "model": active_model,
+            "max_tokens": 1024,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": "Generate the regions in JSON."}]
+        }
+    else:
+        payload = {
+            "model": active_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Generate the regions in JSON."}
+            ],
+            "response_format": { "type": "json_object" },
+            "temperature": 1.0
+        }
+        
+    var json_payload = JSON.stringify(payload)
+    var error = request(api_url, headers, HTTPClient.METHOD_POST, json_payload)
+    if error != OK:
+        llm_error_occurred.emit("Failed to send World Regions Generation Request.")
+
 func _on_request_completed(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
     if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
         llm_error_occurred.emit("HTTP Request failed. Response code: " + str(response_code) + " Body: " + body.get_string_from_utf8())
@@ -215,6 +362,21 @@ func _on_request_completed(result: int, response_code: int, headers: PackedStrin
                         netfeed_stream_received.emit(parsed_data["events"])
                     else:
                         llm_error_occurred.emit("NetFeed response missing 'events' array.")
+                elif current_request_type == "oligarch_generation":
+                    if parsed_data.has("oligarchs"):
+                        oligarchs_generated.emit(parsed_data["oligarchs"])
+                    else:
+                        llm_error_occurred.emit("Oligarch response missing 'oligarchs' array.")
+                elif current_request_type == "npc_roster_generation":
+                    if parsed_data.has("npcs"):
+                        npc_roster_generated.emit(parsed_data["npcs"])
+                    else:
+                        llm_error_occurred.emit("NPC response missing 'npcs' array.")
+                elif current_request_type == "world_regions_generation":
+                    if parsed_data.has("regions"):
+                        world_regions_generated.emit(parsed_data["regions"])
+                    else:
+                        llm_error_occurred.emit("Region response missing 'regions' array.")
             else:
                 llm_error_occurred.emit("Failed to parse LLM nested JSON response. Raw content: " + message_content)
         else:

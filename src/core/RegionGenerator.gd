@@ -6,8 +6,10 @@ class_name RegionGenerator
 # =============================================================
 # At playthrough start, generates 6-10 unique regions with random
 # names, properties, and visual biomes. No two playthroughs have
-# the same world geography.
+# No NPC is spawned or despawned mid-game.
 # =============================================================
+
+signal world_generated()
 
 const MIN_REGIONS: int = 6
 const MAX_REGIONS: int = 10
@@ -15,28 +17,6 @@ const MAX_REGIONS: int = 10
 # The generated world map — lives for the entire playthrough
 var regions: Array[Dictionary] = []
 var starting_region: String = ""
-
-# =============================================================
-# NAME POOLS — Shuffled at generation for uniqueness
-# =============================================================
-
-var prefixes_slum = ["Rust", "Ash", "Gray", "Smog", "Drip", "Scrap", "Gutter", "Soot", "Blight", "Mire"]
-var suffixes_slum = ["Hollow", "Row", "Depths", "Block", "Flats", "Pit", "Warren", "Maze", "Sprawl", "Drift"]
-
-var prefixes_elite = ["Crystal", "Silver", "Solar", "Ivory", "Platinum", "Azure", "Opal", "Gilt", "Zenith", "Apex"]
-var suffixes_elite = ["Heights", "Spire", "Plaza", "Terrace", "Citadel", "Pinnacle", "Crown", "Summit", "Arch", "Tower"]
-
-var prefixes_industrial = ["Foundry", "Slag", "Iron", "Steam", "Cinder", "Bore", "Anvil", "Rivet", "Piston", "Crucible"]
-var suffixes_industrial = ["Basin", "Works", "Yard", "Maw", "Gulch", "Trench", "Core", "Hub", "Strip", "Forge"]
-
-var prefixes_farm = ["Substrate", "Root", "Loam", "Spore", "Canopy", "Verdant", "Deep", "Seed", "Mulch", "Tillage"]
-var suffixes_farm = ["Fields", "Beds", "Vaults", "Caverns", "Groves", "Terraces", "Pens", "Burrows", "Flats", "Gardens"]
-
-var prefixes_island = ["Haven", "Obsidian", "Coral", "Phantom", "Tempest", "Jade", "Drift", "Crimson", "Fog", "Tidal"]
-var suffixes_island = ["Cay", "Atoll", "Isle", "Reef", "Archipelago", "Reach", "Shoal", "Rock", "Key", "Strand"]
-
-var prefixes_transit = ["Checkpoint", "Border", "Passage", "Corridor", "Junction", "Threshold", "Crossway", "Gate", "Bridge", "Traverse"]
-var suffixes_transit = ["Nexus", "Point", "Lock", "Barricade", "Corridor", "Terminal", "Span", "Crossing", "Arch", "Hub"]
 
 # =============================================================
 # REGION TYPES — Templates with property ranges
@@ -71,70 +51,73 @@ func _ready():
 func generate_world() -> void:
 	regions.clear()
 	
-	# Shuffle all name pools
-	prefixes_slum.shuffle(); suffixes_slum.shuffle()
-	prefixes_elite.shuffle(); suffixes_elite.shuffle()
-	prefixes_industrial.shuffle(); suffixes_industrial.shuffle()
-	prefixes_farm.shuffle(); suffixes_farm.shuffle()
-	prefixes_island.shuffle(); suffixes_island.shuffle()
-	prefixes_transit.shuffle(); suffixes_transit.shuffle()
+	if has_node("/root/LLMManager"):
+		var llm = get_node("/root/LLMManager")
+		if not llm.world_regions_generated.is_connected(_on_world_regions_generated):
+			llm.world_regions_generated.connect(_on_world_regions_generated)
+		
+		# Build count distribution for LLM
+		var distribution = {}
+		for type in type_distribution.keys():
+			var range_vec = type_distribution[type]
+			distribution[_type_string(type)] = randi_range(range_vec.x, range_vec.y)
+			
+		print("RegionGenerator: Requesting procedural geography from LLM...")
+		llm.request_world_regions_generation(distribution)
+	else:
+		push_error("LLMManager missing! Falling back to empty world.")
+
+func _on_world_regions_generated(data: Array) -> void:
+	print("RegionGenerator: Received %d regions from LLM." % data.size())
 	
-	# Track name indices to avoid repeats
-	var name_indices = {}
-	for type in RegionType.values():
-		name_indices[type] = 0
+	for r_data in data:
+		var type_str = r_data.get("type", "URBAN_SLUM")
+		var type = _string_to_type(type_str)
+		var region = _generate_region_shell(type, roster_index_helper(type))
+		region["name"] = r_data.get("name", "Unknown Sector")
+		region["short_description"] = r_data.get("short_description", "")
+		regions.append(region)
 	
-	# Generate regions for each type
-	for type in RegionType.values():
-		var range_vec = type_distribution[type]
-		var count = randi_range(range_vec.x, range_vec.y)
-		for i in range(count):
-			var region = _generate_region(type, name_indices[type])
-			name_indices[type] += 1
-			regions.append(region)
-	
-	# Ensure we have at least MIN_REGIONS
-	while regions.size() < MIN_REGIONS:
-		var extra = _generate_region(RegionType.URBAN_SLUM, name_indices[RegionType.URBAN_SLUM])
-		name_indices[RegionType.URBAN_SLUM] += 1
-		regions.append(extra)
-	
-	# Cap at MAX_REGIONS
-	if regions.size() > MAX_REGIONS:
-		regions.resize(MAX_REGIONS)
-	
-	# Shuffle the final order
+	# Finalize world
 	regions.shuffle()
-	
-	# First URBAN_SLUM is the starting region
 	for region in regions:
 		if region["type"] == "URBAN_SLUM":
 			starting_region = region["name"]
 			region["unlocked"] = true
 			break
 	
-	# Unlock 1-2 additional starting regions
-	var unlocked_count = 0
-	for region in regions:
-		if region["name"] != starting_region and unlocked_count < 2:
-			if region["type"] in ["URBAN_SLUM", "INDUSTRIAL", "TRANSIT"]:
-				region["unlocked"] = true
-				unlocked_count += 1
-	
-	print("RegionGenerator: Created world with %d regions. Starting in: %s" % [regions.size(), starting_region])
+	world_generated.emit()
+	print("RegionGenerator: World geography finalized.")
 
-func _generate_region(type: RegionType, index: int) -> Dictionary:
+# Helper to keep IDs unique if needed
+var _type_counts = {}
+func roster_index_helper(type: RegionType) -> int:
+	var c = _type_counts.get(type, 0)
+	_type_counts[type] = c + 1
+	return c
+
+func _string_to_type(s: String) -> RegionType:
+	match s:
+		"URBAN_SLUM": return RegionType.URBAN_SLUM
+		"URBAN_ELITE": return RegionType.URBAN_ELITE
+		"INDUSTRIAL": return RegionType.INDUSTRIAL
+		"AGRICULTURAL": return RegionType.AGRICULTURAL
+		"ISLAND_RETREAT": return RegionType.ISLAND_RETREAT
+		"TRANSIT": return RegionType.TRANSIT
+	return RegionType.URBAN_SLUM
+
+func _generate_region_shell(type: RegionType, index: int) -> Dictionary:
 	var region = {
 		"id": "region_%d_%d" % [type, index],
-		"name": _generate_name(type, index),
+		"name": "Generating...",
 		"type": _type_string(type),
 		"unlocked": false,
 		"security_modifier": 0,
 		"tension_modifier": 0,
-		"population_density": 0.5, # 0-1
+		"population_density": 0.5,
 		"infrastructure_targets": [],
 		"visual_biome": "",
-		"connected_oligarch": "" # Set later by WorldDirector
+		"connected_oligarch": ""
 	}
 	
 	match type:
@@ -182,21 +165,7 @@ func _generate_region(type: RegionType, index: int) -> Dictionary:
 	
 	return region
 
-func _generate_name(type: RegionType, index: int) -> String:
-	match type:
-		RegionType.URBAN_SLUM:
-			return prefixes_slum[index % prefixes_slum.size()] + " " + suffixes_slum[index % suffixes_slum.size()]
-		RegionType.URBAN_ELITE:
-			return prefixes_elite[index % prefixes_elite.size()] + " " + suffixes_elite[index % suffixes_elite.size()]
-		RegionType.INDUSTRIAL:
-			return prefixes_industrial[index % prefixes_industrial.size()] + " " + suffixes_industrial[index % suffixes_industrial.size()]
-		RegionType.AGRICULTURAL:
-			return prefixes_farm[index % prefixes_farm.size()] + " " + suffixes_farm[index % suffixes_farm.size()]
-		RegionType.ISLAND_RETREAT:
-			return prefixes_island[index % prefixes_island.size()] + " " + suffixes_island[index % suffixes_island.size()]
-		RegionType.TRANSIT:
-			return prefixes_transit[index % prefixes_transit.size()] + " " + suffixes_transit[index % suffixes_transit.size()]
-	return "Unknown Region"
+# Names are now generated by LLM
 
 func _type_string(type: RegionType) -> String:
 	match type:
