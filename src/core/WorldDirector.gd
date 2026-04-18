@@ -12,6 +12,11 @@ signal world_state_changed()
 signal netfeed_event_generated(event_data: Dictionary)
 signal oligarch_action_taken(action: Dictionary)
 signal playthrough_setup_complete() # Fired when regions, oligarchs, and NPCs are ready
+signal victory_achieved(kind: String, title: String, flavor: String)
+
+# Flips true the first time a victory condition hits; prevents repeat fires
+# until the scene is reloaded / playthrough reinitialized.
+var _victory_locked: bool = false
 
 # ---------------------------------------------------------
 # NETFEED (The Internet/Communication Array)
@@ -57,6 +62,27 @@ func _ready():
 # =============================================================
 
 func initialize_playthrough() -> void:
+	# Reset all playthrough state so this is idempotent across restarts.
+	global_economy = {
+		"food_price": 100,
+		"tech_price": 500,
+		"security_presence": 50,
+		"public_tension": 20,
+		"senate_alignment": 50,
+	}
+	oligarchs.clear()
+	politicians.clear()
+	netfeed_history.clear()
+	cycle = 0
+	_victory_locked = false
+	# Don't wipe current_region — Main.gd sets it before calling us.
+
+	if has_node("/root/SenateDirector"):
+		var senate = get_node("/root/SenateDirector")
+		senate.active_bill = {}
+		senate.bill_history.clear()
+		senate.politicians = []
+
 	# 1. World Geography (Asynchronous)
 	if has_node("/root/RegionGenerator"):
 		var region_gen = get_node("/root/RegionGenerator")
@@ -486,24 +512,44 @@ func get_living_oligarchs() -> Array[OligarchData]:
 # VICTORY CONDITIONS
 # ---------------------------------------------------------
 func _check_systemic_collapse():
-	var all_dead = true
+	if _victory_locked:
+		return
+
+	var all_dead: bool = oligarchs.size() > 0
 	for o in oligarchs:
 		if o.alive:
 			all_dead = false
 			break
-	
+
 	if all_dead:
-		print("VICTORY: Direct Action. All Oligarchs eliminated. The Enclave falls.")
-	
-	if global_economy["public_tension"] >= 100:
-		print("VICTORY: Political Revolution. The masses storm The Enclave.")
-	
-	# Economic collapse: all oligarch wealth below threshold
-	var total_wealth = 0
+		_fire_victory("DIRECT_ACTION",
+			"DIRECT ACTION",
+			"All oligarchs eliminated. The Enclave falls. A new order writes itself.")
+		return
+
+	if int(global_economy.get("public_tension", 0)) >= 100:
+		_fire_victory("POLITICAL_REVOLUTION",
+			"POLITICAL REVOLUTION",
+			"Tension hits 100. The masses storm The Enclave. The NetFeed goes silent.")
+		return
+
+	if int(global_economy.get("senate_alignment", 50)) <= 0:
+		_fire_victory("POLITICAL_REFORM",
+			"POLITICAL REFORM",
+			"Senate alignment collapses. Corporate charters dissolved by vote.")
+		return
+
+	var total_wealth: int = 0
 	for o in oligarchs:
 		total_wealth += o.wealth
 	if total_wealth < 100000 and oligarchs.size() > 0:
-		print("VICTORY: Systemic Collapse. The Enclave is bankrupt.")
-	
-	if global_economy["senate_alignment"] <= 0:
-		print("VICTORY: Political Reform. The Senate dissolves corporate charters.")
+		_fire_victory("SYSTEMIC_COLLAPSE",
+			"SYSTEMIC COLLAPSE",
+			"Combined oligarch wealth collapses below survival. The Enclave is bankrupt.")
+		return
+
+
+func _fire_victory(kind: String, title: String, flavor: String) -> void:
+	_victory_locked = true
+	print("VICTORY: [%s] %s — %s" % [kind, title, flavor])
+	victory_achieved.emit(kind, title, flavor)

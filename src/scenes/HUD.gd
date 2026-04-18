@@ -44,18 +44,37 @@ var _modal_title: Label
 var _modal_list: VBoxContainer
 var _modal_action_id: String = ""
 
+# Politicians panel (toggle with P)
+var _pol_panel: Panel
+var _pol_text: RichTextLabel
+var _pol_visible: bool = false
+
+# Cached for the Politicians panel — last proposed bill, cleared on resolve.
+# Lets us show each senator's predicted stance before the vote lands.
+var _active_bill: Dictionary = {}
+var _last_vote_record: Array = []
+
+# Victory modal — shown when WorldDirector.victory_achieved fires
+var _victory_root: Control
+var _victory_title_label: Label
+var _victory_flavor_label: Label
+var _victory_kind_label: Label
+
 
 func _ready() -> void:
 	layer = 10
 	_build_state_panel()
 	_build_netfeed_panel()
 	_build_senate_panel()
+	_build_politicians_panel()
 	_build_prompt_panel()
 	_build_modal()
+	_build_victory_modal()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
 	WorldDirector.netfeed_event_generated.connect(_on_netfeed_event)
 	WorldDirector.playthrough_setup_complete.connect(_on_playthrough_ready)
+	WorldDirector.victory_achieved.connect(_on_victory)
 
 	# Senate hooks (autoload-safe)
 	var senate = get_node_or_null("/root/SenateDirector")
@@ -300,6 +319,8 @@ func _build_senate_panel() -> void:
 
 
 func _on_bill_proposed(bill: Dictionary) -> void:
+	_active_bill = bill
+	_last_vote_record = []
 	var sponsor_id: String = str(bill.get("sponsor_id", ""))
 	var sponsor_name := _resolve_politician_name(sponsor_id)
 	var title: String = str(bill.get("title", "Untitled Bill"))
@@ -318,8 +339,14 @@ func _on_bill_proposed(bill: Dictionary) -> void:
 		lines.append("[i][color=#%s]Stated: %s[/color][/i]" % [_hex(COL_COOL), rationale])
 	_senate_text.text = "\n".join(lines)
 
+	if _pol_visible:
+		_refresh_politicians()
+
 
 func _on_bill_resolved(bill: Dictionary, result: String, vote_record: Array) -> void:
+	_last_vote_record = vote_record
+	_active_bill = {}
+
 	var margin: int = int(bill.get("margin", 0))
 	var yes := 0
 	var no := 0
@@ -343,6 +370,165 @@ func _on_bill_resolved(bill: Dictionary, result: String, vote_record: Array) -> 
 	])
 	lines.append("[b][color=#%s]%s[/color][/b]" % [_hex(COL_FG), title])
 	_senate_text.text = "\n".join(lines)
+
+	if _pol_visible:
+		_refresh_politicians()
+
+
+# -------------------------------------------------------------
+# Politicians panel (P to toggle)
+# -------------------------------------------------------------
+func _build_politicians_panel() -> void:
+	_pol_panel = _make_panel(COL_BG)
+	_pol_panel.anchor_left = 0.0
+	_pol_panel.anchor_top = 0.0
+	_pol_panel.offset_left = 20
+	_pol_panel.offset_top = 240
+	_pol_panel.offset_right = 440
+	_pol_panel.offset_bottom = 580
+	_pol_panel.visible = false
+
+	var title := _make_label("// SENATE ROSTER  (press P to hide)", COL_ACCENT, 11, true)
+	title.offset_left = PANEL_PAD
+	title.offset_top = PANEL_PAD - 2
+	title.offset_right = 420 - PANEL_PAD
+	title.offset_bottom = PANEL_PAD + 16
+	_pol_panel.add_child(title)
+
+	_pol_text = RichTextLabel.new()
+	_pol_text.bbcode_enabled = true
+	_pol_text.fit_content = true
+	_pol_text.scroll_active = false
+	_pol_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pol_text.anchor_left = 0.0
+	_pol_text.anchor_top = 0.0
+	_pol_text.anchor_right = 1.0
+	_pol_text.offset_left = PANEL_PAD
+	_pol_text.offset_top = PANEL_PAD + 24
+	_pol_text.offset_right = -PANEL_PAD
+	_pol_text.offset_bottom = 340
+	_pol_text.add_theme_color_override("default_color", COL_FG)
+	_pol_text.add_theme_font_size_override("normal_font_size", 12)
+	_pol_text.add_theme_font_size_override("bold_font_size", 12)
+	_pol_text.add_theme_font_size_override("italics_font_size", 12)
+	_pol_panel.add_child(_pol_text)
+
+
+func _toggle_politicians() -> void:
+	_pol_visible = not _pol_visible
+	_pol_panel.visible = _pol_visible
+	if _pol_visible:
+		_refresh_politicians()
+
+
+func _refresh_politicians() -> void:
+	if WorldDirector.politicians.is_empty():
+		_pol_text.text = "[i][color=#%s]> Senate roster not yet generated.[/color][/i]" % _hex(COL_DIM)
+		return
+
+	var lines := PackedStringArray()
+	# Header describes what the right column means.
+	var ctx_header: String
+	if not _active_bill.is_empty():
+		ctx_header = "[color=#%s]predicted stance on active bill →[/color]" % _hex(COL_DIM)
+	elif not _last_vote_record.is_empty():
+		ctx_header = "[color=#%s]· = last vote on resolved bill[/color]" % _hex(COL_DIM)
+	else:
+		ctx_header = "[color=#%s]chamber idle — no bill in docket[/color]" % _hex(COL_DIM)
+	lines.append(ctx_header)
+	lines.append("")
+
+	for p in WorldDirector.politicians:
+		lines.append(_politician_row(p))
+
+	_pol_text.text = "\n".join(lines)
+
+
+func _politician_row(p) -> String:
+	var name_part: String = p.politician_name
+	var compromised: bool = p.scandal_level > 50.0
+	if compromised:
+		name_part = "[color=#%s]⚠[/color] %s" % [_hex(COL_HOT), name_part]
+
+	var faction_color := _color_for_faction(p.faction)
+	var faction_short := _shorten_faction(p.faction)
+
+	# 10-tick bar, 0..100 normalization of public_approval (-100..+100 → 0..100)
+	var approval_norm: float = (p.public_approval + 100.0) / 2.0
+	var bar := _bar(approval_norm, 10)
+	var approval_color := _color_for_approval(p.public_approval)
+
+	# Stance
+	var stance_str: String = ""
+	if not _active_bill.is_empty():
+		var s = p.evaluate_bill(_active_bill, WorldDirector.global_economy, [])
+		stance_str = _format_stance(s, "→")
+	else:
+		var actual := _actual_vote_for(p.politician_id)
+		if actual != "":
+			stance_str = _format_stance(actual, "·")
+
+	return "[b]%s[/b]  [color=#%s]%s[/color]  [color=#%s]%s[/color]  %s" % [
+		name_part,
+		_hex(faction_color),
+		faction_short,
+		_hex(approval_color),
+		bar,
+		stance_str,
+	]
+
+
+func _actual_vote_for(politician_id: String) -> String:
+	for v in _last_vote_record:
+		if str(v.get("politician_id", "")) == politician_id:
+			return str(v.get("stance", ""))
+	return ""
+
+
+func _bar(value: float, ticks: int) -> String:
+	var filled: int = clampi(int(round(value / 100.0 * ticks)), 0, ticks)
+	var out: String = ""
+	for i in range(ticks):
+		out += "█" if i < filled else "░"
+	return out
+
+
+func _format_stance(stance: String, prefix: String) -> String:
+	match stance:
+		"YES":
+			return "[color=#%s]%s YES[/color]" % [_hex(COL_WARN), prefix]
+		"NO":
+			return "[color=#%s]%s NO[/color]" % [_hex(COL_COOL), prefix]
+		"ABSTAIN":
+			return "[color=#%s]%s ABSTAIN[/color]" % [_hex(COL_DIM), prefix]
+		"ABSENT":
+			return "[color=#%s]%s ABSENT[/color]" % [_hex(COL_DIM), prefix]
+	return ""
+
+
+func _color_for_faction(faction: String) -> Color:
+	match faction:
+		"CORPORATE_BLOC": return COL_HOT
+		"POPULIST":       return COL_ACCENT
+		"REFORM":         return COL_COOL
+		"INDEPENDENT":    return COL_DIM
+	return COL_DIM
+
+
+func _shorten_faction(faction: String) -> String:
+	match faction:
+		"CORPORATE_BLOC": return "CORP_BLOC"
+		"POPULIST":       return "POPULIST "
+		"REFORM":         return "REFORM   "
+		"INDEPENDENT":    return "INDEP    "
+	return faction
+
+
+func _color_for_approval(value: float) -> Color:
+	if value > 40.0:  return COL_WARN
+	if value > 0.0:   return COL_FG
+	if value > -40.0: return COL_DIM
+	return COL_HOT
 
 
 # -------------------------------------------------------------
@@ -462,10 +648,162 @@ func _on_modal_pick(oligarch_id: String) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _modal_root and _modal_root.visible and event is InputEventKey:
-		if event.pressed and event.keycode == KEY_ESCAPE:
+	if not (event is InputEventKey) or not event.pressed:
+		return
+
+	# Victory modal swallows everything
+	if _victory_root and _victory_root.visible:
+		return
+
+	# Oligarch-target modal: ESC closes it; otherwise fall through to nothing
+	if _modal_root and _modal_root.visible:
+		if event.keycode == KEY_ESCAPE:
 			hide_modal()
 			get_viewport().set_input_as_handled()
+		return
+
+	# P toggles the politicians roster
+	if event.keycode == KEY_P:
+		_toggle_politicians()
+		get_viewport().set_input_as_handled()
+
+
+# -------------------------------------------------------------
+# Victory modal (fired by WorldDirector.victory_achieved)
+# -------------------------------------------------------------
+func _build_victory_modal() -> void:
+	_victory_root = Control.new()
+	_victory_root.anchor_left = 0.0
+	_victory_root.anchor_top = 0.0
+	_victory_root.anchor_right = 1.0
+	_victory_root.anchor_bottom = 1.0
+	_victory_root.visible = false
+	_victory_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_victory_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_victory_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.01, 0.01, 0.02, 0.92)
+	backdrop.anchor_left = 0.0
+	backdrop.anchor_top = 0.0
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_victory_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -360
+	panel.offset_top = -220
+	panel.offset_right = 360
+	panel.offset_bottom = 220
+	_victory_root.add_child(panel)
+
+	# Top banner — VICTORY
+	var banner := _make_label("// VICTORY //", COL_ACCENT, 14, true)
+	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner.anchor_left = 0.0
+	banner.anchor_top = 0.0
+	banner.anchor_right = 1.0
+	banner.offset_left = PANEL_PAD
+	banner.offset_top = PANEL_PAD + 4
+	banner.offset_right = -PANEL_PAD
+	banner.offset_bottom = PANEL_PAD + 28
+	panel.add_child(banner)
+
+	# Kind (small, e.g. "DIRECT_ACTION")
+	_victory_kind_label = _make_label("", COL_DIM, 11, true)
+	_victory_kind_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_victory_kind_label.anchor_left = 0.0
+	_victory_kind_label.anchor_top = 0.0
+	_victory_kind_label.anchor_right = 1.0
+	_victory_kind_label.offset_left = PANEL_PAD
+	_victory_kind_label.offset_top = PANEL_PAD + 36
+	_victory_kind_label.offset_right = -PANEL_PAD
+	_victory_kind_label.offset_bottom = PANEL_PAD + 52
+	panel.add_child(_victory_kind_label)
+
+	# Title (big)
+	_victory_title_label = _make_label("", COL_FG, 34, true)
+	_victory_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_victory_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_victory_title_label.anchor_left = 0.0
+	_victory_title_label.anchor_top = 0.0
+	_victory_title_label.anchor_right = 1.0
+	_victory_title_label.offset_left = PANEL_PAD
+	_victory_title_label.offset_top = PANEL_PAD + 70
+	_victory_title_label.offset_right = -PANEL_PAD
+	_victory_title_label.offset_bottom = PANEL_PAD + 150
+	panel.add_child(_victory_title_label)
+
+	# Flavor
+	_victory_flavor_label = _make_label("", COL_DIM, 14, false)
+	_victory_flavor_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_victory_flavor_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_victory_flavor_label.anchor_left = 0.0
+	_victory_flavor_label.anchor_top = 0.0
+	_victory_flavor_label.anchor_right = 1.0
+	_victory_flavor_label.offset_left = PANEL_PAD + 20
+	_victory_flavor_label.offset_top = PANEL_PAD + 170
+	_victory_flavor_label.offset_right = -PANEL_PAD - 20
+	_victory_flavor_label.offset_bottom = PANEL_PAD + 250
+	panel.add_child(_victory_flavor_label)
+
+	# Buttons
+	var restart := Button.new()
+	restart.text = "RESTART PLAYTHROUGH"
+	restart.anchor_left = 0.5
+	restart.anchor_top = 1.0
+	restart.anchor_right = 0.5
+	restart.anchor_bottom = 1.0
+	restart.offset_left = -200
+	restart.offset_top = -64
+	restart.offset_right = -20
+	restart.offset_bottom = -20
+	restart.add_theme_color_override("font_color", COL_ACCENT)
+	restart.add_theme_color_override("font_hover_color", COL_FG)
+	restart.pressed.connect(_restart_playthrough)
+	panel.add_child(restart)
+
+	var continue_btn := Button.new()
+	continue_btn.text = "CONTINUE (sandbox)"
+	continue_btn.anchor_left = 0.5
+	continue_btn.anchor_top = 1.0
+	continue_btn.anchor_right = 0.5
+	continue_btn.anchor_bottom = 1.0
+	continue_btn.offset_left = 20
+	continue_btn.offset_top = -64
+	continue_btn.offset_right = 200
+	continue_btn.offset_bottom = -20
+	continue_btn.add_theme_color_override("font_color", COL_DIM)
+	continue_btn.add_theme_color_override("font_hover_color", COL_FG)
+	continue_btn.pressed.connect(_dismiss_victory)
+	panel.add_child(continue_btn)
+
+
+func _on_victory(kind: String, title: String, flavor: String) -> void:
+	_victory_kind_label.text = kind
+	_victory_title_label.text = title
+	_victory_flavor_label.text = flavor
+	_victory_root.visible = true
+	get_tree().paused = true
+
+
+func _dismiss_victory() -> void:
+	_victory_root.visible = false
+	get_tree().paused = false
+
+
+func _restart_playthrough() -> void:
+	_victory_root.visible = false
+	get_tree().paused = false
+	# Full scene reload — simplest reset. All singletons persist; they
+	# re-initialize their state via WorldDirector.initialize_playthrough()
+	# on the new Main._ready().
+	get_tree().reload_current_scene()
 
 
 # -------------------------------------------------------------
