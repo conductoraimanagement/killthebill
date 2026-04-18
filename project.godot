@@ -12,11 +12,16 @@ config_version=5
 
 config/name="KILL THE BILL"
 config/description="A 3D isometric immersive sim where the economy and social class dictate your survival."
+run/main_scene="res://src/scenes/Main.tscn"
 config/features=PackedStringArray("4.2", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
+LLMManager="*res://src/core/LLMManager.gd"
+RegionGenerator="*res://src/core/RegionGenerator.gd"
+PopulationDirector="*res://src/core/PopulationDirector.gd"
+SenateDirector="*res://src/core/SenateDirector.gd"
 WorldDirector="*res://src/core/WorldDirector.gd"
 PlayerManager="*res://src/core/PlayerManager.gd"
 

@@ -114,8 +114,9 @@ func _propose_bill_async(sponsor: PoliticianData, world: Dictionary, oligarchs: 
 	}
 	# LLMManager is expected to post back via _on_bill_generated with parsed JSON.
 	# (Mirrors the pattern used for oligarch/region generation.)
-	if Engine.has_singleton("LLMManager"):
-		LLMManager.request_bill(request, Callable(self, "_on_bill_generated").bind(sponsor))
+	if has_node("/root/LLMManager"):
+		var llm = get_node("/root/LLMManager")
+		llm.request_bill(request, Callable(self, "_on_bill_generated").bind(sponsor))
 	else:
 		_on_bill_generated(_fallback_bill(sponsor), sponsor)
 

@@ -35,9 +35,19 @@ var global_economy = {
 var oligarchs: Array[OligarchData] = []
 
 # ---------------------------------------------------------
+# PROCEDURAL POLITICIANS — 11 senators, generated at start
+# ---------------------------------------------------------
+var politicians: Array[PoliticianData] = []
+
+# ---------------------------------------------------------
 # PROCEDURAL REGIONS — Generated at playthrough start
 # ---------------------------------------------------------
 var current_region: String = ""
+
+# ---------------------------------------------------------
+# World cycle counter — bumped each run_world_cycle()
+# ---------------------------------------------------------
+var cycle: int = 0
 
 func _ready():
 	print("WorldDirector initialized. Economy online.")
@@ -122,6 +132,54 @@ func _on_oligarchs_generated(data: Array) -> void:
 		_finish_setup()
 
 func _on_population_generated() -> void:
+	# 5. Politicians (Asynchronous)
+	_generate_politicians_async()
+
+func _generate_politicians_async() -> void:
+	if has_node("/root/LLMManager"):
+		var llm = get_node("/root/LLMManager")
+		if not llm.politicians_generated.is_connected(_on_politicians_generated):
+			llm.politicians_generated.connect(_on_politicians_generated)
+		print("WorldDirector: Requesting 11 procedural politicians from LLM...")
+		llm.request_politician_generation(11)
+	else:
+		_on_politicians_generated([])
+
+func _on_politicians_generated(data: Array) -> void:
+	politicians.clear()
+	print("WorldDirector: Received %d politicians from LLM. Finalizing Senate..." % data.size())
+
+	for i in range(data.size()):
+		var p_data = data[i]
+		var p := PoliticianData.new()
+		p.politician_id = "politician_%d" % i
+		p.politician_name = "%s %s" % [p_data.get("first_name", "Unknown"), p_data.get("last_name", "Senator")]
+		p.title = p_data.get("title", "Senator")
+		p.faction = p_data.get("faction", "INDEPENDENT")
+		p.cause = p_data.get("cause", "")
+		p.seat_district = p_data.get("seat_district", "At-Large")
+		p.quirks = Array(p_data.get("quirks", []), TYPE_STRING, &"", null)
+
+		# Randomize intrinsic traits
+		p.integrity = randf()
+		p.corruption = randf()
+		p.populism = randf()
+		p.ambition = randf()
+		p.conviction = randf()
+		p.charisma = randf()
+
+		# Starting dynamic state
+		p.public_approval = randf_range(-20.0, 40.0)
+		p.re_election_proximity = randi_range(6, 36)
+		p.position_consistency = 0.5
+
+		politicians.append(p)
+		print("  - %s (%s, %s)" % [p.politician_name, p.title, p.faction])
+
+	# Register with the SenateDirector singleton if present.
+	if has_node("/root/SenateDirector"):
+		get_node("/root/SenateDirector").register_politicians(politicians)
+
 	_finish_setup()
 
 func _finish_setup() -> void:
@@ -156,12 +214,19 @@ func _assign_oligarch_territories(region_gen) -> void:
 # =============================================================
 
 func run_world_cycle() -> void:
+	cycle += 1
 	_evolve_oligarchs()
-	
+
 	# Evolve NPCs
 	if has_node("/root/PopulationDirector"):
 		get_node("/root/PopulationDirector").evolve_all_npcs(global_economy)
-	
+
+	# Tick the Senate — resolves last bill, picks a sponsor, proposes a new bill.
+	if has_node("/root/SenateDirector") and politicians.size() > 0:
+		var senate = get_node("/root/SenateDirector")
+		var recent_netfeed: Array = netfeed_history.slice(max(0, netfeed_history.size() - 5))
+		senate.begin_cycle(global_economy, oligarchs, recent_netfeed)
+
 	_update_region_dynamics()
 	_check_systemic_collapse()
 	world_state_changed.emit()
@@ -242,9 +307,38 @@ func _ripple_sabotage(target_sector: String):
 			break
 	if target_sector == "Food":
 		global_economy["food_price"] += 200
-	global_economy["public_tension"] += 15
-	global_economy["security_presence"] += 10
+	elif target_sector in ["Tech", "Pharma", "Energy"]:
+		global_economy["tech_price"] += 150
+	global_economy["public_tension"] = clamp(global_economy["public_tension"] + 15, 0, 100)
+	global_economy["security_presence"] = clamp(global_economy["security_presence"] + 10, 0, 100)
 	print("Ripple: %s sector sabotaged. Prices spike, tension rises." % target_sector)
+
+	var headline: String = _sabotage_headline(target_sector)
+	var event := {
+		"type": "NEWS_TICKER",
+		"headline": headline,
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	netfeed_history.append(event)
+	netfeed_event_generated.emit(event)
+
+
+func _sabotage_headline(sector: String) -> String:
+	var region_tag: String = current_region if current_region != "" else "the Sinks"
+	match sector:
+		"Food":
+			return "Overnight raid on %s food depot — Enforcers sweep neighboring blocks." % region_tag
+		"Tech":
+			return "%s refinery sabotage suspected; tech prices surge across the grid." % region_tag
+		"Pharma":
+			return "%s pharma store torched. Medicine shortages reported in The Sinks." % region_tag
+		"Energy":
+			return "%s power relay downed. Enclave switches to backup; tensions spike." % region_tag
+		"Security":
+			return "Checkpoint near %s breached overnight. Patrols redeployed." % region_tag
+		"Media":
+			return "%s media spire goes dark for 18 minutes. No statement issued." % region_tag
+	return "Sabotage reported in %s. Authorities investigating." % region_tag
 
 func _ripple_assassination(target_id: String):
 	for o in oligarchs:
@@ -288,7 +382,16 @@ func _ripple_leak_scandal(target_id: String):
 			o.public_image = clamp(o.public_image - 30, -100, 100)
 			o.controversy_level = clamp(o.controversy_level + 50, 0, 100)
 			o.recent_scandals.append("Player leaked classified datashard.")
+			global_economy["public_tension"] = clamp(global_economy["public_tension"] + 8, 0, 100)
 			print("Ripple: Scandal hits %s. Public image tanks." % o.oligarch_name)
+
+			var event := {
+				"type": "NEWS_TICKER",
+				"headline": "LEAK: Internal dossier on %s hits the feed. Outlets scramble to verify." % o.oligarch_name,
+				"timestamp": Time.get_unix_time_from_system(),
+			}
+			netfeed_history.append(event)
+			netfeed_event_generated.emit(event)
 			break
 
 func _travel_to_region(target_region: String):
