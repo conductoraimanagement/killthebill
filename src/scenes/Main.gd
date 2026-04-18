@@ -34,6 +34,7 @@ func _ready() -> void:
 	_setup_cycle_timer()
 
 	_hud.oligarch_picked.connect(_on_oligarch_picked)
+	_hud.politician_bribed.connect(_on_politician_bribed)
 
 	# Pending loaded config, if any
 	var preloaded: Dictionary = {}
@@ -255,12 +256,17 @@ func _on_depot_sabotaged(target: InteractableTarget) -> void:
 
 func _on_terminal_activated(_terminal_node: DatashardTerminal) -> void:
 	_hud.hide_prompt()
-	_hud.show_oligarch_target_modal("leak_scandal")
+	_hud.show_terminal_menu()
 
 
 func _on_oligarch_picked(oligarch_id: String, action_id: String) -> void:
-	print("Main: leaking scandal (action=%s, target=%s)." % [action_id, oligarch_id])
+	print("Main: oligarch action (action=%s, target=%s)." % [action_id, oligarch_id])
 	WorldDirector.trigger_event(action_id, oligarch_id)
+
+
+func _on_politician_bribed(politician_id: String, direction: String) -> void:
+	print("Main: bribe politician (id=%s, dir=%s)." % [politician_id, direction])
+	WorldDirector.trigger_event("bribe_politician", "%s|%s" % [politician_id, direction])
 
 
 # -------------------------------------------------------------

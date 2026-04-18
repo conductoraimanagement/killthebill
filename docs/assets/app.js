@@ -40,7 +40,7 @@ const DOCS = [
         intro: 'The loop the human drives.',
         pages: [
             { file: 'loop.md',        title: 'Core Loop' },
-            { file: 'progression.md', title: 'Progression', stub: true },
+            { file: 'progression.md', title: 'Progression, Credits & Heat' },
             { file: 'combat.md',      title: 'Combat',      stub: true },
             { file: 'heat.md',        title: 'Heat & Evasion', stub: true },
             { file: 'victory.md',     title: 'Victory',     stub: true },

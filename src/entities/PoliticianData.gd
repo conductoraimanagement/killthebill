@@ -59,6 +59,10 @@ class_name PoliticianData
 @export var re_election_proximity: int = 20       # cycles until re-election
 @export var recent_votes: Array[Dictionary] = []  # rolling log of {bill_id, stance}
 @export var position_consistency: float = 0.5     # derived; drops on flip-voting
+## One-shot bribe direction for the next vote. -1.0 → paid to vote NO,
+## +1.0 → paid to vote YES, 0.0 → no active bribe. Cleared by SenateDirector
+## after _tally_and_resolve.
+@export var pending_bribe_direction: float = 0.0
 
 # =============================================================
 # QUIRKS — Human details for LLM speeches, interviews, headlines
@@ -103,6 +107,10 @@ func evaluate_bill(bill: Dictionary, world: Dictionary, peer_stances: Array = []
 	var player_ask: float = float(bill.get("_player_requested_stance", 0.0))  # -1..+1
 	score += (player_leverage / 100.0) * player_ask
 
+	# 4b. One-shot bribe — heavy pull toward the bought direction.
+	if pending_bribe_direction != 0.0:
+		score += pending_bribe_direction * 5.0
+
 	# 5. Charisma contagion from peers who already voted
 	if peer_stances.size() > 0:
 		var peer_sum: float = 0.0
@@ -140,6 +148,19 @@ func _public_stance_on(bill: Dictionary, world: Dictionary) -> float:
 # =============================================================
 # BEHAVIORAL PROFILE
 # =============================================================
+
+# =============================================================
+# BRIBE COST — how much it costs the player to flip this politician
+# on a single bill. Scandal-ridden, corrupt politicians are cheap;
+# clean, principled ones are expensive. See docs/04-player/progression.md.
+# =============================================================
+func get_bribe_cost() -> int:
+	var base: float = 2000.0
+	var scandal_discount: float = (1.0 - scandal_level / 100.0)   # scandalous → cheap
+	var corruption_discount: float = (1.0 - corruption)           # corrupt → cheap
+	var cost: float = base * scandal_discount * corruption_discount
+	return max(100, int(cost))
+
 
 func get_behavioral_profile() -> String:
 	if scandal_level > 70.0:

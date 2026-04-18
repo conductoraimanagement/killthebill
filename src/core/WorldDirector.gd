@@ -83,6 +83,10 @@ func initialize_playthrough(preloaded_config: Dictionary = {}) -> void:
 		senate.bill_history.clear()
 		senate.politicians = []
 
+	# Fresh player state (credits, heat, playstyle trackers).
+	if has_node("/root/PlayerManager"):
+		get_node("/root/PlayerManager").initialize_run()
+
 	# If the user loaded a saved world config, inject it directly and skip
 	# LLM generation entirely. Otherwise fall through to the async generator
 	# chain that hits LLMManager (with offline fallback).
@@ -304,6 +308,11 @@ func _assign_oligarch_territories(region_gen) -> void:
 
 func run_world_cycle() -> void:
 	cycle += 1
+
+	# Passive heat decay — idle playing cools you off slowly.
+	if has_node("/root/PlayerManager"):
+		get_node("/root/PlayerManager").cool_heat(1)
+
 	_evolve_oligarchs()
 
 	# Evolve NPCs
@@ -381,6 +390,13 @@ func trigger_event(action_id: String, target: String = ""):
 			_travel_to_region(target)
 		"leak_scandal":
 			_ripple_leak_scandal(target)
+		"sell_scandal":
+			_ripple_sell_scandal(target)
+		"bribe_politician":
+			# target format: "politician_id|direction" where direction is "YES" or "NO"
+			var parts: PackedStringArray = target.split("|")
+			if parts.size() == 2:
+				_ripple_bribe_politician(parts[0], parts[1])
 	
 	_update_region_dynamics()
 	world_state_changed.emit()
@@ -410,6 +426,37 @@ func _ripple_sabotage(target_sector: String):
 	}
 	netfeed_history.append(event)
 	netfeed_event_generated.emit(event)
+
+	# Loot & heat — see docs/04-player/progression.md (income mechanism #1).
+	if has_node("/root/PlayerManager"):
+		var pm = get_node("/root/PlayerManager")
+		var loot: int = _sabotage_loot_for(target_sector)
+		var heat_amt: int = _sabotage_heat_for(target_sector)
+		pm.add_credits(loot, "sabotage loot: %s" % target_sector)
+		pm.add_heat(heat_amt, "sabotage: %s" % target_sector)
+		pm.bump_playstyle(0.08, 0.02, 0.0, 0.0)
+
+
+func _sabotage_loot_for(sector: String) -> int:
+	match sector:
+		"Food":     return randi_range(300, 600)
+		"Tech":     return randi_range(500, 900)
+		"Pharma":   return randi_range(600, 1000)
+		"Energy":   return randi_range(400, 700)
+		"Security": return randi_range(200, 400)
+		"Media":    return randi_range(200, 500)
+	return 250
+
+
+func _sabotage_heat_for(sector: String) -> int:
+	match sector:
+		"Food":     return 3
+		"Tech":     return 4
+		"Pharma":   return 4
+		"Energy":   return 3
+		"Security": return 5
+		"Media":    return 2
+	return 3
 
 
 func _sabotage_headline(sector: String) -> String:
@@ -481,7 +528,83 @@ func _ripple_leak_scandal(target_id: String):
 			}
 			netfeed_history.append(event)
 			netfeed_event_generated.emit(event)
+
+			if has_node("/root/PlayerManager"):
+				get_node("/root/PlayerManager").bump_playstyle(0.05, 0.0, 0.1, 0.02)
 			break
+
+
+# See progression.md, income mechanism #2 — sell scandal to Media oligarch.
+# Corrupt option: payout now, but suppresses the leak and shifts the senate
+# pro-Enclave. Heat +2. Playstyle ruthlessness bump.
+func _ripple_sell_scandal(target_id: String):
+	var target: OligarchData = null
+	var media: OligarchData = null
+	for o in oligarchs:
+		if o.oligarch_id == target_id and o.alive:
+			target = o
+		if o.sector_of_influence == "Media" and o.alive:
+			media = o
+	if target == null:
+		return
+
+	var payout: int = 500 + int(target.controversy_level * 30)
+	if media != null:
+		payout += 1000
+
+	target.controversy_level = clamp(target.controversy_level - 20, 0, 100)
+	global_economy["senate_alignment"] = clamp(
+		global_economy["senate_alignment"] + 5, 0, 100)
+
+	var silent_event := {
+		"type": "SILENT_RIPPLE",
+		"headline": "",
+		"systemic_impact": "scandal on %s suppressed; Media consolidates leverage" % target.oligarch_name,
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	netfeed_history.append(silent_event)
+	netfeed_event_generated.emit(silent_event)
+
+	if has_node("/root/PlayerManager"):
+		var pm = get_node("/root/PlayerManager")
+		pm.add_credits(payout, "scandal sold to Media")
+		pm.add_heat(2, "dealing in stolen info")
+		pm.bump_playstyle(0.0, 0.08, 0.0, 0.04)
+
+	print("Ripple: Sold dirt on %s for %d credits. Senate shifts pro-Enclave." % [
+		target.oligarch_name, payout,
+	])
+
+
+# See progression.md, spending mechanism — bribe a politician on the active bill.
+# direction: "YES" or "NO" — the stance the player paid for.
+func _ripple_bribe_politician(politician_id: String, direction: String) -> void:
+	var p: PoliticianData = null
+	for pol in politicians:
+		if pol.politician_id == politician_id:
+			p = pol
+			break
+	if p == null or not p.alive:
+		return
+
+	var cost: int = p.get_bribe_cost()
+	if not has_node("/root/PlayerManager"):
+		return
+	var pm = get_node("/root/PlayerManager")
+	if not pm.spend_credits(cost, "bribe: %s" % p.politician_name):
+		return
+
+	# Set the pending direction that PoliticianData.evaluate_bill reads on
+	# the next tally. Heavier pull than ambient player_leverage.
+	p.pending_bribe_direction = 1.0 if direction == "YES" else -1.0
+	p.player_leverage = min(100.0, p.player_leverage + 20.0)
+
+	pm.add_heat(2, "bribery")
+	pm.bump_playstyle(0.0, 0.05, 0.0, 0.03)
+
+	print("Ripple: Bribed %s for %s on the active bill (%d credits)." % [
+		p.politician_name, direction, cost,
+	])
 
 func _travel_to_region(target_region: String):
 	if has_node("/root/RegionGenerator"):

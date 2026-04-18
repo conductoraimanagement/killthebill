@@ -38,7 +38,7 @@ The people — billionaires, politicians, citizens, and the occasional myth.
 ### 4. [Player](04-player/)
 The loop the human drives.
 - [Core Loop](04-player/loop.md) — Observe → Plan → Act → Adapt
-- [Progression](04-player/progression.md) — archetypes, class seeds, roguelite persistence
+- [Progression, Credits & Heat](04-player/progression.md) — class seeds, income mechanisms, spending, heat system *(new, partial)*
 - [Combat](04-player/combat.md) — weapons, noise, stealth
 - [Heat & Evasion](04-player/heat.md) — police, SWAT, military, escape
 - [Victory](04-player/victory.md) — three paths to collapse, all live at once

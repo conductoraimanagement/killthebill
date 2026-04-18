@@ -157,6 +157,8 @@ func _tally_and_resolve(world: Dictionary, oligarchs: Array) -> void:
 			"bill_id": active_bill.get("bill_id", ""),
 			"stance": stance,
 		})
+		# One-shot bribes clear after the vote they paid for.
+		p.pending_bribe_direction = 0.0
 
 	var yes: int = 0
 	var no: int = 0

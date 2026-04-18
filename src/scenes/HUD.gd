@@ -12,6 +12,7 @@ class_name HUD
 # =============================================================
 
 signal oligarch_picked(oligarch_id: String, action_id: String)
+signal politician_bribed(politician_id: String, direction: String)
 
 const COL_BG       := Color(0.05, 0.05, 0.06, 0.88)
 const COL_BG_MODAL := Color(0.02, 0.02, 0.03, 0.92)
@@ -72,6 +73,15 @@ var _load_list: VBoxContainer
 var _load_paste_input: TextEdit
 var _load_status_label: Label
 
+# Terminal menu (LEAK / SELL / LOBBY)
+var _terminal_menu_root: Control
+
+# Politician bribe modal
+var _bribe_root: Control
+var _bribe_list: VBoxContainer
+var _bribe_title: Label
+var _bribe_status: Label
+
 
 func _ready() -> void:
 	layer = 10
@@ -84,6 +94,8 @@ func _ready() -> void:
 	_build_victory_modal()
 	_build_save_modal()
 	_build_load_modal()
+	_build_terminal_menu_modal()
+	_build_bribe_modal()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
 	WorldDirector.netfeed_event_generated.connect(_on_netfeed_event)
@@ -95,6 +107,12 @@ func _ready() -> void:
 	if senate:
 		senate.bill_proposed.connect(_on_bill_proposed)
 		senate.bill_resolved.connect(_on_bill_resolved)
+
+	# PlayerManager hooks (credits + heat)
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm:
+		pm.credits_changed.connect(_on_credits_or_heat_changed)
+		pm.heat_changed.connect(_on_credits_or_heat_changed)
 
 	_refresh_state()
 
@@ -165,7 +183,7 @@ func _build_state_panel() -> void:
 	_state_panel.offset_left = 20
 	_state_panel.offset_top = 20
 	_state_panel.offset_right = 320
-	_state_panel.offset_bottom = 220
+	_state_panel.offset_bottom = 260
 
 	var title := _make_label("// WORLD STATE", COL_ACCENT, 11, true)
 	title.offset_left = PANEL_PAD
@@ -208,7 +226,40 @@ func _refresh_state() -> void:
 		_hex(COL_DIM),
 		"// ticking every 25s",
 	])
+
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm:
+		lines.append("[color=#%s]credits[/color]         [color=#%s]%s[/color] [color=#%s]cr[/color]" % [
+			_hex(COL_DIM),
+			_hex(_color_for_credits(pm.credits)),
+			str(pm.credits).rpad(5),
+			_hex(COL_DIM),
+		])
+		lines.append("[color=#%s]heat[/color]            [color=#%s]%s[/color] [color=#%s]/ 100[/color]" % [
+			_hex(COL_DIM),
+			_hex(_color_for_heat(pm.heat)),
+			str(pm.heat).rpad(5),
+			_hex(COL_DIM),
+		])
+
 	_state_text.text = "\n".join(lines)
+
+
+func _on_credits_or_heat_changed(_new: int, _delta: int, _reason: String) -> void:
+	_refresh_state()
+
+
+func _color_for_credits(value: int) -> Color:
+	if value >= 1000: return COL_COOL
+	if value >= 300:  return COL_FG
+	if value >= 100:  return COL_WARN
+	return COL_HOT
+
+
+func _color_for_heat(value: int) -> Color:
+	if value > 60: return COL_HOT
+	if value > 30: return COL_WARN
+	return COL_FG
 
 
 func _econ_row(key: String, value, unit: String) -> String:
@@ -397,9 +448,9 @@ func _build_politicians_panel() -> void:
 	_pol_panel.anchor_left = 0.0
 	_pol_panel.anchor_top = 0.0
 	_pol_panel.offset_left = 20
-	_pol_panel.offset_top = 240
+	_pol_panel.offset_top = 280
 	_pol_panel.offset_right = 440
-	_pol_panel.offset_bottom = 580
+	_pol_panel.offset_bottom = 620
 	_pol_panel.visible = false
 
 	var title := _make_label("// SENATE ROSTER  (press P to hide)", COL_ACCENT, 11, true)
@@ -677,6 +728,20 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 
+	# Terminal menu: ESC closes
+	if _terminal_menu_root and _terminal_menu_root.visible:
+		if event.keycode == KEY_ESCAPE:
+			hide_terminal_menu()
+			get_viewport().set_input_as_handled()
+		return
+
+	# Bribe modal: ESC closes
+	if _bribe_root and _bribe_root.visible:
+		if event.keycode == KEY_ESCAPE:
+			hide_bribe_modal()
+			get_viewport().set_input_as_handled()
+		return
+
 	# Victory modal swallows everything except the save/load shortcuts,
 	# but those have their own buttons on the panel, so just absorb.
 	if _victory_root and _victory_root.visible:
@@ -850,6 +915,312 @@ func _restart_playthrough() -> void:
 	# re-initialize their state via WorldDirector.initialize_playthrough()
 	# on the new Main._ready().
 	get_tree().reload_current_scene()
+
+
+# -------------------------------------------------------------
+# Terminal menu (DatashardTerminal activation) —
+# LEAK / SELL / LOBBY / CANCEL
+# -------------------------------------------------------------
+func _build_terminal_menu_modal() -> void:
+	_terminal_menu_root = Control.new()
+	_terminal_menu_root.anchor_right = 1.0
+	_terminal_menu_root.anchor_bottom = 1.0
+	_terminal_menu_root.visible = false
+	_terminal_menu_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_terminal_menu_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_terminal_menu_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.55)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_terminal_menu_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -220
+	panel.offset_top = -170
+	panel.offset_right = 220
+	panel.offset_bottom = 170
+	_terminal_menu_root.add_child(panel)
+
+	var title := _make_label("// DATASHARD TERMINAL", COL_COOL, 15, true)
+	title.offset_left = PANEL_PAD + 4
+	title.offset_top = PANEL_PAD
+	title.offset_right = 440 - PANEL_PAD
+	title.offset_bottom = PANEL_PAD + 22
+	panel.add_child(title)
+
+	var sub := _make_label("Pick a move.", COL_DIM, 11, false)
+	sub.offset_left = PANEL_PAD + 4
+	sub.offset_top = PANEL_PAD + 28
+	sub.offset_right = 440 - PANEL_PAD
+	sub.offset_bottom = PANEL_PAD + 46
+	panel.add_child(sub)
+
+	var y := PANEL_PAD + 58
+	var btn_h := 44
+	var gap := 10
+
+	var leak_btn := _make_menu_button(panel, "LEAK SCANDAL TO NETFEED",
+		"Public hit. Tension rises, senate nudges populist. No payout.",
+		COL_ACCENT, y, btn_h)
+	leak_btn.pressed.connect(_on_terminal_leak)
+	y += btn_h + gap
+
+	var sell_btn := _make_menu_button(panel, "SELL SCANDAL TO MEDIA",
+		"Corrupt option. Pays credits; Media suppresses. Senate drifts Enclave.",
+		COL_WARN, y, btn_h)
+	sell_btn.pressed.connect(_on_terminal_sell)
+	y += btn_h + gap
+
+	var lobby_btn := _make_menu_button(panel, "LOBBY A POLITICIAN",
+		"Bribe a senator to flip their vote on the active bill.",
+		COL_COOL, y, btn_h)
+	lobby_btn.pressed.connect(_on_terminal_lobby)
+	y += btn_h + gap
+
+	var cancel := Button.new()
+	cancel.text = "CANCEL (Esc)"
+	cancel.anchor_right = 1.0
+	cancel.offset_left = PANEL_PAD + 4
+	cancel.offset_top = y + 8
+	cancel.offset_right = -PANEL_PAD - 4
+	cancel.offset_bottom = y + 8 + btn_h
+	cancel.add_theme_color_override("font_color", COL_DIM)
+	cancel.add_theme_color_override("font_hover_color", COL_FG)
+	cancel.pressed.connect(hide_terminal_menu)
+	panel.add_child(cancel)
+
+
+func _make_menu_button(panel: Panel, text: String, subtitle: String, color: Color, y: int, h: int) -> Button:
+	var btn := Button.new()
+	btn.text = "%s\n   %s" % [text, subtitle]
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.anchor_right = 1.0
+	btn.offset_left = PANEL_PAD + 4
+	btn.offset_top = y
+	btn.offset_right = -PANEL_PAD - 4
+	btn.offset_bottom = y + h
+	btn.add_theme_color_override("font_color", color)
+	btn.add_theme_color_override("font_hover_color", COL_FG)
+	panel.add_child(btn)
+	return btn
+
+
+func show_terminal_menu() -> void:
+	_terminal_menu_root.visible = true
+	get_tree().paused = true
+
+
+func hide_terminal_menu() -> void:
+	_terminal_menu_root.visible = false
+	get_tree().paused = false
+
+
+func _on_terminal_leak() -> void:
+	_terminal_menu_root.visible = false
+	# Keep the tree paused — show_oligarch_target_modal pauses again.
+	get_tree().paused = false
+	show_oligarch_target_modal("leak_scandal")
+
+
+func _on_terminal_sell() -> void:
+	_terminal_menu_root.visible = false
+	get_tree().paused = false
+	show_oligarch_target_modal("sell_scandal")
+
+
+func _on_terminal_lobby() -> void:
+	_terminal_menu_root.visible = false
+	get_tree().paused = false
+	show_bribe_modal()
+
+
+# -------------------------------------------------------------
+# Politician bribe modal
+# -------------------------------------------------------------
+func _build_bribe_modal() -> void:
+	_bribe_root = Control.new()
+	_bribe_root.anchor_right = 1.0
+	_bribe_root.anchor_bottom = 1.0
+	_bribe_root.visible = false
+	_bribe_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_bribe_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_bribe_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.6)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_bribe_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -380
+	panel.offset_top = -260
+	panel.offset_right = 380
+	panel.offset_bottom = 260
+	_bribe_root.add_child(panel)
+
+	_bribe_title = _make_label("// LOBBY SENATOR", COL_ACCENT, 15, true)
+	_bribe_title.offset_left = PANEL_PAD + 4
+	_bribe_title.offset_top = PANEL_PAD
+	_bribe_title.offset_right = 760 - PANEL_PAD
+	_bribe_title.offset_bottom = PANEL_PAD + 22
+	panel.add_child(_bribe_title)
+
+	var scroll := ScrollContainer.new()
+	scroll.anchor_right = 1.0
+	scroll.offset_left = PANEL_PAD
+	scroll.offset_top = PANEL_PAD + 32
+	scroll.offset_right = -PANEL_PAD
+	scroll.offset_bottom = -80
+	panel.add_child(scroll)
+
+	_bribe_list = VBoxContainer.new()
+	_bribe_list.anchor_right = 1.0
+	_bribe_list.add_theme_constant_override("separation", 6)
+	scroll.add_child(_bribe_list)
+
+	_bribe_status = _make_label("", COL_DIM, 11, true)
+	_bribe_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_bribe_status.anchor_right = 1.0
+	_bribe_status.offset_left = PANEL_PAD + 4
+	_bribe_status.offset_top = -72
+	_bribe_status.offset_right = -PANEL_PAD - 4
+	_bribe_status.offset_bottom = -46
+	_bribe_status.anchor_top = 1.0
+	_bribe_status.anchor_bottom = 1.0
+	panel.add_child(_bribe_status)
+
+	var cancel := Button.new()
+	cancel.text = "CANCEL (Esc)"
+	cancel.anchor_left = 0.0
+	cancel.anchor_top = 1.0
+	cancel.anchor_right = 0.0
+	cancel.anchor_bottom = 1.0
+	cancel.offset_left = PANEL_PAD
+	cancel.offset_top = -44
+	cancel.offset_right = 140
+	cancel.offset_bottom = -PANEL_PAD
+	cancel.add_theme_color_override("font_color", COL_DIM)
+	cancel.add_theme_color_override("font_hover_color", COL_FG)
+	cancel.pressed.connect(hide_bribe_modal)
+	panel.add_child(cancel)
+
+
+func show_bribe_modal() -> void:
+	_refresh_bribe_list()
+	_bribe_root.visible = true
+	get_tree().paused = true
+
+
+func hide_bribe_modal() -> void:
+	_bribe_root.visible = false
+	get_tree().paused = false
+
+
+func _refresh_bribe_list() -> void:
+	for child in _bribe_list.get_children():
+		child.queue_free()
+
+	if _active_bill.is_empty():
+		_bribe_title.text = "// LOBBY SENATOR"
+		var note := Label.new()
+		note.text = "No bill currently in debate. A bribe now will apply to the NEXT bill the Senate proposes."
+		note.add_theme_color_override("font_color", COL_DIM)
+		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_bribe_list.add_child(note)
+	else:
+		_bribe_title.text = "// LOBBY SENATOR — on: %s" % str(_active_bill.get("title", ""))
+
+	_bribe_status.text = ""
+
+	for p in WorldDirector.politicians:
+		if not p.alive:
+			continue
+		_bribe_list.add_child(_build_bribe_row(p))
+
+
+func _build_bribe_row(p) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+
+	# Left: name + faction + predicted stance + already-bribed indicator
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation", 0)
+
+	var nm := Label.new()
+	var warn_mark := ""
+	if p.scandal_level > 50.0:
+		warn_mark = "[SCANDAL] "
+	nm.text = "%s%s   (%s, %s)" % [warn_mark, p.politician_name, p.faction, p.get_behavioral_profile()]
+	nm.add_theme_color_override("font_color", COL_FG)
+	nm.add_theme_font_size_override("font_size", 13)
+	info.add_child(nm)
+
+	var meta := Label.new()
+	var predicted := ""
+	if not _active_bill.is_empty():
+		predicted = p.evaluate_bill(_active_bill, WorldDirector.global_economy, [])
+	var bribe_note := ""
+	if p.pending_bribe_direction > 0:
+		bribe_note = "  [bribed: YES]"
+	elif p.pending_bribe_direction < 0:
+		bribe_note = "  [bribed: NO]"
+	meta.text = "predicted: %s%s   cost: %d" % [
+		predicted if predicted != "" else "—",
+		bribe_note,
+		p.get_bribe_cost(),
+	]
+	meta.add_theme_color_override("font_color", COL_DIM)
+	meta.add_theme_font_size_override("font_size", 11)
+	info.add_child(meta)
+
+	row.add_child(info)
+
+	# Right: two buttons
+	var yes_btn := Button.new()
+	yes_btn.text = "→ YES"
+	yes_btn.add_theme_color_override("font_color", COL_WARN)
+	yes_btn.add_theme_color_override("font_hover_color", COL_FG)
+	yes_btn.pressed.connect(_on_bribe_pick.bind(p.politician_id, "YES"))
+	row.add_child(yes_btn)
+
+	var no_btn := Button.new()
+	no_btn.text = "→ NO"
+	no_btn.add_theme_color_override("font_color", COL_COOL)
+	no_btn.add_theme_color_override("font_hover_color", COL_FG)
+	no_btn.pressed.connect(_on_bribe_pick.bind(p.politician_id, "NO"))
+	row.add_child(no_btn)
+
+	# Disable if player can't afford
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm and not pm.can_afford(p.get_bribe_cost()):
+		yes_btn.disabled = true
+		no_btn.disabled = true
+
+	return row
+
+
+func _on_bribe_pick(politician_id: String, direction: String) -> void:
+	politician_bribed.emit(politician_id, direction)
+	# Let Main apply the ripple, then refresh the modal so the user sees the update.
+	call_deferred("_refresh_bribe_list")
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm:
+		_bribe_status.text = "Paid. Credits remaining: %d" % pm.credits
+		_bribe_status.add_theme_color_override("font_color", COL_COOL)
 
 
 # -------------------------------------------------------------
@@ -1339,6 +1710,8 @@ func _action_label(action_id: String) -> String:
 	match action_id:
 		"leak_scandal":
 			return "LEAK SCANDAL TO NETFEED"
+		"sell_scandal":
+			return "SELL SCANDAL TO MEDIA OLIGARCH"
 		"assassinate_oligarch":
 			return "MARK FOR ASSASSINATION"
 	return action_id.to_upper()
