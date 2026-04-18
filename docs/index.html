@@ -12,45 +12,100 @@
       <div class="nav-section">OVERVIEW</div>
       <a href="index.html" class="active">Dashboard</a>
       <a href="status.html">Project Status</a>
-      
-      <div class="nav-section">ROADMAP (PHASES)</div>
+      <div class="nav-section">ROADMAP</div>
       <a href="phases/phase1-architecture.html">Phase 1: Architecture</a>
       <a href="phases/phase2-prototyping.html">Phase 2: Prototyping</a>
       <a href="phases/phase3-core-systems.html">Phase 3: Core Systems</a>
       <a href="phases/phase4-gameplay.html">Phase 4: Gameplay</a>
-      
-      <div class="nav-section">CORE ARCHITECTURE</div>
-      <a href="core/world-director.html">World Director</a>
-      <a href="core/player-manager.html">Player Manager</a>
-      
+      <div class="nav-section">CORE SINGLETONS</div>
+      <a href="core/world-director.html">WorldDirector</a>
+      <a href="core/player-manager.html">PlayerManager</a>
+      <a href="core/population-director.html">PopulationDirector</a>
+      <a href="core/llm-manager.html">LLMManager</a>
       <div class="nav-section">ENTITIES</div>
-      <a href="entities/npc-ai.html">NPC State & LLM</a>
+      <a href="entities/npc-ai.html">NPC: Nature & Nurture</a>
+      <a href="entities/relationships.html">Relationships & Agents</a>
       <a href="entities/social-fabric.html">Social Fabric Engine</a>
-      
       <div class="nav-section">SYSTEMS</div>
+      <a href="systems/netfeed.html">NetFeed & Events</a>
       <a href="systems/heat-evasion.html">Heat & Evasion</a>
       <a href="systems/combat.html">Combat Mechanics</a>
       <a href="systems/macro-world.html">Regions & Travel</a>
+      <a href="systems/victory-conditions.html">Victory Conditions</a>
     </div>
   </nav>
   
   <main class="content">
     <h1>KILL THE BILL: Documentation Database</h1>
-    <p>Welcome to the Lead Architect's systemic database. This portal contains all technical schemas, variables, and interaction logic for the Godot simulation engine.</p>
+    <p>Welcome to the Lead Architect's systemic database. This portal contains all technical schemas, variables, and interaction logic for the Godot 4 simulation engine. The game is a 3D isometric immersive sim where the player manipulates a dynamic economy, exploits a PR & Reputation Engine, and recruits persistent NPCs as agents to topple a corporate oligarchy.</p>
     
-    <h2>System Status Overview</h2>
+    <h2>Project Snapshot</h2>
     <div class="grid">
       <div class="card">
-        <h3><span class="badge gold">ACTIVE</span> Core Singletons</h3>
-        <p>The global brain and state managers are fully mapped. These include the WorldDirector (which handles the butterfly effect and economy) and the PlayerManager (handling traits and archetypes).</p>
+        <h3><span class="badge gold">ACTIVE</span> Phase 3: Core Systems</h3>
+        <p>LLM Network Manager with 6-provider fallback (Gemini → Local). NetFeed event streaming. NPC Nature/Nurture evolution. Relationship & Agent system.</p>
       </div>
       <div class="card">
-        <h3><span class="badge green">READY</span> Entity AI Integration</h3>
-        <p>The unscripted NPC system relies on an Epidemic Influence model. NPCs use their dynamic state machine payload to interface directly with an LLM for dialogue.</p>
+        <h3><span class="badge green">40</span> Persistent NPCs</h3>
+        <p>Randomized roster per playthrough. 6 intrinsic traits, 56+ quirks, behavioral profiling. Each NPC evolves uniquely through the same world events.</p>
       </div>
       <div class="card">
-        <h3><span class="badge red">DANGER</span> Direct Action Systems</h3>
-        <p>Loud actions trigger the Heat System, deploying SWAT and Mechs based on the local crime tier. Combat is highly systemic and tied to stealth.</p>
+        <h3><span class="badge red">3</span> Victory Paths</h3>
+        <p>Direct Action (Assassination), Systemic Collapse (Economic Hacking), Political Revolution (NPC Persuasion). All tracked simultaneously.</p>
+      </div>
+    </div>
+
+    <h2>Architecture Overview</h2>
+    <div class="grid" style="grid-template-columns: 1fr;">
+      <div class="card">
+        <table style="width:100%; border-collapse: collapse;">
+          <tr style="border-bottom: 1px solid var(--border);">
+            <th style="text-align:left; padding: 0.5rem;">Singleton</th>
+            <th style="text-align:left; padding: 0.5rem;">Role</th>
+            <th style="text-align:left; padding: 0.5rem;">Script</th>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><a href="core/world-director.html" style="color: var(--accent-toxic);">WorldDirector</a></td>
+            <td style="padding: 0.5rem;">Global economy, Butterfly Effect, PR Engine, NetFeed cycle</td>
+            <td style="padding: 0.5rem;"><code>src/core/WorldDirector.gd</code></td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><a href="core/player-manager.html" style="color: var(--accent-toxic);">PlayerManager</a></td>
+            <td style="padding: 0.5rem;">Archetype, traits, roguelite succession</td>
+            <td style="padding: 0.5rem;"><code>src/core/PlayerManager.gd</code></td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><a href="core/population-director.html" style="color: var(--accent-toxic);">PopulationDirector</a></td>
+            <td style="padding: 0.5rem;">Persistent NPC roster, quirks, evolution cycle</td>
+            <td style="padding: 0.5rem;"><code>src/core/PopulationDirector.gd</code></td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem;"><a href="core/llm-manager.html" style="color: var(--accent-toxic);">LLMManager</a></td>
+            <td style="padding: 0.5rem;">Multi-provider LLM API wrapper, NetFeed generation</td>
+            <td style="padding: 0.5rem;"><code>src/core/LLMManager.gd</code></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <h2>Quick Links</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Entities</h3>
+        <ul>
+          <li><a href="entities/npc-ai.html" style="color: var(--accent-toxic);">NPC Nature & Nurture</a> — Intrinsic traits, behavioral profiles</li>
+          <li><a href="entities/relationships.html" style="color: var(--accent-toxic);">Relationships & Agents</a> — Bond tiers, trust, objectives</li>
+          <li><a href="entities/social-fabric.html" style="color: var(--accent-toxic);">Social Fabric</a> — Crowd psychology, pressure cycle</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Systems</h3>
+        <ul>
+          <li><a href="systems/netfeed.html" style="color: var(--accent-toxic);">NetFeed & Events</a> — LLM conjecture, event types</li>
+          <li><a href="systems/heat-evasion.html" style="color: var(--accent-toxic);">Heat & Evasion</a> — Crime tiers, escalation</li>
+          <li><a href="systems/combat.html" style="color: var(--accent-toxic);">Combat Mechanics</a> — Weapons, noise, stealth</li>
+          <li><a href="systems/victory-conditions.html" style="color: var(--accent-toxic);">Victory Conditions</a> — Three collapse paths</li>
+        </ul>
       </div>
     </div>
   </main>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PopulationDirector - KILL THE BILL</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <nav class="sidebar">
+    <h1>KILL THE BILL</h1>
+    <div class="nav-links">
+      <div class="nav-section">OVERVIEW</div>
+      <a href="../index.html">Dashboard</a>
+      <a href="../status.html">Project Status</a>
+      
+      <div class="nav-section">ROADMAP</div>
+      <a href="../phases/phase1-architecture.html">Phase 1: Architecture</a>
+      <a href="../phases/phase2-prototyping.html">Phase 2: Prototyping</a>
+      <a href="../phases/phase3-core-systems.html">Phase 3: Core Systems</a>
+      <a href="../phases/phase4-gameplay.html">Phase 4: Gameplay</a>
+      
+      <div class="nav-section">CORE SINGLETONS</div>
+      <a href="world-director.html">WorldDirector</a>
+      <a href="player-manager.html">PlayerManager</a>
+      <a href="population-director.html" class="active">PopulationDirector</a>
+      <a href="llm-manager.html">LLMManager</a>
+      
+      <div class="nav-section">ENTITIES</div>
+      <a href="../entities/npc-ai.html">NPC: Nature & Nurture</a>
+      <a href="../entities/relationships.html">Relationships & Agents</a>
+      <a href="../entities/social-fabric.html">Social Fabric Engine</a>
+      
+      <div class="nav-section">SYSTEMS</div>
+      <a href="../systems/netfeed.html">NetFeed & Events</a>
+      <a href="../systems/heat-evasion.html">Heat & Evasion</a>
+      <a href="../systems/combat.html">Combat Mechanics</a>
+      <a href="../systems/macro-world.html">Regions & Travel</a>
+      <a href="../systems/victory-conditions.html">Victory Conditions</a>
+    </div>
+  </nav>
+  
+  <main class="content">
+    <h1>PopulationDirector Singleton</h1>
+    <p>The <code>PopulationDirector</code> manages the <strong>persistent NPC roster</strong>. At the start of each playthrough, it generates a fixed cast of ~40 unique characters with fully randomized intrinsic personality traits. These NPCs persist for the entire run and evolve based on world pressure filtered through their immutable nature. No NPC is spawned or despawned mid-game.</p>
+    
+    <h2>Design Philosophy</h2>
+    <div class="card" style="margin-bottom: 2rem;">
+      <p>NPCs are <strong>not disposable</strong>. They are persistent characters the player can form relationships with, recruit as agents, or watch evolve into radicals or broken shells depending on the systemic pressures. Each playthrough generates a completely different roster, ensuring high replayability.</p>
+    </div>
+
+    <h2>Roster Generation (<code>generate_new_roster()</code>)</h2>
+    <p>Called once at the start of a new playthrough. The function creates <code>MAX_NPCS</code> (40) persistent <code>NPCData</code> resources.</p>
+
+    <h3>Step 1: Name Generation</h3>
+    <div class="card" style="margin-bottom: 1rem;">
+      <p>Two pools of 40 first names and 40 last names are shuffled. Names are drawn sequentially using modulo indexing to ensure uniqueness within a run. The pools are multicultural to reflect the collapsed global society.</p>
+    </div>
+
+    <h3>Step 2: Social Class Assignment</h3>
+    <div class="card" style="margin-bottom: 1rem;">
+      <p>Each NPC is assigned a class via weighted random roll:</p>
+      <table style="width:100%; border-collapse: collapse;">
+        <tr style="border-bottom: 1px solid var(--border);">
+          <th style="text-align:left; padding: 0.5rem;">Class</th>
+          <th style="text-align:left; padding: 0.5rem;">Weight</th>
+          <th style="text-align:left; padding: 0.5rem;">Rationale</th>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td style="padding: 0.5rem;">Oligarch</td>
+          <td style="padding: 0.5rem;">5%</td>
+          <td style="padding: 0.5rem;">Extremely rare. High starting wealth (800-1500cr).</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td style="padding: 0.5rem;">Enforcer</td>
+          <td style="padding: 0.5rem;">10%</td>
+          <td style="padding: 0.5rem;">The system's enforcers. Moderate wealth (150-400cr).</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td style="padding: 0.5rem;">Worker</td>
+          <td style="padding: 0.5rem;">40%</td>
+          <td style="padding: 0.5rem;">The struggling majority. Low wealth (30-120cr).</td>
+        </tr>
+        <tr>
+          <td style="padding: 0.5rem;">Destitute</td>
+          <td style="padding: 0.5rem;">45%</td>
+          <td style="padding: 0.5rem;">The bottom. Near-zero wealth (0-30cr).</td>
+        </tr>
+      </table>
+    </div>
+
+    <h3>Step 3: Intrinsic Trait Randomization</h3>
+    <div class="card" style="margin-bottom: 1rem;">
+      <p>All 6 intrinsic traits (<code>resilience</code>, <code>aggression</code>, <code>empathy</code>, <code>idealism</code>, <code>greed</code>, <code>conformity</code>) are randomized across the full <code>0.0-1.0</code> range using <code>randf()</code>. After randomization, slight <strong>class-based biases</strong> are applied:</p>
+      <ul>
+        <li><strong>Oligarchs:</strong> <code>greed += 0.2</code>, <code>empathy -= 0.2</code> (upbringing favors self-interest)</li>
+        <li><strong>Enforcers:</strong> <code>conformity += 0.2</code>, <code>aggression += 0.1</code> (military conditioning)</li>
+        <li><strong>Destitute:</strong> <code>resilience += 0.1</code> (survival of the toughest)</li>
+      </ul>
+    </div>
+
+    <h3>Step 4: Quirk Assignment</h3>
+    <div class="card" style="margin-bottom: 1rem;">
+      <p>Each NPC receives <strong>1-3 random quirks</strong> drawn from a shuffled combined pool of ~56 quirks across 5 categories:</p>
+      <table style="width:100%; border-collapse: collapse;">
+        <tr style="border-bottom: 1px solid var(--border);">
+          <th style="text-align:left; padding: 0.5rem;">Category</th>
+          <th style="text-align:left; padding: 0.5rem;">Count</th>
+          <th style="text-align:left; padding: 0.5rem;">Examples</th>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td style="padding: 0.5rem;">Habits</td>
+          <td style="padding: 0.5rem;">12</td>
+          <td style="padding: 0.5rem;">"Always chewing something", "Fidgets with a broken lighter"</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td style="padding: 0.5rem;">Speech</td>
+          <td style="padding: 0.5rem;">12</td>
+          <td style="padding: 0.5rem;">"Stutters when nervous", "Swears constantly"</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td style="padding: 0.5rem;">Physical</td>
+          <td style="padding: 0.5rem;">12</td>
+          <td style="padding: 0.5rem;">"Has a limp from an Enforcer beating", "One eye clouded over"</td>
+        </tr>
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td style="padding: 0.5rem;">Fears</td>
+          <td style="padding: 0.5rem;">10</td>
+          <td style="padding: 0.5rem;">"Terrified of enclosed spaces", "Flinches at loud noises"</td>
+        </tr>
+        <tr>
+          <td style="padding: 0.5rem;">Backstory</td>
+          <td style="padding: 0.5rem;">12</td>
+          <td style="padding: 0.5rem;">"Lost a child to water rationing", "Former Enforcer who deserted"</td>
+        </tr>
+      </table>
+      <p style="margin-top: 1rem;">Quirks are injected into the LLM prompt as <code>"Quirks you MUST embody: ..."</code> to ensure every conversation feels human.</p>
+    </div>
+
+    <h2>World Cycle Evolution (<code>evolve_all_npcs()</code>)</h2>
+    <div class="card" style="margin-bottom: 1rem;">
+      <p>Called by the <code>WorldDirector</code> each game cycle. Iterates through the entire roster and passes the current <code>global_economy</code> dictionary to each NPC's <code>process_world_pressure()</code> method. The same raw numbers produce different outcomes per NPC because of their unique intrinsic trait filters.</p>
+      <p><strong>Parameters passed:</strong> <code>tension</code>, <code>food_price</code>, <code>security_presence</code></p>
+    </div>
+
+    <h2>Query Functions</h2>
+    <div class="grid">
+      <div class="card">
+        <h3><code>get_npc_by_id(id)</code></h3>
+        <p>Returns a specific NPC by their unique <code>npc_id</code> string. Used for targeted interactions.</p>
+      </div>
+      <div class="card">
+        <h3><code>get_radicals()</code></h3>
+        <p>Returns an array of all NPCs whose <code>get_behavioral_profile()</code> is currently "Radical Agitator". Useful for the player to find potential violent allies.</p>
+      </div>
+      <div class="card">
+        <h3><code>get_broken()</code></h3>
+        <p>Returns all NPCs profiled as "Broken and Submissive". These are potential exploitation targets or indicators of extreme oppression.</p>
+      </div>
+      <div class="card">
+        <h3><code>get_population_summary()</code></h3>
+        <p>Returns a <code>Dictionary</code> mapping behavioral profiles to their count. E.g., <code>{"Radical Agitator": 3, "Anxious Citizen": 22, ...}</code>. Powers the UI population mood indicator.</p>
+      </div>
+    </div>
+
+    <h2>Source File</h2>
+    <div class="card">
+      <p><strong>Script:</strong> <code>src/core/PopulationDirector.gd</code></p>
+      <p><strong>Type:</strong> Autoload Singleton (Node)</p>
+      <p><strong>Dependencies:</strong> <code>NPCData</code> (Resource), <code>WorldDirector</code> (reads global_economy)</p>
+    </div>
+  </main>
+</body>
+</html>
