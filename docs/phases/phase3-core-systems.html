@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Phase 3: Core Systems - KILL THE BILL</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <nav class="sidebar">
+    <h1>KILL THE BILL</h1>
+    <div class="nav-links">
+      <div class="nav-section">OVERVIEW</div>
+      <a href="../index.html">Dashboard</a>
+      <a href="../status.html">Project Status</a>
+      
+      <div class="nav-section">ROADMAP (PHASES)</div>
+      <a href="phase1-architecture.html">Phase 1: Architecture</a>
+      <a href="phase2-prototyping.html">Phase 2: Prototyping</a>
+      <a href="phase3-core-systems.html" class="active">Phase 3: Core Systems</a>
+      <a href="phase4-gameplay.html">Phase 4: Gameplay</a>
+      
+      <div class="nav-section">CORE ARCHITECTURE</div>
+      <a href="../core/world-director.html">World Director</a>
+      <a href="../core/player-manager.html">Player Manager</a>
+      
+      <div class="nav-section">ENTITIES</div>
+      <a href="../entities/npc-ai.html">NPC State & LLM</a>
+      <a href="../entities/social-fabric.html">Social Fabric Engine</a>
+      
+      <div class="nav-section">SYSTEMS</div>
+      <a href="../systems/heat-evasion.html">Heat & Evasion</a>
+      <a href="../systems/combat.html">Combat Mechanics</a>
+      <a href="../systems/macro-world.html">Regions & Travel</a>
+    </div>
+  </nav>
+  
+  <main class="content">
+    <h1><span class="badge neon">PHASE 3</span> Core Systems & LLM Integration</h1>
+    <p>This phase wires up the "brain" of the simulation. It connects the procedural NPC data schemas to external LLM APIs to generate dynamic responses, and implements the Social Fabric polling loop.</p>
+    
+    <div class="grid" style="grid-template-columns: 1fr;"> <!-- Make it full width for more detail -->
+      <div class="card" style="border-color: var(--accent-toxic);">
+        <h3><span class="badge green">DONE</span> 3.1: NPCData Resource Expansion</h3>
+        <p><strong>Objective:</strong> Strongly type the micro-state of every NPC to ensure the LLM has exact psychological and economic context.</p>
+        <h4>Technical Breakdown:</h4>
+        <ul>
+          <li><strong>Class:</strong> Custom Godot <code>Resource</code> (<code>NPCData.gd</code>).</li>
+          <li><strong>Core Variables:</strong> <code>health</code>, <code>wealth</code>, <code>paranoia</code>.</li>
+          <li><strong>Social Variables:</strong> <code>social_cohesion</code> (How likely they are to conform to the crowd), <code>defiance_level</code> (How likely they are to rebel against Enforcers).</li>
+          <li><strong>Memory Array:</strong> <code>memories: Array[String]</code>. A rolling ledger of the last 5 interactions with the player or major world events to ensure narrative consistency across LLM calls.</li>
+          <li><strong>Serialization:</strong> <code>get_llm_context_string()</code> formats the Resource into a highly compressed, token-efficient prompt string to append to the System Prompt.</li>
+        </ul>
+      </div>
+
+      <div class="card" style="border-color: var(--accent-toxic);">
+        <h3><span class="badge green">DONE</span> 3.2: LLM Network & NetFeed Engine</h3>
+        <p><strong>Objective:</strong> Create a robust, multi-provider API wrapper that acts as the "Game Master" and generates systemic consequences.</p>
+        <h4>Technical Breakdown:</h4>
+        <ul>
+          <li><strong>Class:</strong> <code>HTTPRequest</code> Singleton Autoload (<code>LLMManager.gd</code>).</li>
+          <li><strong>Ultimate Provider Fallback:</strong> On <code>_ready()</code>, it scans `OS.get_environment()` and cascades securely: <code>Gemini -> OpenAI -> Claude -> Qwen -> OpenRouter</code>. If all cloud keys fail, it defaults to a <strong>Local Server Loopback</strong> (e.g., Ollama <code>llama3</code> on <code>127.0.0.1:11434</code>).</li>
+          <li><strong>Dynamic Payload Formatting:</strong> Automatically shifts JSON structures depending on the provider (e.g., mapping Claude's <code>max_tokens</code> vs OpenAI's <code>response_format: json_object</code>).</li>
+          <li><strong>Complex Conjecture Generation:</strong> The <code>trigger_news_cycle()</code> passes the entire global state (Oligarch wealth, tension, prices) to the LLM. The LLM generates an <em>unconstrained</em> stream of events based on this exact state intersection.</li>
+          <li><strong>Event Types:</strong> Parses two specific outputs from the LLM stream: 
+            <ul>
+              <li><strong>`NEWS_TICKER`:</strong> Public headlines appended to the NetFeed.</li>
+              <li><strong>`SILENT_RIPPLE`:</strong> Invisible systemic shifts that silently alter the math behind the scenes.</li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+
+      <div class="card" style="border-color: var(--border);">
+        <h3><span class="badge accent">TODO</span> 3.3: Contextual Persuasion UI & NetFeed</h3>
+        <p><strong>Objective:</strong> Build the diegetic physical interface (the player's "Datapad") to view the NetFeed and manipulate NPCs.</p>
+        <h4>Technical Breakdown:</h4>
+        <ul>
+          <li><strong>Node Hierarchy:</strong> <code>CanvasLayer</code> -> <code>PanelContainer</code> (CRT-styled terminal).</li>
+          <li><strong>The NetFeed Ticker:</strong> A scrolling <code>RichTextLabel</code> that subscribes to the <code>WorldDirector.netfeed_event_generated</code> signal, updating in real-time as the LLM streams events.</li>
+          <li><strong>Hybrid Dialogue System:</strong> 
+            <ul>
+              <li><strong>Dynamic Buttons:</strong> A <code>VBoxContainer</code> that auto-populates with standard systemic responses (e.g., [Bribe], [Threaten]) based on the NPC's class.</li>
+              <li><strong>Open Input:</strong> A <code>LineEdit</code> text box for the player to attempt "social engineering". This text is sent directly to the LLM.</li>
+            </ul>
+          </li>
+          <li><strong>Styling:</strong> Must adhere strictly to the corporate-brutalist CSS tokens (neon accents, monospace fonts, dark backgrounds).</li>
+        </ul>
+      </div>
+
+      <div class="card" style="border-color: var(--border);">
+        <h3><span class="badge accent">TODO</span> 3.4: Social Fabric Polling Loop</h3>
+        <p><strong>Objective:</strong> Implement the localized crowd psychology math to simulate riots or pacification.</p>
+        <h4>Technical Breakdown:</h4>
+        <ul>
+          <li><strong>Execution:</strong> A 60-second <code>Timer</code> loop residing inside <code>WorldDirector.gd</code>.</li>
+          <li><strong>Sector Zeitgeist Math:</strong> 
+             <br><code>Zeitgeist = SUM(NPC.tension) / Active_NPC_Count</code>
+          </li>
+          <li><strong>Conformity Gravity:</strong> Iterates through all active NPCs. If an NPC has high <code>social_cohesion</code>, their personal tension is mathematically pulled toward the <code>Sector Zeitgeist</code>. If they have high <code>defiance_level</code>, they resist the pull.</li>
+          <li><strong>Systemic Triggers:</strong> If the local Zeitgeist hits a critical mass (e.g., >80), the Sector automatically enters a <strong>Riot State</strong>, spawning Enforcer drones and locking down travel without direct player involvement.</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

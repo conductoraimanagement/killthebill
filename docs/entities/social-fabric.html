@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Social Fabric - KILL THE BILL</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <nav class="sidebar">
+    <h1>KILL THE BILL</h1>
+    <div class="nav-links">
+      <div class="nav-section">OVERVIEW</div>
+      <a href="../index.html">Dashboard</a>
+      <a href="../status.html">Project Status</a>
+      
+      <div class="nav-section">ROADMAP (PHASES)</div>
+      <a href="../phases/phase1-architecture.html">Phase 1: Architecture</a>
+      <a href="../phases/phase2-prototyping.html">Phase 2: Prototyping</a>
+      <a href="../phases/phase3-core-systems.html">Phase 3: Core Systems</a>
+      <a href="../phases/phase4-gameplay.html">Phase 4: Gameplay</a>
+      
+      <div class="nav-section">CORE ARCHITECTURE</div>
+      <a href="../core/world-director.html">World Director</a>
+      <a href="../core/player-manager.html">Player Manager</a>
+      
+      <div class="nav-section">ENTITIES</div>
+      <a href="npc-ai.html">NPC State & LLM</a>
+      <a href="social-fabric.html" class="active">Social Fabric Engine</a>
+      
+      <div class="nav-section">SYSTEMS</div>
+      <a href="../systems/heat-evasion.html">Heat & Evasion</a>
+      <a href="../systems/combat.html">Combat Mechanics</a>
+      <a href="../systems/macro-world.html">Regions & Travel</a>
+    </div>
+  </nav>
+  
+  <main class="content">
+    <h1>Social Fabric Engine</h1>
+    <p>The Social Fabric Engine simulates crowd psychology using an "Epidemic Influence Model." Because every NPC has <strong>persistent intrinsic traits</strong> (set at roster generation), the same world event produces vastly different crowd compositions depending on who is in the sector.</p>
+    
+    <h2>The Pressure Cycle</h2>
+    <p>Every in-game cycle, the <code>PopulationDirector.evolve_all_npcs()</code> function passes the current <code>global_economy</code> state through every persistent NPC's <code>process_world_pressure()</code> method. Each NPC's intrinsic traits filter the same raw numbers into unique personal outcomes:</p>
+    
+    <div class="grid" style="grid-template-columns: 1fr;">
+      <div class="card">
+        <h4>The Math: How Traits Filter Pressure</h4>
+        <ul>
+          <li><strong>Stress:</strong> <code>stress += pressure * (1.0 - resilience * 0.7)</code> — Resilient NPCs absorb more before cracking.</li>
+          <li><strong>Hope:</strong> <code>hope -= decay * (1.0 - idealism * 0.6)</code> — Idealists lose hope slower under oppression.</li>
+          <li><strong>Radicalization:</strong> <code>radical_push = aggression * 3.0 - conformity * 2.0</code> — Aggression drives extremism, conformity brakes it. Only fires when stressed AND hopeless.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>Emergent Crowd Dynamics</h2>
+    <p>Because each NPC processes the same world state through different personality filters, the crowd naturally stratifies without any scripted logic:</p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="badge red">RADICALS</span> High Aggression + Low Conformity</h3>
+        <p>Under sustained pressure, these NPCs' <code>radicalization</code> spikes. They become <strong>Radical Agitators</strong> — Kaczynski types who reject both the system and the crowd. The player can recruit them for violent direct action, but they are unpredictable allies.</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge accent">BROKEN</span> Low Resilience + High Conformity</h3>
+        <p>These NPCs crack first. Their stress overwhelms their capacity to resist, and their conformity means they submit rather than fight. They become <strong>Broken and Submissive</strong> — useless as allies but easy to exploit or ignore.</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge green">IDEALISTS</span> High Idealism + High Empathy</h3>
+        <p>Under moderate stress, these NPCs become <strong>Revolutionary Idealists</strong>. They believe in collective action and are the ideal candidates for organizing a political revolution (Victory Condition 3).</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge gold">EXPLOITERS</span> High Greed + Low Empathy</h3>
+        <p>Regardless of stress, these NPCs are <strong>Opportunistic Exploiters</strong>. They thrive in chaos, hoarding resources and selling information. Useful as black market contacts but will betray the player for profit.</p>
+      </div>
+    </div>
+
+    <h2>The Affinity System (Player Perception)</h2>
+    <div class="card" style="margin-top: 1rem;">
+      <p>An NPC's <code>opinion_of_player</code> float (-1.0 to 1.0) is calculated using a multi-axis mechanism, now deeply influenced by intrinsic traits:</p>
+      <ol>
+        <li><strong>Class Prejudice:</strong> Baseline modifier. Destitute NPCs distrust White Collar players. Enforcers distrust everyone below them.</li>
+        <li><strong>Economic Impact:</strong> If the player's actions hurt the NPC's <code>immediate_need</code>, affinity drops. High-empathy NPCs also lose affinity when others near them are hurt.</li>
+        <li><strong>Personality Contagion:</strong> High-<code>conformity</code> NPCs gradually adopt the crowd's opinion of the player. Low-conformity NPCs form their own judgment and may like the player precisely because the crowd hates them.</li>
+      </ol>
+    </div>
+  </main>
+</body>
+</html>

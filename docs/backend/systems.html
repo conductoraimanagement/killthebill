@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Backend Systems - KILL THE BILL</title>
+  <link rel="stylesheet" href="../styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+  </script>
+</head>
+<body>
+  <nav class="sidebar">
+    <h1>KILL THE BILL</h1>
+    <div class="nav-links">
+      <a href="../general/architecture.html">Architecture</a>
+      <a href="../backend/systems.html" class="active">Backend Systems</a>
+      <a href="../frontend/visuals.html">Frontend Visuals</a>
+    </div>
+  </nav>
+  <main class="content">
+    <h1>Backend Systems: The Living Engine</h1>
+    
+    <p>The backend of KILL THE BILL is built on a highly reactive, interconnected systemic web. Every action ripples through the economy, social fabric, and local sector dynamics.</p>
+
+    <h2>The Systemic Loop Schema</h2>
+    <div class="diagram-container">
+      <div class="mermaid">
+        graph TD
+          A[Player Action] -->|Assassinate, Hack, Sabotage| B(WorldDirector)
+          B -->|Adjusts Global Wealth & Tension| C{Global Economy}
+          C -->|Food Price, Security Level| D[Sector Dynamics]
+          C -->|Dictates Zeitgeist| E[Social Fabric Engine]
+          D -->|Changes Local Modifiers| F[Active Map Constraints]
+          E -->|Calculates Cohesion vs Defiance| G[NPC Controller]
+          F -->|Spawns Hazards & Guards| G
+          G -->|Injects Context Payload| H((LLM API))
+          H -->|Generates Dialogue & Action| I[NPC Reacts to Player]
+      </div>
+    </div>
+
+    <h2>Core System Components</h2>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="badge gold">Singleton</span> WorldDirector</h3>
+        <p>The central brain. Manages the wealth, paranoia, and survival of the 4 Oligarchs. It calculates the global economy variables whenever an event is triggered.</p>
+        <ul>
+          <li><strong>Food Price:</strong> Drives NPC survival needs.</li>
+          <li><strong>Security Level:</strong> Dictates Enforcer spawn rates.</li>
+          <li><strong>Senate Alignment:</strong> Corporate vs. Reformist control.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="badge red">Mechanic</span> Social Fabric Engine</h3>
+        <p>An Epidemic Influence Model calculating crowd psychology. Driven by the Sector's Zeitgeist (average mood).</p>
+        <ul>
+          <li><strong>Cohesive NPCs:</strong> Drift toward the crowd's mood.</li>
+          <li><strong>Defiant NPCs:</strong> Rebel against the crowd's mood.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="badge green">Integration</span> LLM Context Payload</h3>
+        <p>NPCs do not have scripted trees. When the player talks to an NPC, the <code>NPCController</code> gathers the NPC's social class, mood, and global economic constraints to form a JSON payload for the LLM.</p>
+      </div>
+    </div>
+
+  </main>
+</body>
+</html>

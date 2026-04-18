@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Phase 4: Gameplay - KILL THE BILL</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <nav class="sidebar">
+    <h1>KILL THE BILL</h1>
+    <div class="nav-links">
+      <div class="nav-section">OVERVIEW</div>
+      <a href="../index.html">Dashboard</a>
+      <a href="../status.html">Project Status</a>
+      
+      <div class="nav-section">ROADMAP (PHASES)</div>
+      <a href="phase1-architecture.html">Phase 1: Architecture</a>
+      <a href="phase2-prototyping.html">Phase 2: Prototyping</a>
+      <a href="phase3-core-systems.html">Phase 3: Core Systems</a>
+      <a href="phase4-gameplay.html" class="active">Phase 4: Gameplay</a>
+      
+      <div class="nav-section">CORE ARCHITECTURE</div>
+      <a href="../core/world-director.html">World Director</a>
+      <a href="../core/player-manager.html">Player Manager</a>
+      
+      <div class="nav-section">ENTITIES</div>
+      <a href="../entities/npc-ai.html">NPC State & LLM</a>
+      <a href="../entities/social-fabric.html">Social Fabric Engine</a>
+      
+      <div class="nav-section">SYSTEMS</div>
+      <a href="../systems/heat-evasion.html">Heat & Evasion</a>
+      <a href="../systems/combat.html">Combat Mechanics</a>
+      <a href="../systems/macro-world.html">Regions & Travel</a>
+    </div>
+  </nav>
+  
+  <main class="content">
+    <h1><span class="badge red">PHASE 4</span> Direct Action Gameplay</h1>
+    <p>The final phase implements the lethal, physical consequences of the game. It introduces combat, noise mechanics, security escalation (Heat), and the roguelite succession cycle.</p>
+    
+    <div class="grid">
+      <div class="card">
+        <h3><span class="badge accent">STEP 4.1</span> Combat Raycasting</h3>
+        <p>Implementation of weapon mechanics.</p>
+        <ul>
+          <li><strong>Mechanics:</strong> Physics raycasting from the player to the mouse position.</li>
+          <li><strong>Damage Models:</strong> Implementing health variables for NPCs and physical infrastructure (e.g., blowing up servers).</li>
+          <li><strong>Noise Generation:</strong> Classifying weapons (Silent Crossbows vs. Loud Automatics) which trigger varied audio spheres that alert nearby NPCs.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="badge accent">STEP 4.2</span> The Heat System</h3>
+        <p>Security escalation and AI hunting.</p>
+        <ul>
+          <li><strong>Crime Events:</strong> A signal bus triggered when cameras or loyalist NPCs witness violence/sabotage.</li>
+          <li><strong>Tier Spawning:</strong> Depending on the Local Heat level, dynamically instantiating Police (Tier 1) or Enforcer Hitsquads (Tier 2) at the edge of the navmesh.</li>
+          <li><strong>Hunter AI:</strong> Writing the behavior tree for Enforcers to track the player's last known position using the <code>NavigationAgent3D</code>.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3><span class="badge accent">STEP 4.3</span> Roguelite Loop (Succession)</h3>
+        <p>Handling death and consequence persistence.</p>
+        <ul>
+          <li><strong>DeathScreen UI:</strong> A dedicated <code>Control</code> scene triggered on player health = 0 or arrest.</li>
+          <li><strong>Data Persistence:</strong> Saving the <code>WorldDirector</code> global economy dictionary to disk (JSON) to ensure Butterfly Effects persist across runs.</li>
+          <li><strong>Respawn:</strong> Passing the player back to the <code>PlayerManager</code> menu to generate a new Class Seed citizen in the scarred world.</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

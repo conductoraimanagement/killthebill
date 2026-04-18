@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Phase 2: Prototyping - KILL THE BILL</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <nav class="sidebar">
+    <h1>KILL THE BILL</h1>
+    <div class="nav-links">
+      <div class="nav-section">OVERVIEW</div>
+      <a href="../index.html">Dashboard</a>
+      <a href="../status.html">Project Status</a>
+      
+      <div class="nav-section">ROADMAP (PHASES)</div>
+      <a href="phase1-architecture.html">Phase 1: Architecture</a>
+      <a href="phase2-prototyping.html" class="active">Phase 2: Prototyping</a>
+      <a href="phase3-core-systems.html">Phase 3: Core Systems</a>
+      <a href="phase4-gameplay.html">Phase 4: Gameplay</a>
+      
+      <div class="nav-section">CORE ARCHITECTURE</div>
+      <a href="../core/world-director.html">World Director</a>
+      <a href="../core/player-manager.html">Player Manager</a>
+      
+      <div class="nav-section">ENTITIES</div>
+      <a href="../entities/npc-ai.html">NPC State & LLM</a>
+      <a href="../entities/social-fabric.html">Social Fabric Engine</a>
+      
+      <div class="nav-section">SYSTEMS</div>
+      <a href="../systems/heat-evasion.html">Heat & Evasion</a>
+      <a href="../systems/combat.html">Combat Mechanics</a>
+      <a href="../systems/macro-world.html">Regions & Travel</a>
+    </div>
+  </nav>
+  
+  <main class="content">
+    <h1><span class="badge gold">PHASE 2</span> Godot Prototyping</h1>
+    <p>This phase represents the transition from architectural theory to engine execution. The goal is to establish the fundamental 3D environment, the isometric camera, and the player navigation systems in Godot 4.</p>
+    
+    <div class="grid" style="grid-template-columns: 1fr;">
+      <div class="card" style="border-color: var(--accent-toxic);">
+        <h3><span class="badge green">DONE</span> 2.1: Isometric Camera Rig</h3>
+        <p><strong>Objective:</strong> Establish the visual perspective of the immersive sim, giving the player a 'god-game' view of the systemic world.</p>
+        <h4>Technical Breakdown:</h4>
+        <ul>
+          <li><strong>Class:</strong> Custom <code>Camera3D</code> script (<code>CameraController.gd</code>).</li>
+          <li><strong>Projection:</strong> Rigidly set to <strong>Orthogonal</strong> to create the classic retro-tactical isometric look, avoiding perspective distortion.</li>
+          <li><strong>Transform Math:</strong> The camera's local rotation is mathematically locked to exactly X: -30 degrees, Y: 45 degrees.</li>
+          <li><strong>Input Mechanics:</strong> Reads `get_viewport().get_mouse_position()` for edge-panning (moving the camera when the mouse hits screen borders), maps WASD for manual panning, and intercepts mouse-wheel events for Orthogonal size adjustment (zooming) bounded by predefined `min_zoom` and `max_zoom` clamps.</li>
+          <li><strong>Player Tracking:</strong> Uses a mathematically smooth interpolation (<code>lerp</code> over delta time) to re-center on the `PlayerManager.current_avatar` when the spacebar is pressed or tracking is toggled on.</li>
+        </ul>
+      </div>
+
+      <div class="card" style="border-color: var(--accent-toxic);">
+        <h3><span class="badge green">DONE</span> 2.2: WorldDirector Expansion (PR & Reputation)</h3>
+        <p><strong>Objective:</strong> Initialize the core memory and systemic mathematical brain of the entire game.</p>
+        <h4>Technical Breakdown:</h4>
+        <ul>
+          <li><strong>Class:</strong> Autoload Singleton Node (<code>WorldDirector.gd</code>).</li>
+          <li><strong>Global Dictionaries:</strong> Stores the <code>global_economy</code> (food prices, tension, security presence) and the complex <code>oligarchs</code> dictionary (wealth, paranoia, public_image, controversy_level, and recent_scandals array).</li>
+          <li><strong>The Signal Bus:</strong> Implements the <code>event_triggered(action, target)</code> signal. Any node in the game can emit this. The WorldDirector catches it, runs the action through the Butterfly Effect matrix, alters the economy, and fires back a <code>world_state_changed</code> signal so UI and NPCs can instantly react.</li>
+          <li><strong>Sector Dynamics:</strong> Local sector variables (like tension modifiers in "The Sinks") are mathematically derived continuously from the overarching `global_economy` numbers via <code>_update_sector_dynamics()</code>.</li>
+        </ul>
+      </div>
+
+      <div class="card" style="border-color: var(--accent-toxic);">
+        <h3><span class="badge green">DONE</span> 2.3: Player Navigation & Movement</h3>
+        <p><strong>Objective:</strong> Allow smooth, pathfinding-based movement across the isometric grid.</p>
+        <h4>Technical Breakdown:</h4>
+        <ul>
+          <li><strong>Class:</strong> <code>CharacterBody3D</code> with an attached <code>NavigationAgent3D</code> node (<code>PlayerController.gd</code>).</li>
+          <li><strong>Input Raycasting:</strong> On `_input(event)` corresponding to a Right-Click, the active <code>Camera3D</code> fires a `project_ray_normal()` physics raycast intersecting with the environment's Collision layer.</li>
+          <li><strong>Vector Math:</strong> The exact `Vector3` intersection point is fed to `NavigationAgent3D.target_position`.</li>
+          <li><strong>Velocity Loop:</strong> Inside `_physics_process()`, the script calculates the next path point, applies a fixed `SPEED` scalar to the normalized direction vector, and calls Godot 4's <code>move_and_slide()</code>. The character mesh uses `look_at()` with spherical linear interpolation (`slerp`) to physically rotate towards the destination cleanly.</li>
+        </ul>
+      </div>
+
+      <div class="card" style="border-color: var(--accent-toxic);">
+        <h3><span class="badge green">DONE</span> 2.4: Procedural Greyboxing (The Sinks)</h3>
+        <p><strong>Objective:</strong> Build a test environment capable of verifying pathfinding and camera occlusion without relying on manual editor placement.</p>
+        <h4>Technical Breakdown:</h4>
+        <ul>
+          <li><strong>Class:</strong> <code>Node3D</code> procedural generator (<code>GreyboxTestScene.gd</code>).</li>
+          <li><strong>Mesh Generation:</strong> Programmatically instantiates a 50x50 `CSGBox3D` acting as the floor, and iterates through a nested loop to scatter <code>CSGBox3D</code> pillars representing brutalist architecture.</li>
+          <li><strong>Dynamic Navmesh:</strong> A <code>NavigationRegion3D</code> wraps the generated meshes. The script triggers a runtime <code>bake_navigation_mesh()</code> so the <code>PlayerController</code> can immediately begin pathfinding around the procedurally generated obstacles as soon as the scene loads.</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

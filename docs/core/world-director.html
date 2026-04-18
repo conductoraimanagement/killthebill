@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>World Director - KILL THE BILL</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <nav class="sidebar">
+    <h1>KILL THE BILL</h1>
+    <div class="nav-links">
+      <div class="nav-section">OVERVIEW</div>
+      <a href="../index.html">Dashboard</a>
+      <a href="../status.html">Project Status</a>
+      
+      <div class="nav-section">ROADMAP (PHASES)</div>
+      <a href="../phases/phase1-architecture.html">Phase 1: Architecture</a>
+      <a href="../phases/phase2-prototyping.html">Phase 2: Prototyping</a>
+      <a href="../phases/phase3-core-systems.html">Phase 3: Core Systems</a>
+      <a href="../phases/phase4-gameplay.html">Phase 4: Gameplay</a>
+      
+      <div class="nav-section">CORE ARCHITECTURE</div>
+      <a href="world-director.html" class="active">World Director</a>
+      <a href="player-manager.html">Player Manager</a>
+      
+      <div class="nav-section">ENTITIES</div>
+      <a href="../entities/npc-ai.html">NPC State & LLM</a>
+      <a href="../entities/social-fabric.html">Social Fabric Engine</a>
+      
+      <div class="nav-section">SYSTEMS</div>
+      <a href="../systems/heat-evasion.html">Heat & Evasion</a>
+      <a href="../systems/combat.html">Combat Mechanics</a>
+      <a href="../systems/macro-world.html">Regions & Travel</a>
+    </div>
+  </nav>
+  
+  <main class="content">
+    <h1>World Director Singleton</h1>
+    <p>The <code>WorldDirector</code> is the central brain of the simulation. It manages the global economy, tracks the status of the 4 Oligarchs, and calculates the systemic "Butterfly Effect" ripples that occur after any major player action.</p>
+    
+    <h2>Global State Variables</h2>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="badge gold">ECONOMY</span> Resource Prices</h3>
+        <p><strong>Food Price (Base: 100cr):</strong> Drives the survival needs of Blue Collar NPCs. Sabotaging farms causes this to spike.</p>
+        <p><strong>Tech Price (Base: 500cr):</strong> Determines the cost of hacking tools and black market weapons.</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge red">SOCIETY</span> Public Tension</h3>
+        <p><strong>Tension Level (0-100):</strong> How close the Sinks are to a full-scale riot. Increased by poverty and police brutality.</p>
+        <p><strong>Senate Alignment:</strong> Ranges from Corporate (-100) to Reformist (100). Influenced by player propaganda.</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge accent">SECURITY</span> Paranoia Level</h3>
+        <p><strong>Security Presence (0-100):</strong> High values increase Enforcer spawn rates and checkpoint lockdowns. Spikes when an Oligarch is assassinated.</p>
+      </div>
+    </div>
+
+    <h2>PR & Reputation Engine (The Narrative Layer)</h2>
+    <p>To ensure the world feels deep and reactive, the WorldDirector continuously tracks the <strong>Public Image</strong> of all major actors (Oligarchs, Politicians, Unions). This is fueled by a daily procedural News Cycle where actors generate scandals, quotes, and decisions.</p>
+    <div class="grid">
+      <div class="card" style="border-color: var(--accent-gold);">
+        <h3><span class="badge gold">ACTOR STATE</span> Public Image & Controversy</h3>
+        <ul>
+          <li><strong>Public Image (-100 to 100):</strong> How loved or hated the Oligarch is by the masses.</li>
+          <li><strong>Controversy Level (0 to 100):</strong> How actively the public is discussing them. High controversy acts as a multiplier for public tension.</li>
+          <li><strong>Scandals Array:</strong> A rolling ledger of recent quotes or actions (e.g., "Caught hoarding synthetic meat").</li>
+        </ul>
+      </div>
+      <div class="card" style="border-color: var(--accent-neon);">
+        <h3><span class="badge red">NEWS CYCLE</span> Procedural Gaffes</h3>
+        <p>The LLM periodically generates "Quotes" for Oligarchs based on their current paranoia and wealth. For example, if an Oligarch says, <em>"I'm not sure humanity should endure,"</em> their Public Image plummets and Sector Zeitgeist shifts violently against them.</p>
+      </div>
+      <div class="card" style="border-color: var(--accent-toxic);">
+        <h3><span class="badge green">MANIPULATION</span> Media Hacking</h3>
+        <p>Players can weaponize the PR system. By hacking the Media Conglomerate, players can artificially inject fake scandals or leak real ones, destroying an Oligarch's reputation before firing a single bullet.</p>
+      </div>
+    </div>
+
+    <h2>Expanded Butterfly Effect Matrix</h2>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="badge">EVENT</span> Out-of-Touch Quote</h3>
+        <p><em>"Humanity shouldn't endure."</em></p>
+        <ul>
+          <li><strong>Immediate:</strong> Tech Oligarch's Public Image crashes to -90. Controversy spikes.</li>
+          <li><strong>Systemic:</strong> Enclave stock prices crash. Sinks NPCs aggressively target Tech infrastructure for vandalism.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="badge">ACTION</span> Assassinate Media Mogul</h3>
+        <p><em>The propaganda machine stops.</em></p>
+        <ul>
+          <li><strong>Immediate:</strong> Controversy Level for ALL surviving Oligarchs spikes to 100.</li>
+          <li><strong>Systemic:</strong> Without propaganda shielding them, every minor Oligarch scandal now causes immediate, violent riots in The Sinks.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="badge">ACTION</span> Leak Food Hoarding Scandal</h3>
+        <p><em>Player uploads Datashards to the net.</em></p>
+        <ul>
+          <li><strong>Immediate:</strong> Food Oligarch Public Image drops. Senate approval drops.</li>
+          <li><strong>Systemic:</strong> Food prices actually <em>drop</em> temporarily as the Oligarch tries to buy back public favor, but Security patrols double to protect the silos.</li>
+        </ul>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

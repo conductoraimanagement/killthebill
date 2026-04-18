@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>NPC AI - KILL THE BILL</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <nav class="sidebar">
+    <h1>KILL THE BILL</h1>
+    <div class="nav-links">
+      <div class="nav-section">OVERVIEW</div>
+      <a href="../index.html">Dashboard</a>
+      <a href="../status.html">Project Status</a>
+      
+      <div class="nav-section">ROADMAP (PHASES)</div>
+      <a href="../phases/phase1-architecture.html">Phase 1: Architecture</a>
+      <a href="../phases/phase2-prototyping.html">Phase 2: Prototyping</a>
+      <a href="../phases/phase3-core-systems.html">Phase 3: Core Systems</a>
+      <a href="../phases/phase4-gameplay.html">Phase 4: Gameplay</a>
+      
+      <div class="nav-section">CORE ARCHITECTURE</div>
+      <a href="../core/world-director.html">World Director</a>
+      <a href="../core/player-manager.html">Player Manager</a>
+      
+      <div class="nav-section">ENTITIES</div>
+      <a href="npc-ai.html" class="active">NPC State & LLM</a>
+      <a href="social-fabric.html">Social Fabric Engine</a>
+      
+      <div class="nav-section">SYSTEMS</div>
+      <a href="../systems/heat-evasion.html">Heat & Evasion</a>
+      <a href="../systems/combat.html">Combat Mechanics</a>
+      <a href="../systems/macro-world.html">Regions & Travel</a>
+    </div>
+  </nav>
+  
+  <main class="content">
+    <h1>NPC Persistent Characters & LLM Integration</h1>
+    <p>NPCs are <strong>not disposable</strong>. At the start of each playthrough, the <code>PopulationDirector</code> generates a fixed roster of ~40 unique characters with randomized intrinsic personality traits. These NPCs persist for the <strong>entire run</strong> and evolve based on world pressure filtered through their immutable nature. No two NPCs react the same way to the same crisis.</p>
+    
+    <h2>Nature vs. Nurture Architecture</h2>
+    <p>Every NPC's behavior is the product of two layers: <strong>Intrinsic Traits</strong> (who they fundamentally are) and <strong>Dynamic State</strong> (what the world has done to them). The same food crisis makes a high-aggression NPC radicalize into a Kaczynski type, while a high-conformity NPC becomes broken and submissive.</p>
+
+    <h2>Intrinsic Traits (Nature — Immutable)</h2>
+    <p>Set once at roster generation. These act as filters/multipliers on how world events affect the NPC's dynamic state.</p>
+    <div class="grid" style="grid-template-columns: 1fr;">
+      <div class="card">
+        <table style="width:100%; border-collapse: collapse;">
+          <tr style="border-bottom: 1px solid var(--border);">
+            <th style="text-align:left; padding: 0.5rem;">Trait</th>
+            <th style="text-align:left; padding: 0.5rem;">Range</th>
+            <th style="text-align:left; padding: 0.5rem;">High Value Behavior</th>
+            <th style="text-align:left; padding: 0.5rem;">Low Value Behavior</th>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><code>resilience</code></td>
+            <td style="padding: 0.5rem;">0.0–1.0</td>
+            <td style="padding: 0.5rem;">Stoic, absorbs pressure without cracking</td>
+            <td style="padding: 0.5rem;">Fragile, breaks quickly under stress</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><code>aggression</code></td>
+            <td style="padding: 0.5rem;">0.0–1.0</td>
+            <td style="padding: 0.5rem;">Radicalizes when pushed, violent</td>
+            <td style="padding: 0.5rem;">Withdraws, avoids conflict</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><code>empathy</code></td>
+            <td style="padding: 0.5rem;">0.0–1.0</td>
+            <td style="padding: 0.5rem;">Altruistic, affected by others' pain</td>
+            <td style="padding: 0.5rem;">Self-serving, cold</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><code>idealism</code></td>
+            <td style="padding: 0.5rem;">0.0–1.0</td>
+            <td style="padding: 0.5rem;">Revolutionary, believes change is possible</td>
+            <td style="padding: 0.5rem;">Cynical, resigned to the system</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><code>greed</code></td>
+            <td style="padding: 0.5rem;">0.0–1.0</td>
+            <td style="padding: 0.5rem;">Exploits chaos for personal gain</td>
+            <td style="padding: 0.5rem;">Content, does not pursue wealth</td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem;"><code>conformity</code></td>
+            <td style="padding: 0.5rem;">0.0–1.0</td>
+            <td style="padding: 0.5rem;">Follows the crowd, hard to radicalize</td>
+            <td style="padding: 0.5rem;">Independent thinker, lone wolf</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <h2>Dynamic State (Nurture — Evolves Each Cycle)</h2>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="badge gold">STRESS</span> Accumulated Pressure</h3>
+        <p><code>stress_level</code> (0–100). Rises when food prices spike, tension climbs, or security oppresses. Resilient NPCs absorb pressure slower. Drives behavior when combined with other dynamic variables.</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge green">HOPE</span> Belief in a Future</h3>
+        <p><code>hope</code> (0–100). Decays under sustained oppression + poverty. Idealists lose hope slower. When hope drops below 30 and stress is high, the NPC is primed for radicalization or submission (depending on their nature).</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge red">RADICALIZATION</span> Extremism Index</h3>
+        <p><code>radicalization</code> (0–100). Grows when stressed + hopeless, driven by <code>aggression</code> and braked by <code>conformity</code>. A high-aggression, low-conformity NPC under pressure becomes a Kaczynski. A high-conformity NPC under the same pressure just submits.</p>
+      </div>
+    </div>
+
+    <h2>Derived Behavioral Profiles</h2>
+    <p>The function <code>get_behavioral_profile()</code> evaluates <strong>Nature + Nurture</strong> and returns the NPC's current archetype. This is injected into the LLM prompt so it knows how to voice the character.</p>
+    <div class="grid" style="grid-template-columns: 1fr;">
+      <div class="card">
+        <table style="width:100%; border-collapse: collapse;">
+          <tr style="border-bottom: 1px solid var(--border);">
+            <th style="text-align:left; padding: 0.5rem;">Profile</th>
+            <th style="text-align:left; padding: 0.5rem;">Conditions</th>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><strong>Radical Agitator</strong></td>
+            <td style="padding: 0.5rem;">Stress &gt;70, Aggression &gt;0.7, Conformity &lt;0.3</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><strong>Broken and Submissive</strong></td>
+            <td style="padding: 0.5rem;">Stress &gt;60, Resilience &lt;0.3, Conformity &gt;0.6</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><strong>Revolutionary Idealist</strong></td>
+            <td style="padding: 0.5rem;">Idealism &gt;0.7, Empathy &gt;0.6, Stress &gt;40</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><strong>Opportunistic Exploiter</strong></td>
+            <td style="padding: 0.5rem;">Greed &gt;0.7, Empathy &lt;0.3</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--border);">
+            <td style="padding: 0.5rem;"><strong>Cautiously Stable</strong></td>
+            <td style="padding: 0.5rem;">Stress &lt;30 or Resilience &gt;0.7</td>
+          </tr>
+          <tr>
+            <td style="padding: 0.5rem;"><strong>Anxious Citizen</strong></td>
+            <td style="padding: 0.5rem;">Default fallback</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <h2>LLM Context Serialization</h2>
+    <div class="card" style="margin-top: 1rem;">
+      <p><code>get_llm_context_string()</code> formats the NPC's full identity into a token-efficient prompt. It includes: name, class, behavioral profile, stress/hope/radicalization scores, personality adjectives (e.g., "aggressive, cynical, independent"), and the rolling <code>memories</code> array for narrative continuity.</p>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Frontend Visuals - KILL THE BILL</title>
+  <link rel="stylesheet" href="../styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <nav class="sidebar">
+    <h1>KILL THE BILL</h1>
+    <div class="nav-links">
+      <a href="../general/architecture.html">Architecture</a>
+      <a href="../backend/systems.html">Backend Systems</a>
+      <a href="../frontend/visuals.html" class="active">Frontend Visuals</a>
+    </div>
+  </nav>
+  <main class="content">
+    <h1>Frontend Systems: Visuals & Interface</h1>
+    
+    <p>The visual language is designed to heavily emphasize class division, utilizing a strictly top-down isometric viewpoint to make the player feel like a piece on a board.</p>
+
+    <h2>The Isometric Camera</h2>
+    <div class="card" style="margin-bottom: 2rem;">
+      <p>The game uses a fixed 3D isometric perspective. The <code>CameraController</code> script handles panning and zooming, while maintaining the strict <strong>X: -30 degrees, Y: 45 degrees</strong> orthogonal angle. It follows the player but allows "scouting" ahead.</p>
+    </div>
+
+    <h2>Art Style: Corporate Brutalism vs. High-Tech Slum</h2>
+    
+    <div class="grid">
+      <div class="card">
+        <h3><span class="badge red">Low Class</span> The Sinks</h3>
+        <p><strong>Geometry:</strong> Modular, low-poly blocks. Haphazard construction with verticality blocked by corporate netting.</p>
+        <p><strong>Lighting:</strong> Dark, claustrophobic. Relies heavily on local point lights (flickering neon, barrel fires). Volumetric fog simulates dense smog.</p>
+        <p><strong>Palette:</strong> Grays, rusted browns, toxic greens, and harsh neon pinks.</p>
+        <img src="file:///C:/Users/flore/.gemini/antigravity/brain/7bde5081-2201-428b-aa4c-70475dd243b9/the_sinks_concept_1776457375861.png" alt="The Sinks Concept Art" style="width: 100%; border-radius: 0.5rem; margin-top: 1rem; border: 1px solid var(--border);">
+      </div>
+
+      <div class="card">
+        <h3><span class="badge gold">High Class</span> The Enclave</h3>
+        <p><strong>Geometry:</strong> Symmetrical, clean, brutalist architecture mixed with impossible floating structures.</p>
+        <p><strong>Lighting:</strong> Bright, directional lighting (simulating clear sunlight above the smog layer). Soft shadows.</p>
+        <p><strong>Palette:</strong> Stark whites, gold trims, and lush, synthetic greens.</p>
+        <img src="file:///C:/Users/flore/.gemini/antigravity/brain/7bde5081-2201-428b-aa4c-70475dd243b9/the_enclave_concept_1776457389402.png" alt="The Enclave Concept Art" style="width: 100%; border-radius: 0.5rem; margin-top: 1rem; border: 1px solid var(--border);">
+      </div>
+    </div>
+
+    <h2>UI Systems</h2>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="badge green">Interface</span> Minimalist HUD</h3>
+        <p>To increase immersion, the UI is diegetic where possible (e.g., ammo counters on the weapon model, health indicated by posture or screen effects).</p>
+      </div>
+      <div class="card">
+        <h3><span class="badge accent">Interface</span> Terminal UI</h3>
+        <p>Hacking or reading lore occurs via fullscreen "terminal" overlays that look like retro-futuristic DOS interfaces, replacing the 3D view temporarily.</p>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
