@@ -4,28 +4,22 @@ class_name MainScene
 # =============================================================
 # Main: the playable root scene.
 #
-# Responsibilities (in order on _ready):
-#   1. Build the greybox environment + lighting + camera + player
-#   2. Place interactables (food depot, datashard terminal)
-#   3. Build HUD in loading state
-#   4. Kick off procedural world generation via WorldDirector
-#   5. On playthrough_setup_complete → start the world-cycle timer
-#   6. Relay HUD modal picks (leak scandal) → WorldDirector ripples
+# Responsibilities:
+#   1. Build the HUD in loading state
+#   2. Pick up a pending loaded world config, if any
+#   3. Kick off WorldDirector.initialize_playthrough()
+#   4. When setup completes, spawn the LandscapeGenerator for the
+#      current region
+#   5. When the landscape reports ready, spawn the player + camera
+#      + interactables at its landmark positions, start the world
+#      cycle timer
+#   6. Route HUD modal picks (leak scandal) → WorldDirector ripples
 # =============================================================
 
-const REGION_NAME := "Ash Row"
-const REGION_TYPE := "URBAN_SLUM"
-
-# Cadence: one world cycle every N seconds (oligarchs evolve,
-# Senate ticks, region dynamics update). Chosen so that the
-# player feels the world shift without being overwhelmed.
 const CYCLE_SECONDS := 25.0
-# Every N cycles, also pull a news cycle (LLM or offline fallback)
-# so NetFeed has periodic ambient churn even if the player isn't
-# doing anything.
 const NEWS_EVERY_N_CYCLES := 3
 
-var _greybox: GreyboxTestScene
+var _landscape: LandscapeGenerator
 var _player: CharacterBody3D
 var _camera: CameraController
 var _hud: HUD
@@ -36,22 +30,12 @@ var _cycle_timer: Timer
 
 func _ready() -> void:
 	_ensure_input_actions()
-	WorldDirector.current_region = REGION_NAME
-
-	_setup_environment()
-	_setup_lighting()
-	_setup_player()
-	_setup_camera()
-	_setup_depot()
-	_setup_terminal()
 	_setup_hud()
 	_setup_cycle_timer()
 
-	# Bridge HUD modal picks → WorldDirector ripples
 	_hud.oligarch_picked.connect(_on_oligarch_picked)
 
-	# Pick up a pending loaded config, if any (set when the user picks one
-	# from the Load Modal — WorldConfigManager calls reload_current_scene).
+	# Pending loaded config, if any
 	var preloaded: Dictionary = {}
 	var cfg_mgr = get_node_or_null("/root/WorldConfigManager")
 	if cfg_mgr and not cfg_mgr.pending_config.is_empty():
@@ -59,7 +43,7 @@ func _ready() -> void:
 		cfg_mgr.pending_config = {}
 
 	if preloaded.is_empty():
-		_hud.show_loading("> generating world…  oligarchs, regions, citizens, senate")
+		_hud.show_loading("> generating world…  regions, oligarchs, senate, citizens")
 	else:
 		_hud.show_loading("> loading saved world: %s" % str(preloaded.get("name", "unknown")))
 
@@ -67,8 +51,7 @@ func _ready() -> void:
 		WorldDirector.playthrough_setup_complete.connect(_on_playthrough_ready)
 
 	WorldDirector.initialize_playthrough(preloaded)
-
-	print("Main scene ready. Region=%s. Click to move. E to interact." % REGION_NAME)
+	print("Main scene ready. Click to move once the landscape finishes generating. E to interact. P for Senate roster. F5 to save. F9 to load.")
 
 
 # -------------------------------------------------------------
@@ -95,7 +78,7 @@ func _handle_ground_click(screen_pos: Vector2) -> void:
 
 
 # -------------------------------------------------------------
-# World cycle timer (A)
+# World cycle timer
 # -------------------------------------------------------------
 func _setup_cycle_timer() -> void:
 	_cycle_timer = Timer.new()
@@ -112,46 +95,60 @@ func _on_cycle_tick() -> void:
 		WorldDirector.trigger_news_cycle()
 
 
+# -------------------------------------------------------------
+# Playthrough → landscape → spawn player
+# -------------------------------------------------------------
 func _on_playthrough_ready() -> void:
-	print("Main: playthrough ready. Starting cycle timer.")
+	var region_data: Dictionary = _current_region_data()
+	if region_data.is_empty():
+		push_error("Main: no current region data; falling back to URBAN_SLUM stub")
+		region_data = {"name": "Ash Row", "type": "URBAN_SLUM", "visual_biome": "brutalist_fog"}
+
+	_landscape = LandscapeGenerator.new()
+	_landscape.name = "Landscape"
+	add_child(_landscape)
+	_landscape.landscape_ready.connect(_on_landscape_ready)
+	_landscape.generate(region_data)
+
+
+func _current_region_data() -> Dictionary:
+	var region_gen = get_node_or_null("/root/RegionGenerator")
+	if region_gen == null:
+		return {}
+	# Prefer the explicit starting_region; fall back to first unlocked.
+	if region_gen.starting_region != "":
+		return region_gen.get_region_by_name(region_gen.starting_region)
+	var unlocked: Array = region_gen.get_unlocked_regions()
+	if unlocked.size() > 0:
+		return unlocked[0]
+	return {}
+
+
+func _on_landscape_ready(landscape: LandscapeGenerator) -> void:
+	var spawn: Vector3 = landscape.player_spawn
+	var depot_pos: Vector3 = landscape.landmark_spawns.get("food_depot", Vector3(10, 0, -8))
+	var terminal_pos: Vector3 = landscape.landmark_spawns.get("datashard_terminal", Vector3(-10, 0, -6))
+	# Lift landmarks slightly so they sit on the ground.
+	depot_pos.y = 0
+	terminal_pos.y = 0
+
+	_spawn_player(spawn)
+	_setup_camera()
+	_spawn_depot(depot_pos, landscape.region)
+	_spawn_terminal(terminal_pos)
+
 	_cycle_timer.start()
-
-
-# -------------------------------------------------------------
-# Environment / lighting
-# -------------------------------------------------------------
-func _setup_environment() -> void:
-	_greybox = GreyboxTestScene.new()
-	_greybox.name = "Greybox"
-	add_child(_greybox)
-
-
-func _setup_lighting() -> void:
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55, 45, 0)
-	sun.light_energy = 0.9
-	sun.light_color = Color(1.00, 0.92, 0.85)
-	sun.shadow_enabled = true
-	add_child(sun)
-
-	var env := WorldEnvironment.new()
-	var e := Environment.new()
-	e.background_mode = Environment.BG_COLOR
-	e.background_color = Color(0.04, 0.04, 0.05)
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.35, 0.38, 0.45)
-	e.ambient_light_energy = 0.45
-	e.fog_enabled = true
-	e.fog_light_color = Color(0.20, 0.19, 0.22)
-	e.fog_density = 0.008
-	env.environment = e
-	add_child(env)
+	print("Main: landscape ready for '%s' (type=%s, biome=%s). Cycle timer started." % [
+		str(landscape.region.get("name", "?")),
+		str(landscape.region.get("type", "?")),
+		str(landscape.region.get("visual_biome", "?")),
+	])
 
 
 # -------------------------------------------------------------
 # Player / camera
 # -------------------------------------------------------------
-func _setup_player() -> void:
+func _spawn_player(at: Vector3) -> void:
 	_player = CharacterBody3D.new()
 	_player.name = "Player"
 	_player.set_script(load("res://src/entities/PlayerController.gd"))
@@ -189,7 +186,7 @@ func _setup_player() -> void:
 	nose.material_override = mat
 	_player.add_child(nose)
 
-	_player.position = Vector3(0, 1.0, 5)
+	_player.position = at
 	add_child(_player)
 
 
@@ -203,28 +200,27 @@ func _setup_camera() -> void:
 # -------------------------------------------------------------
 # Interactables
 # -------------------------------------------------------------
-func _setup_depot() -> void:
+func _spawn_depot(at: Vector3, region_data: Dictionary) -> void:
 	_depot = InteractableTarget.new()
 	_depot.name = "FoodDepot"
 	_depot.sector = "Food"
-	_depot.depot_name = "%s Food Depot" % REGION_NAME
+	var region_name: String = str(region_data.get("name", "Region"))
+	_depot.depot_name = "%s Food Depot" % region_name
 	add_child(_depot)
-	_depot.position = Vector3(10, 0, -8)
+	_depot.position = at
 	_depot.set_player(_player)
-
 	_depot.became_interactable.connect(_on_depot_interactable)
 	_depot.became_non_interactable.connect(_on_target_left)
 	_depot.sabotaged_signal.connect(_on_depot_sabotaged)
 
 
-func _setup_terminal() -> void:
+func _spawn_terminal(at: Vector3) -> void:
 	_terminal = DatashardTerminal.new()
 	_terminal.name = "DatashardTerminal"
 	_terminal.terminal_name = "black-market terminal"
 	add_child(_terminal)
-	_terminal.position = Vector3(-10, 0, -6)
+	_terminal.position = at
 	_terminal.set_player(_player)
-
 	_terminal.became_interactable.connect(_on_terminal_interactable)
 	_terminal.became_non_interactable.connect(_on_target_left)
 	_terminal.requested_oligarch_pick.connect(_on_terminal_activated)
@@ -243,7 +239,6 @@ func _on_depot_interactable(target: InteractableTarget) -> void:
 
 
 func _on_terminal_interactable(term: DatashardTerminal) -> void:
-	# Only useful after generation has produced oligarchs.
 	if WorldDirector.get_living_oligarchs().is_empty():
 		_hud.show_prompt("[E] %s — no targets yet" % term.terminal_name)
 	else:
