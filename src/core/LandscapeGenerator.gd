@@ -23,6 +23,7 @@ class_name LandscapeGenerator
 # =============================================================
 
 signal landscape_ready(generator)
+signal patrol_spawned(patrol)
 
 const METERS_PER_STORY := 3.0
 const STREET_EVERY_N := 4     # every 4th grid row/column stays clear for streets
@@ -163,6 +164,9 @@ var config: Dictionary = {}
 var player_spawn: Vector3 = Vector3.ZERO
 var landmark_spawns: Dictionary = {}
 
+# Active Enforcer patrols in the landscape. Re-populated each phase.
+var enforcer_patrols: Array = []
+
 var _nav_region: NavigationRegion3D
 var _rng: RandomNumberGenerator
 var _occupied: Array = []    # 2D array of bool, size [grid_w][grid_h]
@@ -211,8 +215,20 @@ func generate(region_data: Dictionary) -> void:
 	_choose_player_spawn()
 	_build_ambient()
 	_bake_nav()
+	_spawn_enforcer_patrols()
+
+	# Refresh patrols each phase so day→night doubles the presence
+	# and heat spikes don't leave an empty street forever.
+	var ts := get_node_or_null("/root/TimeSystem")
+	if ts and not ts.phase_changed.is_connected(_on_phase_changed_refresh_patrols):
+		ts.phase_changed.connect(_on_phase_changed_refresh_patrols)
 
 	landscape_ready.emit(self)
+
+
+func _on_phase_changed_refresh_patrols(_phase: int) -> void:
+	_despawn_enforcer_patrols()
+	_spawn_enforcer_patrols()
 
 
 # -------------------------------------------------------------
@@ -560,6 +576,73 @@ func _spawn_prop(kind: String, pos: Vector3, accent: Color) -> void:
 			return
 	mesh_inst.material_override = mat
 	add_child(mesh_inst)
+
+
+# -------------------------------------------------------------
+# Enforcer patrols — ambient security, scaled by security_presence,
+# player heat, and the current day/night phase.
+# -------------------------------------------------------------
+func _spawn_enforcer_patrols() -> void:
+	var wd := get_node_or_null("/root/WorldDirector")
+	var pm := get_node_or_null("/root/PlayerManager")
+	var ts := get_node_or_null("/root/TimeSystem")
+
+	var security: int = 50
+	if wd:
+		security = int(wd.global_economy.get("security_presence", 50))
+	var heat: int = 0
+	if pm:
+		heat = int(pm.heat)
+
+	var count: int = 2
+	count += max(0, (security - 50) / 15)    # +0..+3 from security_presence
+	count += max(0, (heat - 30) / 20)        # +0..+3 from heat pressure
+
+	if ts and ts.is_night():
+		count = int(ceil(count * 1.8))       # night doubles patrol density (rounded)
+
+	count = clamp(count, 0, 8)
+
+	for i in range(count):
+		var p := _build_single_patrol()
+		if p:
+			enforcer_patrols.append(p)
+			patrol_spawned.emit(p)
+
+
+func _despawn_enforcer_patrols() -> void:
+	for p in enforcer_patrols:
+		if is_instance_valid(p):
+			p.queue_free()
+	enforcer_patrols.clear()
+
+
+func _build_single_patrol() -> EnforcerPatrol:
+	# Patrols walk between two street cells (grid cells on a street row
+	# or column) — streets are always clear by construction.
+	var a: Vector3 = _pick_street_cell()
+	var b: Vector3 = _pick_street_cell()
+	# Guarantee some distance for a meaningful patrol.
+	var tries: int = 0
+	while b.distance_to(a) < 20.0 and tries < 12:
+		b = _pick_street_cell()
+		tries += 1
+
+	var patrol := EnforcerPatrol.new()
+	patrol.set_waypoints(a, b)
+	add_child(patrol)
+	return patrol
+
+
+func _pick_street_cell() -> Vector3:
+	# A street cell is one whose grid x or z is a multiple of STREET_EVERY_N.
+	for _try in range(40):
+		var gx: int = _rng.randi_range(1, _grid_w - 2)
+		var gz: int = _rng.randi_range(1, _grid_h - 2)
+		if gx % STREET_EVERY_N == 0 or gz % STREET_EVERY_N == 0:
+			return _cell_center(gx, gz)
+	# Fallback — map center.
+	return Vector3.ZERO
 
 
 # -------------------------------------------------------------

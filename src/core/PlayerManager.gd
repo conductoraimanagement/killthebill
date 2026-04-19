@@ -140,6 +140,15 @@ func add_heat(amount: int, reason: String = "") -> void:
 		)
 
 
+# External callers (encounter resolutions, etc.) can force-fire a defeat
+# with a custom flavor without needing heat to cap.
+func fire_defeat(kind: String, title: String, flavor: String) -> void:
+	if _defeat_locked:
+		return
+	_defeat_locked = true
+	defeat_triggered.emit(kind, title, flavor)
+
+
 func _publish_heat_note(text: String) -> void:
 	var wd := get_node_or_null("/root/WorldDirector")
 	if wd == null:

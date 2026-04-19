@@ -98,6 +98,17 @@ var _hooks_revealed: bool = false
 # End-of-run modal banner label (shared by victory + defeat paths)
 var _endrun_banner: Label
 
+# Enforcer encounter modal (triggered by a patrol's proximity signal)
+var _encounter_root: Control
+var _encounter_heading: Label
+var _encounter_body: Label
+var _encounter_bribe_btn: Button
+var _encounter_flee_btn: Button
+var _encounter_submit_btn: Button
+var _active_encounter_patrol = null
+var _encounter_computed_bribe_cost: int = 0
+var _encounter_computed_flee_chance: float = 0.0
+
 
 func _ready() -> void:
 	layer = 10
@@ -113,6 +124,7 @@ func _ready() -> void:
 	_build_terminal_menu_modal()
 	_build_bribe_modal()
 	_build_shop_modal()
+	_build_encounter_modal()
 	_build_jobs_panel()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
@@ -931,6 +943,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _victory_root and _victory_root.visible:
 		return
 
+	# Enforcer encounter modal: pick BRIBE/FLEE/SUBMIT — no ESC out.
+	if _encounter_root and _encounter_root.visible:
+		return
+
 	# Oligarch-target modal: ESC closes it; otherwise fall through to nothing
 	if _modal_root and _modal_root.visible:
 		if event.keycode == KEY_ESCAPE:
@@ -1434,6 +1450,228 @@ func _on_buy_burner() -> void:
 	_on_bill_proposed(_active_bill)
 	_shop_status.text = "Burner hot. Senate panel now shows the honest rationale."
 	_shop_status.add_theme_color_override("font_color", COL_COOL)
+
+
+# -------------------------------------------------------------
+# Enforcer encounter modal — a patrol flagged you. Three options:
+# BRIBE (not accepted at heat > 80), FLEE (stealth roll), SUBMIT (→ defeat).
+# -------------------------------------------------------------
+const BRIBE_BASE_RATE := 200  # credits per 20 heat, min 200
+const BRIBE_HEAT_CAP := 80    # above this, enforcer won't accept a bribe
+const BRIBE_HEAT_REDUCTION := 20  # bribed enforcer lets heat cool slightly
+const FLEE_SUCCESS_HEAT_REDUCTION := 10
+const FLEE_FAIL_HEAT_PENALTY := 25
+
+func _build_encounter_modal() -> void:
+	_encounter_root = Control.new()
+	_encounter_root.anchor_right = 1.0
+	_encounter_root.anchor_bottom = 1.0
+	_encounter_root.visible = false
+	_encounter_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_encounter_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_encounter_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.10, 0.02, 0.02, 0.72)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_encounter_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -280
+	panel.offset_top = -200
+	panel.offset_right = 280
+	panel.offset_bottom = 200
+	_encounter_root.add_child(panel)
+
+	var banner := _make_label("// ENFORCER CHECKPOINT //", COL_HOT, 13, true)
+	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner.anchor_left = 0.0
+	banner.anchor_top = 0.0
+	banner.anchor_right = 1.0
+	banner.offset_left = PANEL_PAD
+	banner.offset_top = PANEL_PAD + 4
+	banner.offset_right = -PANEL_PAD
+	banner.offset_bottom = PANEL_PAD + 26
+	panel.add_child(banner)
+
+	_encounter_heading = _make_label("Halt.", COL_FG, 20, true)
+	_encounter_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_encounter_heading.anchor_left = 0.0
+	_encounter_heading.anchor_top = 0.0
+	_encounter_heading.anchor_right = 1.0
+	_encounter_heading.offset_left = PANEL_PAD
+	_encounter_heading.offset_top = PANEL_PAD + 36
+	_encounter_heading.offset_right = -PANEL_PAD
+	_encounter_heading.offset_bottom = PANEL_PAD + 64
+	panel.add_child(_encounter_heading)
+
+	_encounter_body = _make_label("", COL_DIM, 12, false)
+	_encounter_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_encounter_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_encounter_body.anchor_left = 0.0
+	_encounter_body.anchor_top = 0.0
+	_encounter_body.anchor_right = 1.0
+	_encounter_body.offset_left = PANEL_PAD + 20
+	_encounter_body.offset_top = PANEL_PAD + 70
+	_encounter_body.offset_right = -PANEL_PAD - 20
+	_encounter_body.offset_bottom = PANEL_PAD + 130
+	panel.add_child(_encounter_body)
+
+	var btn_top: int = PANEL_PAD + 145
+	var btn_w: int = 520
+	var btn_h: int = 36
+
+	_encounter_bribe_btn = Button.new()
+	_encounter_bribe_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_encounter_bribe_btn.anchor_right = 1.0
+	_encounter_bribe_btn.offset_left = PANEL_PAD
+	_encounter_bribe_btn.offset_top = btn_top
+	_encounter_bribe_btn.offset_right = -PANEL_PAD
+	_encounter_bribe_btn.offset_bottom = btn_top + btn_h
+	_encounter_bribe_btn.add_theme_color_override("font_color", COL_WARN)
+	_encounter_bribe_btn.add_theme_color_override("font_hover_color", COL_FG)
+	_encounter_bribe_btn.pressed.connect(_on_encounter_bribe)
+	panel.add_child(_encounter_bribe_btn)
+
+	btn_top += btn_h + 6
+
+	_encounter_flee_btn = Button.new()
+	_encounter_flee_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_encounter_flee_btn.anchor_right = 1.0
+	_encounter_flee_btn.offset_left = PANEL_PAD
+	_encounter_flee_btn.offset_top = btn_top
+	_encounter_flee_btn.offset_right = -PANEL_PAD
+	_encounter_flee_btn.offset_bottom = btn_top + btn_h
+	_encounter_flee_btn.add_theme_color_override("font_color", COL_COOL)
+	_encounter_flee_btn.add_theme_color_override("font_hover_color", COL_FG)
+	_encounter_flee_btn.pressed.connect(_on_encounter_flee)
+	panel.add_child(_encounter_flee_btn)
+
+	btn_top += btn_h + 6
+
+	_encounter_submit_btn = Button.new()
+	_encounter_submit_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_encounter_submit_btn.text = "SUBMIT — run ends, arrest flavor"
+	_encounter_submit_btn.anchor_right = 1.0
+	_encounter_submit_btn.offset_left = PANEL_PAD
+	_encounter_submit_btn.offset_top = btn_top
+	_encounter_submit_btn.offset_right = -PANEL_PAD
+	_encounter_submit_btn.offset_bottom = btn_top + btn_h
+	_encounter_submit_btn.add_theme_color_override("font_color", COL_HOT)
+	_encounter_submit_btn.add_theme_color_override("font_hover_color", COL_FG)
+	_encounter_submit_btn.pressed.connect(_on_encounter_submit)
+	panel.add_child(_encounter_submit_btn)
+
+
+func show_enforcer_encounter(patrol) -> void:
+	_active_encounter_patrol = patrol
+
+	var pm = get_node_or_null("/root/PlayerManager")
+	var heat: int = int(pm.heat) if pm else 0
+	var stealth: float = float(pm.player_stealth_preference) if pm else 0.0
+
+	_encounter_computed_bribe_cost = _compute_bribe_cost(heat)
+	_encounter_computed_flee_chance = _compute_flee_chance(stealth)
+
+	_encounter_heading.text = "Halt."
+	_encounter_body.text = "An Enforcer flags you down. Your heat reads %d/100. Their squad is listening in." % heat
+
+	# BRIBE — disabled if heat too high or not enough credits
+	if heat > BRIBE_HEAT_CAP:
+		_encounter_bribe_btn.text = "BRIBE — they won't take it tonight"
+		_encounter_bribe_btn.disabled = true
+	elif pm and not pm.can_afford(_encounter_computed_bribe_cost):
+		_encounter_bribe_btn.text = "BRIBE — %d cr (you can't afford)" % _encounter_computed_bribe_cost
+		_encounter_bribe_btn.disabled = true
+	else:
+		_encounter_bribe_btn.text = "BRIBE — %d cr (waved through)" % _encounter_computed_bribe_cost
+		_encounter_bribe_btn.disabled = false
+
+	# FLEE
+	_encounter_flee_btn.text = "FLEE — %d%% escape (stealth-weighted)" % int(_encounter_computed_flee_chance * 100.0)
+	_encounter_flee_btn.disabled = false
+
+	_encounter_root.visible = true
+	get_tree().paused = true
+
+
+func _compute_bribe_cost(heat: int) -> int:
+	return max(200, int(heat * BRIBE_BASE_RATE / 20.0))
+
+
+func _compute_flee_chance(stealth: float) -> float:
+	return clamp(0.30 + stealth * 0.55, 0.10, 0.90)
+
+
+func _close_encounter_and_resolve_patrol() -> void:
+	if _active_encounter_patrol and is_instance_valid(_active_encounter_patrol):
+		_active_encounter_patrol.resolve()
+	_active_encounter_patrol = null
+	_encounter_root.visible = false
+	get_tree().paused = false
+
+
+func _on_encounter_bribe() -> void:
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm == null:
+		return
+	if not pm.spend_credits(_encounter_computed_bribe_cost, "enforcer bribe"):
+		return
+	pm.add_heat(-BRIBE_HEAT_REDUCTION, "enforcer waved through")
+	_publish_feed_note("An Enforcer patrol was 'resolved' at a checkpoint near the Sinks. No incident report filed.")
+	_close_encounter_and_resolve_patrol()
+
+
+func _on_encounter_flee() -> void:
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm == null:
+		return
+	var roll: float = randf()
+	if roll < _encounter_computed_flee_chance:
+		pm.add_heat(-FLEE_SUCCESS_HEAT_REDUCTION, "flee: clean break")
+		_publish_feed_note("A fugitive slipped an Enforcer patrol cordon near the checkpoint. Descriptions conflict.")
+	else:
+		pm.add_heat(FLEE_FAIL_HEAT_PENALTY, "flee: ID'd")
+		_publish_feed_note("Enforcer body-cam footage captures a flagged person-of-interest attempting evasion. ID confirmed.")
+	_close_encounter_and_resolve_patrol()
+
+
+func _on_encounter_submit() -> void:
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm == null:
+		return
+	# Despawn the patrol BEFORE firing defeat so the landscape is clean
+	# if the player picks CONTINUE on the defeat modal.
+	if _active_encounter_patrol and is_instance_valid(_active_encounter_patrol):
+		_active_encounter_patrol.resolve()
+	_active_encounter_patrol = null
+	_encounter_root.visible = false
+
+	# Force a defeat with surrender flavor, bypassing heat-cap-only path.
+	pm.fire_defeat(
+		"SURRENDERED",
+		"SURRENDERED",
+		"You walked up with hands visible. The shackles came out. The Enclave breathes easier tonight."
+	)
+
+
+func _publish_feed_note(text: String) -> void:
+	var wd := get_node_or_null("/root/WorldDirector")
+	if wd == null:
+		return
+	var event := {
+		"type": "NEWS_TICKER",
+		"headline": text,
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	wd.netfeed_history.append(event)
+	wd.netfeed_event_generated.emit(event)
 
 
 # -------------------------------------------------------------

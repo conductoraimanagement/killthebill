@@ -41,8 +41,8 @@ const DOCS = [
         pages: [
             { file: 'loop.md',        title: 'Core Loop' },
             { file: 'progression.md', title: 'Progression, Credits & Heat' },
+            { file: 'heat.md',        title: 'Heat & Enforcement' },
             { file: 'combat.md',      title: 'Combat',      stub: true },
-            { file: 'heat.md',        title: 'Heat & Evasion', stub: true },
             { file: 'victory.md',     title: 'Victory',     stub: true },
         ]
     },

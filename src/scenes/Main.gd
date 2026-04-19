@@ -133,6 +133,15 @@ func _on_landscape_ready(landscape: LandscapeGenerator) -> void:
 		# Apply current time immediately so the first frame isn't full-noon.
 		landscape.on_time_of_day_updated(ts.time_of_day)
 
+	# Wire Enforcer patrols — each spawned patrol gets the player ref so it
+	# can run proximity detection, and its encountered_player signal goes to
+	# the HUD encounter modal.
+	if not landscape.patrol_spawned.is_connected(_on_patrol_spawned):
+		landscape.patrol_spawned.connect(_on_patrol_spawned)
+	# Hook any already-spawned patrols from the initial generate() call.
+	for p in landscape.enforcer_patrols:
+		_on_patrol_spawned(p)
+
 	print("Main: landscape ready for '%s' (type=%s, biome=%s). Day clock live." % [
 		str(landscape.region.get("name", "?")),
 		str(landscape.region.get("type", "?")),
@@ -261,6 +270,18 @@ func _on_oligarch_picked(oligarch_id: String, action_id: String) -> void:
 func _on_politician_bribed(politician_id: String, direction: String) -> void:
 	print("Main: bribe politician (id=%s, dir=%s)." % [politician_id, direction])
 	WorldDirector.trigger_event("bribe_politician", "%s|%s" % [politician_id, direction])
+
+
+func _on_patrol_spawned(patrol: EnforcerPatrol) -> void:
+	if _player:
+		patrol.set_player(_player)
+	if not patrol.encountered_player.is_connected(_on_patrol_encounter):
+		patrol.encountered_player.connect(_on_patrol_encounter)
+
+
+func _on_patrol_encounter(patrol: EnforcerPatrol) -> void:
+	_hud.hide_prompt()
+	_hud.show_enforcer_encounter(patrol)
 
 
 # -------------------------------------------------------------
