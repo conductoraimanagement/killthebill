@@ -53,9 +53,14 @@ func set_npc_data(data) -> void:
 
 
 func prompt_text() -> String:
-	if npc_data != null:
-		return "[E] %s" % npc_data.npc_name
-	return "[E] Interact"
+	if npc_data == null:
+		return "[E] Interact"
+	var suffix: String = ""
+	if npc_data.is_hostile_to_player():
+		suffix = " — they recognize you"
+	elif npc_data.is_ally_to_player():
+		suffix = " ✓ trusted"
+	return "[E] %s%s" % [npc_data.npc_name, suffix]
 
 
 func _process(delta: float) -> void:
@@ -139,9 +144,18 @@ func _build_visual() -> void:
 func _apply_data_styling() -> void:
 	if _body_mat == null or npc_data == null:
 		return
-	# Color by social_class. Enforcers (class 1) aren't spawned as crowd,
-	# but guard the branch anyway.
+	# Color by social_class first.
+	var base_color: Color = Color(0.52, 0.36, 0.24)
 	match int(npc_data.social_class):
-		1: _body_mat.albedo_color = Color(0.18, 0.20, 0.26)   # Enforcer-navy fallback
-		2: _body_mat.albedo_color = Color(0.52, 0.36, 0.24)   # Worker rust
-		3: _body_mat.albedo_color = Color(0.32, 0.30, 0.28)   # Destitute gray
+		1: base_color = Color(0.18, 0.20, 0.26)   # Enforcer-navy fallback
+		2: base_color = Color(0.52, 0.36, 0.24)   # Worker rust
+		3: base_color = Color(0.32, 0.30, 0.28)   # Destitute gray
+
+	# Then disposition tint. Hostile NPCs go darker-and-redder; allies
+	# get a faint cool rim. Silhouette reads their attitude at distance.
+	if npc_data.is_hostile_to_player():
+		base_color = base_color.lerp(Color(0.52, 0.12, 0.12), 0.45)
+	elif npc_data.is_ally_to_player():
+		base_color = base_color.lerp(Color(0.22, 0.60, 0.60), 0.30)
+
+	_body_mat.albedo_color = base_color

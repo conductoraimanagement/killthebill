@@ -102,6 +102,18 @@ func can_recruit() -> bool:
 	# Must have at least Friend-level bond and sufficient trust
 	return relationship_type >= 2 and trust >= 30.0
 
+
+## Hostile to the player: they've noticed you AND they dislike you.
+## Drives the passive-snitch heat drift + visual tint + hostile prompt.
+func is_hostile_to_player() -> bool:
+	return knowledge_of_player > 0.5 and opinion_of_player < -0.3
+
+
+## Ally to the player: trusted enough and positively disposed.
+## Drives the passive heat-cool drift + ally visual + trusted prompt.
+func is_ally_to_player() -> bool:
+	return trust > 60.0 and opinion_of_player > 0.3
+
 ## Attempt to assign an objective. Returns success/failure reason.
 func assign_objective(objective: String, risk_level: float) -> Dictionary:
 	if not can_recruit():

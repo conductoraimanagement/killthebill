@@ -18,6 +18,11 @@ signal victory_achieved(kind: String, title: String, flavor: String)
 # until the scene is reloaded / playthrough reinitialized.
 var _victory_locked: bool = false
 
+# One-shot warning flag — emits a NetFeed headline the first time the
+# player's heat is driven up by hostile NPCs alone (no active action).
+# Reset in initialize_playthrough.
+var _snitch_warning_fired: bool = false
+
 # ---------------------------------------------------------
 # NETFEED (The Internet/Communication Array)
 # ---------------------------------------------------------
@@ -88,6 +93,7 @@ func initialize_playthrough(preloaded_config: Dictionary = {}) -> void:
 	netfeed_history.clear()
 	cycle = 0
 	_victory_locked = false
+	_snitch_warning_fired = false
 	# Don't wipe current_region — Main.gd sets it before calling us.
 
 	if has_node("/root/SenateDirector"):
@@ -357,6 +363,7 @@ func run_world_cycle() -> void:
 	if has_node("/root/CulturalCameos"):
 		get_node("/root/CulturalCameos").tick_daily()
 
+	_apply_social_pressure()
 	_evolve_oligarchs()
 
 	# Evolve NPCs
@@ -372,6 +379,49 @@ func run_world_cycle() -> void:
 	_update_region_dynamics()
 	_check_systemic_collapse()
 	world_state_changed.emit()
+
+# Hostile NPCs (knowledge>0.5, opinion<-0.3) passively drip heat onto
+# the player each day cycle; allies (trust>60, opinion>0.3) drip it back.
+# Only NPCs active in the current phase count — night-only fixers you
+# wronged can't snitch at noon. See docs/04-player/heat.md.
+func _apply_social_pressure() -> void:
+	if not has_node("/root/PopulationDirector") or not has_node("/root/PlayerManager"):
+		return
+	var pop_dir = get_node("/root/PopulationDirector")
+	var pm = get_node("/root/PlayerManager")
+	var ts = get_node_or_null("/root/TimeSystem")
+	var is_night_now: bool = false
+	if ts:
+		is_night_now = ts.is_night()
+
+	var hostile_count: int = 0
+	var ally_count: int = 0
+	for n in pop_dir.roster:
+		var phase: String = str(n.active_phase) if n.active_phase else "both"
+		var active_now: bool = phase == "both" \
+			or (phase == "day" and not is_night_now) \
+			or (phase == "night" and is_night_now)
+		if not active_now:
+			continue
+		if n.is_hostile_to_player():
+			hostile_count += 1
+		elif n.is_ally_to_player():
+			ally_count += 1
+
+	var net_heat: int = hostile_count - int(float(ally_count) * 0.5)
+	if net_heat != 0:
+		pm.add_heat(net_heat, "neighborhood disposition")
+
+	if hostile_count >= 2 and not _snitch_warning_fired:
+		_snitch_warning_fired = true
+		var event := {
+			"type": "NEWS_TICKER",
+			"headline": "A neighborhood is watching you. Their quiet is reporting.",
+			"timestamp": Time.get_unix_time_from_system(),
+		}
+		netfeed_history.append(event)
+		netfeed_event_generated.emit(event)
+
 
 func _evolve_oligarchs() -> void:
 	for o in oligarchs:
