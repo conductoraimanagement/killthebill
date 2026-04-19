@@ -68,22 +68,36 @@ payout ≈ 500 + target.controversy_level × 30    # reward for having juicy dir
 
 **Tradeoff**: the corrupt option. Money now, strengthened Enclave later. The game watches and remembers (future: player_idealism tracker tanks, cameo arcs gate off).
 
-### 3. Rival oligarch contract *(designed, not implemented)*
-Each news cycle, the game picks a living oligarch A and a rival oligarch B (different sector). A posts an anonymous contract via NetFeed: *"Disrupt B's operations. Compensation on verification."*
+### 3. Rival oligarch contract ✓ *(implemented)*
+Each news cycle, the game rolls ~65% odds of posting a contract from a living oligarch A targeting a rival oligarch B's sector (different sectors only). NetFeed headline: *"Bounty circulating in the black market — A wants B's infrastructure damaged."*
 
-Any sabotage of B's sector while the contract is open pays the full bounty. If the contract expires unclaimed, it's replaced by a new pair next cycle.
+Any sabotage of B's sector within the TTL window (3 cycles) pays the full bounty (800–2500 credits). On completion:
 
-**Tradeoff**: you're becoming a tool of one oligarch against another. A's wealth climbs, their paranoia drops. You're not weakening the Enclave — you're rebalancing it.
+- `PlayerManager.credits +bounty`
+- `contractor.wealth -bounty` (they paid up)
+- `contractor.paranoia -5` (they got what they wanted)
+- Contract removed from `active_jobs`
 
-### 4. Fixer jobs from NPCs *(designed, not implemented)*
-Any NPC with `trust >= 30` and a specific `immediate_need` will occasionally post a task (deliver, observe, retrieve). Completing it:
-- Pays a modest bounty
-- +15 trust with the NPC
-- Progresses toward agent recruitment (see [relationships](../03-characters/relationships.md))
+If no one claims the contract in 3 cycles, it expires with a NetFeed note. A new contract replaces it on the next news cycle.
 
-Refusing or failing → trust −5 to −20.
+**Tradeoff**: you're becoming a tool of one oligarch against another. A's portfolio grows, their paranoia drops, the target weakens but the Enclave as a whole rebalances rather than shrinking.
 
-**Tradeoff**: the small, human-scale economy. These are how you fund yourself without turning feral — but they move slowly.
+### 4. Fixer jobs from NPCs ✓ *(implemented)*
+NPCs with `trust >= 30` can post a fixer job via NetFeed: *"Fixer signal in the Sinks — Jon Holt wants the Food sector disrupted. They say it's personal."*
+
+Two flavors roll from the available actions:
+- **Disrupt sector**: sabotage a random sector. Pays 400–900.
+- **Leak on oligarch**: leak scandal on a specified oligarch. Pays 300–700.
+
+On completion:
+
+- `PlayerManager.credits +bounty`
+- `fixer_npc.trust +15` (bond_history records it)
+- NetFeed: *"NPC quietly paid an unnamed operative. A debt acknowledged."*
+
+Starting trust: NPCs roll `randf_range(0, 60)` on generation (Enforcers are colder; Workers and Destitute trust the player sooner), so ~35% of the roster starts above the 30 threshold for posting jobs. As the player completes fixer jobs, that NPC's trust rises, possibly crossing the `can_recruit()` threshold for [relationships](../03-characters/relationships.md) agent-network mechanics.
+
+**Tradeoff**: the small, human-scale economy. No senate_alignment shift, no paranoia amplification, no oligarch patronage debt. Just a citizen paying you for a favor. But the bounties are smaller, and you can only run one at a time per NPC.
 
 ### 5. Pickpocket / mug *(designed, not implemented)*
 Ambient crowd-NPCs and Enforcer patrols in the streets. Interact → stealth roll.

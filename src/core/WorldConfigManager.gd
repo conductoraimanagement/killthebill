@@ -214,6 +214,8 @@ func rehydrate_npc(n_dict: Dictionary) -> NPCData:
 	n.radicalization = float(n_dict.get("radicalization", 0.0))
 	n.personal_wealth = int(n_dict.get("personal_wealth", 50))
 	n.immediate_need = str(n_dict.get("immediate_need", "Stability"))
+	n.trust = float(n_dict.get("trust", 0.0))
+	n.relationship_type = int(n_dict.get("relationship_type", 0))
 	return n
 
 
@@ -341,6 +343,8 @@ func _npc_to_dict(n: NPCData) -> Dictionary:
 		"radicalization": n.radicalization,
 		"personal_wealth": n.personal_wealth,
 		"immediate_need": n.immediate_need,
+		"trust": n.trust,
+		"relationship_type": n.relationship_type,
 	}
 
 

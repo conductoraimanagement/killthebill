@@ -82,6 +82,11 @@ var _bribe_list: VBoxContainer
 var _bribe_title: Label
 var _bribe_status: Label
 
+# Job board panel (J toggle)
+var _jobs_panel: Panel
+var _jobs_text: RichTextLabel
+var _jobs_visible: bool = false
+
 
 func _ready() -> void:
 	layer = 10
@@ -96,6 +101,7 @@ func _ready() -> void:
 	_build_load_modal()
 	_build_terminal_menu_modal()
 	_build_bribe_modal()
+	_build_jobs_panel()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
 	WorldDirector.netfeed_event_generated.connect(_on_netfeed_event)
@@ -113,6 +119,11 @@ func _ready() -> void:
 	if pm:
 		pm.credits_changed.connect(_on_credits_or_heat_changed)
 		pm.heat_changed.connect(_on_credits_or_heat_changed)
+
+	# Job board hooks
+	WorldDirector.job_posted.connect(_on_job_changed)
+	WorldDirector.job_completed.connect(_on_job_changed)
+	WorldDirector.job_expired.connect(_on_job_changed)
 
 	_refresh_state()
 
@@ -597,6 +608,100 @@ func _color_for_approval(value: float) -> Color:
 
 
 # -------------------------------------------------------------
+# Job board panel (J to toggle) — oligarch contracts + NPC fixer jobs
+# -------------------------------------------------------------
+func _build_jobs_panel() -> void:
+	_jobs_panel = _make_panel(COL_BG)
+	_jobs_panel.anchor_left = 1.0
+	_jobs_panel.anchor_top = 0.0
+	_jobs_panel.offset_left = -460
+	_jobs_panel.offset_top = 420
+	_jobs_panel.offset_right = -20
+	_jobs_panel.offset_bottom = 720
+	_jobs_panel.visible = false
+
+	var title := _make_label("// JOB BOARD  (press J to hide)", COL_ACCENT, 11, true)
+	title.offset_left = PANEL_PAD
+	title.offset_top = PANEL_PAD - 2
+	title.offset_right = 440 - PANEL_PAD
+	title.offset_bottom = PANEL_PAD + 16
+	_jobs_panel.add_child(title)
+
+	_jobs_text = RichTextLabel.new()
+	_jobs_text.bbcode_enabled = true
+	_jobs_text.fit_content = true
+	_jobs_text.scroll_active = false
+	_jobs_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_jobs_text.anchor_left = 0.0
+	_jobs_text.anchor_top = 0.0
+	_jobs_text.anchor_right = 1.0
+	_jobs_text.offset_left = PANEL_PAD
+	_jobs_text.offset_top = PANEL_PAD + 24
+	_jobs_text.offset_right = -PANEL_PAD
+	_jobs_text.offset_bottom = 300
+	_jobs_text.add_theme_color_override("default_color", COL_FG)
+	_jobs_text.add_theme_font_size_override("normal_font_size", 12)
+	_jobs_text.add_theme_font_size_override("bold_font_size", 12)
+	_jobs_panel.add_child(_jobs_text)
+
+
+func _toggle_jobs() -> void:
+	_jobs_visible = not _jobs_visible
+	_jobs_panel.visible = _jobs_visible
+	if _jobs_visible:
+		_refresh_jobs()
+
+
+func _on_job_changed(_job) -> void:
+	if _jobs_visible:
+		_refresh_jobs()
+
+
+func _refresh_jobs() -> void:
+	if WorldDirector.active_jobs.is_empty():
+		_jobs_text.text = "[i][color=#%s]> no active jobs. wait for the next news cycle.[/color][/i]" % _hex(COL_DIM)
+		return
+
+	var lines := PackedStringArray()
+	for j in WorldDirector.active_jobs:
+		lines.append(_job_row(j))
+		lines.append("")
+	_jobs_text.text = "\n".join(lines)
+
+
+func _job_row(job: Dictionary) -> String:
+	var src_type: String = str(job.get("source_type", ""))
+	var badge: String
+	var badge_color: Color
+	if src_type == "oligarch_contract":
+		badge = "CONTRACT"
+		badge_color = COL_HOT
+	elif src_type == "npc_fixer":
+		badge = "FIXER"
+		badge_color = COL_COOL
+	else:
+		badge = "JOB"
+		badge_color = COL_DIM
+
+	var cycles_left: int = int(job.get("expires_at_cycle", 0)) - WorldDirector.cycle
+	var ttl_color := COL_HOT if cycles_left <= 1 else COL_DIM
+
+	var row: String = ""
+	row += "[color=#%s]▸ %s[/color]  [color=#%s]+%d cr[/color]  [color=#%s]%d cycles left[/color]\n" % [
+		_hex(badge_color),
+		badge,
+		_hex(COL_COOL),
+		int(job.get("bounty", 0)),
+		_hex(ttl_color),
+		cycles_left,
+	]
+	row += "[b][color=#%s]%s[/color][/b]\n" % [_hex(COL_FG), str(job.get("source_name", "unknown"))]
+	row += "[color=#%s]%s[/color]\n" % [_hex(COL_DIM), str(job.get("framing", ""))]
+	row += "  → [color=#%s]%s[/color]" % [_hex(COL_WARN), str(job.get("target_label", ""))]
+	return row
+
+
+# -------------------------------------------------------------
 # Prompt panel
 # -------------------------------------------------------------
 func _build_prompt_panel() -> void:
@@ -758,6 +863,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	match event.keycode:
 		KEY_P:
 			_toggle_politicians()
+			get_viewport().set_input_as_handled()
+		KEY_J:
+			_toggle_jobs()
 			get_viewport().set_input_as_handled()
 		KEY_F5:
 			show_save_modal()

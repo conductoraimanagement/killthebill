@@ -54,6 +54,19 @@ var current_region: String = ""
 # ---------------------------------------------------------
 var cycle: int = 0
 
+# ---------------------------------------------------------
+# JOB BOARD — rival oligarch contracts + NPC fixer jobs
+# (See docs/04-player/progression.md income mechanisms 3 & 4)
+# ---------------------------------------------------------
+signal job_posted(job: Dictionary)
+signal job_completed(job: Dictionary)
+signal job_expired(job: Dictionary)
+
+var active_jobs: Array[Dictionary] = []
+var _next_job_index: int = 0
+const MAX_ACTIVE_JOBS := 3
+const JOB_TTL_CYCLES := 3
+
 func _ready():
 	print("WorldDirector initialized. Economy online.")
 
@@ -313,6 +326,7 @@ func run_world_cycle() -> void:
 	if has_node("/root/PlayerManager"):
 		get_node("/root/PlayerManager").cool_heat(1)
 
+	_expire_jobs()
 	_evolve_oligarchs()
 
 	# Evolve NPCs
@@ -436,6 +450,8 @@ func _ripple_sabotage(target_sector: String):
 		pm.add_heat(heat_amt, "sabotage: %s" % target_sector)
 		pm.bump_playstyle(0.08, 0.02, 0.0, 0.0)
 
+	_check_jobs_match("sabotage_sector", target_sector)
+
 
 func _sabotage_loot_for(sector: String) -> int:
 	match sector:
@@ -531,6 +547,8 @@ func _ripple_leak_scandal(target_id: String):
 
 			if has_node("/root/PlayerManager"):
 				get_node("/root/PlayerManager").bump_playstyle(0.05, 0.0, 0.1, 0.02)
+
+			_check_jobs_match("leak_oligarch", target_id)
 			break
 
 
@@ -635,7 +653,12 @@ func _update_region_dynamics():
 # ---------------------------------------------------------
 func trigger_news_cycle():
 	print("--- DAILY NEWS CYCLE (NETFEED REFRESH) ---")
-	
+
+	# Also refresh the job board during the news cycle — batched with NetFeed
+	# so jobs feel like they arrive "with the broadcast" rather than on a
+	# separate tick.
+	_maybe_post_jobs()
+
 	if has_node("/root/LLMManager"):
 		var llm = get_node("/root/LLMManager")
 		if not llm.netfeed_stream_received.is_connected(_on_netfeed_stream_received):
@@ -739,3 +762,196 @@ func _fire_victory(kind: String, title: String, flavor: String) -> void:
 	_victory_locked = true
 	print("VICTORY: [%s] %s — %s" % [kind, title, flavor])
 	victory_achieved.emit(kind, title, flavor)
+
+
+# ---------------------------------------------------------
+# JOB BOARD — contracts + fixer jobs
+# Called from trigger_news_cycle() every 3rd world cycle. Posting
+# is probabilistic so the board has rhythm, not clockwork.
+# ---------------------------------------------------------
+
+func _maybe_post_jobs() -> void:
+	if active_jobs.size() >= MAX_ACTIVE_JOBS:
+		return
+	if randf() < 0.65 and active_jobs.size() < MAX_ACTIVE_JOBS:
+		_try_post_oligarch_contract()
+	if randf() < 0.45 and active_jobs.size() < MAX_ACTIVE_JOBS:
+		_try_post_fixer_job()
+
+
+func _try_post_oligarch_contract() -> void:
+	var living: Array = get_living_oligarchs()
+	if living.size() < 2:
+		return
+	var contractor = living.pick_random()
+	var candidates: Array = []
+	for o in living:
+		if o.sector_of_influence != contractor.sector_of_influence:
+			candidates.append(o)
+	if candidates.is_empty():
+		return
+	var target_oligarch = candidates.pick_random()
+	# Avoid posting a duplicate contract (same contractor+target already active)
+	for j in active_jobs:
+		if j.get("source_id", "") == contractor.oligarch_id and j.get("target_ref", "") == target_oligarch.sector_of_influence:
+			return
+	_post_job({
+		"source_type": "oligarch_contract",
+		"source_id": contractor.oligarch_id,
+		"source_name": contractor.oligarch_name,
+		"target_kind": "sabotage_sector",
+		"target_ref": target_oligarch.sector_of_influence,
+		"target_label": "disrupt %s sector" % target_oligarch.sector_of_influence,
+		"bounty": randi_range(800, 2500),
+		"framing": "%s wants %s's infrastructure damaged." % [
+			contractor.oligarch_name, target_oligarch.oligarch_name,
+		],
+	})
+
+
+func _try_post_fixer_job() -> void:
+	if not has_node("/root/PopulationDirector"):
+		return
+	var pop_dir = get_node("/root/PopulationDirector")
+	var candidates: Array = []
+	for n in pop_dir.roster:
+		if n.trust >= 30.0:
+			candidates.append(n)
+	if candidates.is_empty():
+		return
+	var fixer = candidates.pick_random()
+	# Skip if fixer already has a job on the board
+	for j in active_jobs:
+		if j.get("source_id", "") == fixer.npc_id:
+			return
+
+	var use_leak: bool = (randf() < 0.4) and not get_living_oligarchs().is_empty()
+	var job_dict: Dictionary
+	if use_leak:
+		var target_oligarch = get_living_oligarchs().pick_random()
+		job_dict = {
+			"source_type": "npc_fixer",
+			"source_id": fixer.npc_id,
+			"source_name": fixer.npc_name,
+			"target_kind": "leak_oligarch",
+			"target_ref": target_oligarch.oligarch_id,
+			"target_label": "leak on %s" % target_oligarch.oligarch_name,
+			"bounty": randi_range(300, 700),
+			"framing": "%s has been asking around — they want dirt on %s." % [
+				fixer.npc_name, target_oligarch.oligarch_name,
+			],
+		}
+	else:
+		var sectors := ["Food", "Tech", "Energy", "Pharma"]
+		var sector: String = sectors.pick_random()
+		job_dict = {
+			"source_type": "npc_fixer",
+			"source_id": fixer.npc_id,
+			"source_name": fixer.npc_name,
+			"target_kind": "sabotage_sector",
+			"target_ref": sector,
+			"target_label": "disrupt %s" % sector,
+			"bounty": randi_range(400, 900),
+			"framing": "%s wants the %s sector disrupted. They say it's personal." % [
+				fixer.npc_name, sector,
+			],
+		}
+	_post_job(job_dict)
+
+
+func _post_job(job: Dictionary) -> void:
+	_next_job_index += 1
+	job["job_id"] = "job_%04d" % _next_job_index
+	job["posted_at_cycle"] = cycle
+	job["expires_at_cycle"] = cycle + JOB_TTL_CYCLES
+	active_jobs.append(job)
+	job_posted.emit(job)
+
+	var event := {
+		"type": "NEWS_TICKER",
+		"headline": _job_post_headline(job),
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	netfeed_history.append(event)
+	netfeed_event_generated.emit(event)
+
+
+func _expire_jobs() -> void:
+	var remaining: Array[Dictionary] = []
+	for j in active_jobs:
+		if cycle >= int(j.get("expires_at_cycle", 0)):
+			job_expired.emit(j)
+			var event := {
+				"type": "NEWS_TICKER",
+				"headline": "Job on '%s' expired unclaimed." % str(j.get("target_label", "")),
+				"timestamp": Time.get_unix_time_from_system(),
+			}
+			netfeed_history.append(event)
+			netfeed_event_generated.emit(event)
+		else:
+			remaining.append(j)
+	active_jobs = remaining
+
+
+func _check_jobs_match(kind: String, target_ref: String) -> void:
+	var remaining: Array[Dictionary] = []
+	for j in active_jobs:
+		if str(j.get("target_kind", "")) == kind and str(j.get("target_ref", "")) == target_ref:
+			_complete_job(j)
+		else:
+			remaining.append(j)
+	active_jobs = remaining
+
+
+func _complete_job(job: Dictionary) -> void:
+	var bounty: int = int(job.get("bounty", 0))
+
+	# Contractor pays (oligarch) or wipes their tab (fixer)
+	if str(job.get("source_type", "")) == "oligarch_contract":
+		var o := get_oligarch_by_id(str(job.get("source_id", "")))
+		if o:
+			o.wealth = max(0, o.wealth - bounty)
+			# Contractor oligarch's paranoia drops — they got what they wanted
+			o.paranoia = max(0.0, o.paranoia - 5.0)
+	elif str(job.get("source_type", "")) == "npc_fixer":
+		if has_node("/root/PopulationDirector"):
+			var pop_dir = get_node("/root/PopulationDirector")
+			for n in pop_dir.roster:
+				if n.npc_id == str(job.get("source_id", "")):
+					n.trust = min(100.0, n.trust + 15.0)
+					n.bond_history.append("Completed job: " + str(job.get("target_label", "")))
+					break
+
+	if has_node("/root/PlayerManager"):
+		get_node("/root/PlayerManager").add_credits(bounty, "job: %s" % str(job.get("target_label", "")))
+
+	var event := {
+		"type": "NEWS_TICKER",
+		"headline": _job_complete_headline(job),
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	netfeed_history.append(event)
+	netfeed_event_generated.emit(event)
+
+	job_completed.emit(job)
+
+
+func _job_post_headline(job: Dictionary) -> String:
+	match str(job.get("source_type", "")):
+		"oligarch_contract":
+			return "Bounty circulating in the black market — %s" % str(job.get("framing", ""))
+		"npc_fixer":
+			return "Fixer signal in the Sinks — %s" % str(job.get("framing", ""))
+	return "Job posted."
+
+
+func _job_complete_headline(job: Dictionary) -> String:
+	match str(job.get("source_type", "")):
+		"oligarch_contract":
+			return "Bounty settled. The disruption of %s was suspiciously well-timed for %s." % [
+				str(job.get("target_ref", "")),
+				str(job.get("source_name", "unknown")),
+			]
+		"npc_fixer":
+			return "%s quietly paid an unnamed operative. A debt acknowledged." % str(job.get("source_name", "Someone"))
+	return "Job completed."

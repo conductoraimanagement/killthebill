@@ -76,7 +76,13 @@ func _on_npc_roster_generated(data: Array) -> void:
 			3:
 				npc.personal_wealth = randi_range(0, 30)
 				npc.immediate_need = "Survival"
-		
+
+		# Seed NPC trust so some citizens are pre-disposed to post fixer jobs.
+		# About 35% of NPCs start with trust ≥ 30 — the threshold for posting.
+		# Workers and the Destitute trust the player easier than Enforcers.
+		var trust_bias: float = 15.0 if npc.social_class == 1 else 30.0
+		npc.trust = clamp(randf_range(0.0, 60.0) + trust_bias - 15.0, 0.0, 60.0)
+
 		roster.append(npc)
 
 	if roster.size() < MAX_NPCS:
