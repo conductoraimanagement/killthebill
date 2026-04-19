@@ -13,6 +13,8 @@ class_name PopulationDirector
 
 signal population_generated()
 signal npc_died(npc, cause: String)
+signal npc_bond_formed(a, b)
+signal npc_romance_formed(a, b)
 
 const MAX_NPCS: int = 40 # Total persistent population cap
 
@@ -203,6 +205,24 @@ func _kill_npc(npc, cause: String, cycle: int, wd, pm) -> void:
 		if is_lover:
 			pm.remove_romantic_partner(npc.npc_id)
 
+	# NPC-to-NPC partner takes a hit. The social graph mourns too.
+	if npc.npc_partner_id != "":
+		var survivor = _find_by_id(npc.npc_partner_id)
+		if survivor != null and survivor.alive:
+			survivor.hope = max(0.0, survivor.hope - 30.0)
+			survivor.stress_level = min(100.0, survivor.stress_level + 15.0)
+			survivor.npc_partner_id = ""
+			if wd:
+				var grief_event := {
+					"type": "NEWS_TICKER",
+					"headline": "%s heard about %s. They were seen on their balcony through the night." % [
+						survivor.npc_name, npc.npc_name,
+					],
+					"timestamp": Time.get_unix_time_from_system(),
+				}
+				wd.netfeed_history.append(grief_event)
+				wd.netfeed_event_generated.emit(grief_event)
+
 	# NetFeed headline.
 	if wd:
 		var headline: String = _headline_for_death(npc, cause, is_lover, is_ally)
@@ -216,6 +236,123 @@ func _kill_npc(npc, cause: String, cycle: int, wd, pm) -> void:
 
 	npc_died.emit(npc, cause)
 	print("NPC died: %s (%s)" % [npc.npc_name, cause])
+
+
+const SOCIAL_PAIRS_PER_CYCLE: int = 8
+const BOND_INCREMENT_PER_MEETING: float = 2.5
+const BOND_FIRST_MENTION_THRESHOLD: float = 30.0
+const BOND_ROMANCE_THRESHOLD: float = 75.0
+
+
+# Called by WorldDirector each day. Picks SOCIAL_PAIRS_PER_CYCLE random
+# pairs of alive NPCs active in the current phase and runs them through
+# a single interaction — bond bump + mood contagion + radicalization
+# spread + opinion-of-player diffusion + occasional romance formation.
+# The roster lives independently of the player.
+func tick_social_graph(cycle: int) -> void:
+	var ts := get_node_or_null("/root/TimeSystem")
+	var is_night_now: bool = ts.is_night() if ts else false
+
+	var active_pool: Array = []
+	for n in roster:
+		if not n.alive:
+			continue
+		var phase: String = str(n.active_phase) if n.active_phase else "both"
+		var active_now: bool = phase == "both" \
+			or (phase == "day" and not is_night_now) \
+			or (phase == "night" and is_night_now)
+		if active_now:
+			active_pool.append(n)
+
+	if active_pool.size() < 2:
+		return
+
+	for i in range(SOCIAL_PAIRS_PER_CYCLE):
+		var a = active_pool.pick_random()
+		var b = active_pool.pick_random()
+		if a.npc_id == b.npc_id:
+			continue
+		_interact_pair(a, b, cycle)
+
+
+func _interact_pair(a, b, cycle: int) -> void:
+	# --- Bond bump (symmetric) ---
+	var prev_bond: float = float(a.npc_bonds.get(b.npc_id, 0.0))
+	var new_bond: float = min(100.0, prev_bond + BOND_INCREMENT_PER_MEETING)
+	a.npc_bonds[b.npc_id] = new_bond
+	b.npc_bonds[a.npc_id] = new_bond
+
+	# NetFeed the first time a bond crosses the "notable" threshold — a
+	# one-shot cue that two roster members have become a pair of interest.
+	if prev_bond < BOND_FIRST_MENTION_THRESHOLD and new_bond >= BOND_FIRST_MENTION_THRESHOLD:
+		_emit_social_note("%s and %s were seen deep in conversation at the breadline. Subject unknown." % [
+			a.npc_name, b.npc_name,
+		])
+		npc_bond_formed.emit(a, b)
+
+	# --- Mood contagion, weighted by bond ---
+	# Strong bonds spread mood faster. Weak acquaintances barely affect
+	# each other. Split the delta so both move toward a midpoint.
+	var weight: float = new_bond / 100.0 * 0.25   # 0..0.25
+	_pull_toward(a, b, "hope", weight)
+	_pull_toward(a, b, "stress_level", weight * 0.6)
+
+	# --- Radicalization spread ---
+	# Agitators infect the cautious, unless the cautious have high conformity.
+	if a.radicalization > 70.0 and b.radicalization < 40.0 and b.conformity < 0.6:
+		b.radicalization = min(100.0, b.radicalization + 2.0)
+	if b.radicalization > 70.0 and a.radicalization < 40.0 and a.conformity < 0.6:
+		a.radicalization = min(100.0, a.radicalization + 2.0)
+
+	# --- Opinion-of-player diffusion ---
+	# Stronger opinion drags the weaker toward it, scaled by bond.
+	if randf() < 0.15:
+		var pull: float = weight * 0.4
+		if abs(a.opinion_of_player) > abs(b.opinion_of_player):
+			b.opinion_of_player = lerp(b.opinion_of_player, a.opinion_of_player, pull)
+		else:
+			a.opinion_of_player = lerp(a.opinion_of_player, b.opinion_of_player, pull)
+
+	# --- Romance formation ---
+	# High bond, both unpartnered (NPC-NPC), compatible dispositions.
+	if new_bond >= BOND_ROMANCE_THRESHOLD \
+	and a.npc_partner_id == "" and b.npc_partner_id == "" \
+	and a.relationship_type != 4 and b.relationship_type != 4 \
+	and randf() < 0.06:
+		_pair_romance(a, b)
+
+
+func _pull_toward(a, b, field: String, weight: float) -> void:
+	# Move a[field] and b[field] partway toward each other.
+	var av: float = float(a.get(field))
+	var bv: float = float(b.get(field))
+	var mid: float = (av + bv) * 0.5
+	a.set(field, clampf(lerp(av, mid, weight), 0.0, 100.0))
+	b.set(field, clampf(lerp(bv, mid, weight), 0.0, 100.0))
+
+
+func _pair_romance(a, b) -> void:
+	a.npc_partner_id = b.npc_id
+	b.npc_partner_id = a.npc_id
+	a.hope = min(100.0, a.hope + 10.0)
+	b.hope = min(100.0, b.hope + 10.0)
+	_emit_social_note("%s and %s walked home together under the overpass. The neighborhood noticed." % [
+		a.npc_name, b.npc_name,
+	])
+	npc_romance_formed.emit(a, b)
+
+
+func _emit_social_note(text: String) -> void:
+	var wd := get_node_or_null("/root/WorldDirector")
+	if wd == null:
+		return
+	var event := {
+		"type": "NEWS_TICKER",
+		"headline": text,
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	wd.netfeed_history.append(event)
+	wd.netfeed_event_generated.emit(event)
 
 
 # Called by WorldDirector each day. For each romantic partner who

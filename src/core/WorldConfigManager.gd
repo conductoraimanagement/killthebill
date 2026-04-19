@@ -227,6 +227,10 @@ func rehydrate_npc(n_dict: Dictionary) -> NPCData:
 	n.alive = bool(n_dict.get("alive", true))
 	n.death_cause = str(n_dict.get("death_cause", ""))
 	n.died_on_cycle = int(n_dict.get("died_on_cycle", -1))
+	var bonds = n_dict.get("npc_bonds", {})
+	if bonds is Dictionary:
+		n.npc_bonds = bonds.duplicate(true)
+	n.npc_partner_id = str(n_dict.get("npc_partner_id", ""))
 	return n
 
 
@@ -362,6 +366,8 @@ func _npc_to_dict(n: NPCData) -> Dictionary:
 		"alive": n.alive,
 		"death_cause": n.death_cause,
 		"died_on_cycle": n.died_on_cycle,
+		"npc_bonds": n.npc_bonds,
+		"npc_partner_id": n.npc_partner_id,
 	}
 
 

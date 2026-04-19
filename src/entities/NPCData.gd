@@ -108,6 +108,15 @@ class_name NPCData
 @export var infidelity_known: bool = false
 @export var infidelity_reacted: bool = false
 
+## Social graph — bonds to other NPCs. {other_npc_id: strength 0..100}.
+## Populated by PopulationDirector.tick_social_graph as the roster
+## bumps into each other cycle after cycle.
+@export var npc_bonds: Dictionary = {}
+
+## NPC-to-NPC romantic partner (independent of player). Non-empty =
+## paired. If either partner dies, the survivor takes a hope hit.
+@export var npc_partner_id: String = ""
+
 ## Returns true if the NPC can be recruited as an agent
 func can_recruit() -> bool:
 	# Must have at least Friend-level bond and sufficient trust

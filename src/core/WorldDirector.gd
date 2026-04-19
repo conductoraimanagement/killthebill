@@ -388,6 +388,10 @@ func run_world_cycle() -> void:
 	if has_node("/root/PopulationDirector"):
 		var pd = get_node("/root/PopulationDirector")
 		pd.evaluate_deaths(global_economy, cycle)
+		# Random NPC-NPC pair interactions — mood contagion, radicalization
+		# spread, opinion-of-player diffusion, occasional romance. The
+		# social graph lives independently of the player.
+		pd.tick_social_graph(cycle)
 		# Romantic partners discover each other — trait-driven reactions.
 		pd.evaluate_infidelity_discoveries(cycle)
 
