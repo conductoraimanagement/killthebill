@@ -189,8 +189,8 @@ func request_oligarch_generation(count: int) -> void:
 	current_request_type = "oligarch_generation"
 	var system_prompt := "You are the Architect for a systemic immersive sim called KILL THE BILL.\n"
 	system_prompt += "Generate " + str(count) + " unique corporate oligarchs for a 'Corporate Brutalist / Slum Cyberpunk' dystopia.\n"
-	system_prompt += "Each must be a fully realized character. Provide: first_name, last_name, title (CEO, Chairman, Director-General, Founder, Chief Architect), sector (Food, Tech, Security, Media, Pharma, Energy), 2-3 ambitions, 2-3 quirks.\n"
-	system_prompt += "High diversity. Some ideological, some greedy, some paranoid, some vain.\n"
+	system_prompt += "Each must be a fully realized character. Provide: first_name, last_name, title (CEO, Chairman, Director-General, Founder, Chief Architect), sector (Food, Tech, Security, Media, Pharma, Energy, Finance), 2-3 ambitions, 2-3 quirks.\n"
+	system_prompt += "Sectors MAY repeat, and some sectors may be absent — real oligarchies cluster rather than evenly distribute. Personality diversity matters more than sector diversity. Some ideological, some greedy, some paranoid, some vain.\n"
 	system_prompt += RESONANCE_NUDGE
 	system_prompt += "Respond STRICTLY in JSON with key 'oligarchs' containing an array of objects."
 	_send(system_prompt, "Generate the oligarch roster in JSON.", 2048, 0.9)
@@ -412,8 +412,8 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 const _OLIGARCH_FIRST := ["Veldra", "Korr", "Lysandra", "Arkady", "Mara", "Thessaly", "Orlan", "Verity", "Cyrus", "Nadia", "Erastus", "Felina", "Roderic", "Indra", "Sevrin", "Mabel", "Yusef", "Ophira", "Callum", "Delphine"]
 const _OLIGARCH_LAST := ["Vextol", "Krynne", "Aurelius", "Stroma", "Bane", "Oksmarra", "Gant", "Throne", "Varik", "Silvane", "Okonjo", "Trell", "Verhovskiy", "Quell", "Drax", "Zhao-Pax", "Hollis", "Karst", "Dain", "Wyler"]
 const _OLIGARCH_TITLES := ["CEO", "Chairman", "Director-General", "Founder", "Chief Architect"]
-const _OLIGARCH_SECTORS := ["Food", "Tech", "Security", "Media", "Pharma", "Energy"]
-const _OLIGARCH_AMBITIONS := ["Monopolize supply", "Achieve political immortality", "Build a legacy", "Escape", "Crush the resistance", "Control the narrative", "Transcend humanity", "Purge The Sinks"]
+const _OLIGARCH_SECTORS := ["Food", "Tech", "Security", "Media", "Pharma", "Energy", "Finance"]
+const _OLIGARCH_AMBITIONS := ["Monopolize supply", "Achieve political immortality", "Build a legacy", "Escape", "Crush the resistance", "Control the narrative", "Transcend humanity", "Purge The Sinks", "Privatize currency", "Insolvency harvest"]
 const _OLIGARCH_QUIRKS := [
 	"Refuses to use the word 'poor' — substitutes 'unfortunate' or 'inefficient'.",
 	"Keeps an antique typewriter on the desk. Hates screens.",
@@ -621,16 +621,17 @@ const _BILL_TEMPLATES := [
 # =============================================================
 
 func _offline_emit_oligarchs(count: int) -> void:
+	# Each oligarch independently rolls a sector. Sectors may repeat
+	# (market consolidation) or be absent entirely (the Enclave doesn't
+	# necessarily have a player in every industry). Reflects how real
+	# oligarchies cluster, not how designed rosters are balanced.
 	var out: Array = []
-	var sectors_used: Array = []
 	for i in range(count):
-		var sector: String = _OLIGARCH_SECTORS[i % _OLIGARCH_SECTORS.size()]
-		sectors_used.append(sector)
 		out.append({
 			"first_name": _OLIGARCH_FIRST.pick_random(),
 			"last_name": _OLIGARCH_LAST.pick_random(),
 			"title": _OLIGARCH_TITLES.pick_random(),
-			"sector": sector,
+			"sector": _OLIGARCH_SECTORS.pick_random(),
 			"ambitions": _pick_distinct(_OLIGARCH_AMBITIONS, randi_range(1, 2)),
 			"quirks": _pick_distinct(_OLIGARCH_QUIRKS, randi_range(2, 3)),
 		})

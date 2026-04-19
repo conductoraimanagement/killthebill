@@ -96,6 +96,8 @@ const AMBITION_POOL: Array[String] = [
 	"Control the narrative",
 	"Transcend humanity",
 	"Purge The Sinks",
+	"Privatize currency",
+	"Insolvency harvest",
 ]
 
 const STAGNATION_CYCLES_THRESHOLD: int = 8   # no progress for this many days → abandon
@@ -246,6 +248,8 @@ func _trait_weight_for(ambition: String) -> float:
 		"Control the narrative":         return 0.3 + intelligence * 0.8
 		"Transcend humanity":            return 0.2 + ideology * 0.5
 		"Purge The Sinks":               return 0.1 + ruthlessness * 1.3
+		"Privatize currency":            return 0.3 + intelligence * 0.9
+		"Insolvency harvest":            return 0.2 + greed * 0.8 + ruthlessness * 0.5
 	return 0.3
 
 ## Process a single ambition
@@ -326,7 +330,29 @@ func _pursue_ambition(ambition: String, economy: Dictionary) -> Dictionary:
 					"description": "%s advocates for 'urban renewal' — mass displacement of Sinks residents." % oligarch_name,
 					"impact": {"tension_increase": 30, "public_image_change": -20}
 				}
-	
+		"Privatize currency":
+			if intelligence > 0.5 and wealth > 1000000:
+				var lobby_cost: int = 200000
+				wealth -= lobby_cost
+				ambition_progress[ambition] = progress + 0.08
+				return {
+					"type": "AMBITION_ACTION",
+					"description": "%s lobbies for private management of the currency clearing system." % oligarch_name,
+					"impact": {"senate_alignment_shift": 8}
+				}
+		"Insolvency harvest":
+			if ruthlessness > 0.6 and greed > 0.6:
+				# Absorb distressed-asset proceeds — abstracted. Self-enriches;
+				# raises senate corporate-alignment; mild tech-price shock
+				# as financial instability spreads.
+				wealth += 50000
+				ambition_progress[ambition] = progress + 0.07
+				return {
+					"type": "AMBITION_ACTION",
+					"description": "%s orchestrates a hostile takeover of a distressed rival firm." % oligarch_name,
+					"impact": {"senate_alignment_shift": 3, "tech_price_increase": 15}
+				}
+
 	return {}
 
 # =============================================================

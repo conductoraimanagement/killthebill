@@ -38,6 +38,13 @@ var hope: float = 50.0
 var homeless: bool = false
 var _rent_arrears_cycles: int = 0
 
+# Finance-sector bookkeeping. debt_held_by_oligarch_id is set by
+# WorldDirector after oligarch generation if a Finance oligarch rolled.
+# rent_drain_multiplier spikes after a Finance sabotage, decays back.
+var debt_held_by_oligarch_id: String = ""
+var rent_drain_multiplier: float = 1.0
+var _finance_shock_cycles_remaining: int = 0
+
 # Romantic partners — polyamorous. Can court many, at risk and cost
 # per partner's personality. See docs/03-characters/relationships.md.
 var romantic_partner_ids: Array[String] = []
@@ -85,6 +92,9 @@ func initialize_run(seed: ClassSeed = ClassSeed.BLUE_COLLAR) -> void:
 	homeless = false
 	_rent_arrears_cycles = 0
 	_severance_end_fired = false
+	debt_held_by_oligarch_id = ""
+	rent_drain_multiplier = 1.0
+	_finance_shock_cycles_remaining = 0
 	romantic_partner_ids.clear()
 	player_ruthlessness = 0.0
 	player_idealism = 0.0
@@ -230,14 +240,22 @@ func cool_heat(amount: int = 1) -> void:
 func apply_daily_tick(economy: Dictionary) -> void:
 	# --- Cost of living ---
 	# Rent scales with food_price — when the world's expensive,
-	# survival eats more of what you have.
+	# survival eats more of what you have. Multiplier climbs after a
+	# Finance-sector sabotage (credit freeze → rent spikes).
 	var food_price: int = int(economy.get("food_price", 100))
 	var daily_cost: int = 30 + max(0, int((food_price - 100) / 4))
 	if homeless:
 		daily_cost = 8  # no rent, but you still need to eat & bribe for a cot
+	daily_cost = int(float(daily_cost) * rent_drain_multiplier)
 	if daily_cost > 0:
 		credits -= daily_cost
 		credits_changed.emit(credits, -daily_cost, "daily cost of living")
+
+	# Decay the finance shock
+	if _finance_shock_cycles_remaining > 0:
+		_finance_shock_cycles_remaining -= 1
+		if _finance_shock_cycles_remaining == 0:
+			rent_drain_multiplier = 1.0
 
 	# --- Eviction state ---
 	# Broke for RENT_ARREARS_THRESHOLD consecutive days → lose housing.
@@ -295,6 +313,13 @@ func _evict() -> void:
 
 # Called by the shop (or future recovery actions) to reclaim housing.
 # Returns false if unaffordable.
+# Called by WorldDirector._ripple_sabotage when the Finance sector is
+# hit. Credit markets freeze → rent spikes temporarily.
+func apply_finance_shock() -> void:
+	rent_drain_multiplier = 1.15
+	_finance_shock_cycles_remaining = 10
+
+
 func secure_housing() -> bool:
 	if not homeless:
 		return true

@@ -73,6 +73,7 @@ Landmarks are the **interactive content** of a landscape. Each region gets 3–5
 | `oligarch_outpost` | Any non-slum | Low-tier infiltration, intel drop, sabotage |
 | `oligarch_villa` | `URBAN_ELITE`, `ISLAND_RETREAT` | Endgame infiltration, assassination target |
 | `financial_server` | `URBAN_ELITE` | Hack target → `hack_grid` butterfly |
+| `financial_center` / `clearing_house` | `URBAN_ELITE` | Sabotage → Finance shock (rent ×1.15 for 10 days, food+tech prices +30, tension +20) |
 | `food_depot` / `grain_silo` / `hydro_vault` | `AGRICULTURAL`, `URBAN_SLUM` | Sabotage → food price spike |
 | `refinery` / `foundry` / `power_relay` | `INDUSTRIAL` | Sabotage → tech/energy price spike |
 | `checkpoint_scanner` / `smuggler_tunnel` | `TRANSIT` | Gate control, contraband passage |

@@ -185,6 +185,15 @@ func _on_oligarchs_generated(data: Array) -> void:
 	# 3. Assign territories
 	if has_node("/root/RegionGenerator"):
 		_assign_oligarch_territories(get_node("/root/RegionGenerator"))
+
+	# 3b. Attribute player debt to a Finance oligarch if one exists.
+	# Thematic: Blue Collar's starting -200 cr is owed to someone specific.
+	if has_node("/root/PlayerManager"):
+		var pm_debt = get_node("/root/PlayerManager")
+		for o in oligarchs:
+			if o.sector_of_influence == "Finance" and o.alive:
+				pm_debt.debt_held_by_oligarch_id = o.oligarch_id
+				break
 	
 	# 4. NPC roster (Asynchronous)
 	if has_node("/root/PopulationDirector"):
@@ -343,27 +352,31 @@ func _apply_preloaded_config(config: Dictionary) -> void:
 	_finish_setup()
 
 func _assign_oligarch_territories(region_gen) -> void:
-	# Link oligarchs to regions matching their sector type
+	# Link oligarchs to regions matching their sector type.
+	# Multiple oligarchs can share a sector now, so this is best-effort:
+	# assigns to first open slot of the matching region type, skipping
+	# if no region exists (the Enclave doesn't HAVE to have e.g. an
+	# Island for the Food oligarchs).
 	for o in oligarchs:
 		match o.sector_of_influence:
 			"Food":
-				var farms = region_gen.get_regions_by_type("AGRICULTURAL")
-				if farms.size() > 0:
-					farms[0]["connected_oligarch"] = o.oligarch_id
+				_try_assign_to_first_region(region_gen, "AGRICULTURAL", o)
 			"Security":
-				var transits = region_gen.get_regions_by_type("TRANSIT")
-				if transits.size() > 0:
-					transits[0]["connected_oligarch"] = o.oligarch_id
+				_try_assign_to_first_region(region_gen, "TRANSIT", o)
 			"Tech", "Pharma", "Energy":
-				var industry = region_gen.get_regions_by_type("INDUSTRIAL")
-				for region in industry:
-					if region["connected_oligarch"] == "":
-						region["connected_oligarch"] = o.oligarch_id
-						break
-			"Media":
-				var elite = region_gen.get_regions_by_type("URBAN_ELITE")
-				if elite.size() > 0:
-					elite[0]["connected_oligarch"] = o.oligarch_id
+				_try_assign_to_first_region(region_gen, "INDUSTRIAL", o)
+			"Media", "Finance":
+				_try_assign_to_first_region(region_gen, "URBAN_ELITE", o)
+
+
+func _try_assign_to_first_region(region_gen, type_key: String, o) -> void:
+	var regions: Array = region_gen.get_regions_by_type(type_key)
+	for region in regions:
+		if region.get("connected_oligarch", "") == "":
+			region["connected_oligarch"] = o.oligarch_id
+			return
+	# No open region of this type — oligarch has no formal territory
+	# this run. Works abstractly (they still exist in the economy).
 
 # =============================================================
 # WORLD CYCLE — Called each tick to evolve everything
@@ -573,7 +586,14 @@ func _ripple_sabotage(target_sector: String):
 		global_economy["food_price"] += 200
 	elif target_sector in ["Tech", "Pharma", "Energy"]:
 		global_economy["tech_price"] += 150
-	global_economy["public_tension"] = clamp(global_economy["public_tension"] + 15, 0, 100)
+	elif target_sector == "Finance":
+		# Credit freeze — prices rise, rent drain spikes, tension jumps.
+		global_economy["food_price"] += 30
+		global_economy["tech_price"] += 30
+		if has_node("/root/PlayerManager"):
+			get_node("/root/PlayerManager").apply_finance_shock()
+	global_economy["public_tension"] = clamp(
+		global_economy["public_tension"] + (20 if target_sector == "Finance" else 15), 0, 100)
 	global_economy["security_presence"] = clamp(global_economy["security_presence"] + 10, 0, 100)
 	print("Ripple: %s sector sabotaged. Prices spike, tension rises." % target_sector)
 
@@ -612,6 +632,7 @@ func _sabotage_loot_for(sector: String) -> int:
 		"Energy":   return randi_range(400, 700)
 		"Security": return randi_range(200, 400)
 		"Media":    return randi_range(200, 500)
+		"Finance":  return randi_range(800, 1400)   # a vault hit is a vault hit
 	return 250
 
 
@@ -623,6 +644,7 @@ func _sabotage_heat_for(sector: String) -> int:
 		"Energy":   return 3
 		"Security": return 5
 		"Media":    return 2
+		"Finance":  return 6                        # the grid notices everything
 	return 3
 
 
@@ -641,6 +663,8 @@ func _sabotage_headline(sector: String) -> String:
 			return "Checkpoint near %s breached overnight. Patrols redeployed." % region_tag
 		"Media":
 			return "%s media spire goes dark for 18 minutes. No statement issued." % region_tag
+		"Finance":
+			return "%s clearing house hit overnight. Credit markets froze for 91 minutes. The feed is careful with numbers." % region_tag
 	return "Sabotage reported in %s. Authorities investigating." % region_tag
 
 func _ripple_assassination(target_id: String):
@@ -665,20 +689,26 @@ func _ripple_assassination(target_id: String):
 
 func _ripple_grid_hack():
 	# The player's biggest one-shot payout. Hitting the financial grid
-	# siphons credits from the Tech Oligarch's holdings; they notice, and
-	# hunt back. See docs/04-player/progression.md income mechanism #6.
-	var tech_oligarch: OligarchData = null
+	# siphons credits from the Finance oligarch's holdings (they own the
+	# clearing-house). Falls back to Tech if no Finance oligarch rolled
+	# this run. See docs/04-player/progression.md income mechanism #6.
+	var target_oligarch: OligarchData = null
 	for o in oligarchs:
-		if o.sector_of_influence == "Tech" and o.alive:
-			tech_oligarch = o
+		if o.sector_of_influence == "Finance" and o.alive:
+			target_oligarch = o
 			break
+	if target_oligarch == null:
+		for o in oligarchs:
+			if o.sector_of_influence == "Tech" and o.alive:
+				target_oligarch = o
+				break
 
 	var payout: int = randi_range(1500, 3000)
 
-	if tech_oligarch:
-		tech_oligarch.wealth = max(0, tech_oligarch.wealth - 15000)
-		tech_oligarch.paranoia = clamp(tech_oligarch.paranoia + 30.0, 0.0, 100.0)
-		tech_oligarch.awareness_of_player = clamp(tech_oligarch.awareness_of_player + 25.0, 0.0, 100.0)
+	if target_oligarch:
+		target_oligarch.wealth = max(0, target_oligarch.wealth - 15000)
+		target_oligarch.paranoia = clamp(target_oligarch.paranoia + 30.0, 0.0, 100.0)
+		target_oligarch.awareness_of_player = clamp(target_oligarch.awareness_of_player + 25.0, 0.0, 100.0)
 
 	global_economy["security_presence"] = clamp(global_economy["security_presence"] - 20, 0, 100)
 

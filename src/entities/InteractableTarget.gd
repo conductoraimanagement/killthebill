@@ -25,12 +25,20 @@ const KIND_CONFIGS: Dictionary = {
 		"display_prefix": "Food Depot",
 	},
 	"financial_center": {
-		"sector": "Tech",
+		"sector": "Finance",
 		"color": Color(0.24, 0.70, 0.85),
 		"emission": Color(0.30, 0.80, 0.95),
 		"mesh": "tall_box",
 		"size": Vector3(2.2, 6.0, 2.2),
 		"display_prefix": "Financial Center",
+	},
+	"clearing_house": {
+		"sector": "Finance",
+		"color": Color(0.75, 0.65, 0.32),
+		"emission": Color(1.00, 0.88, 0.35),
+		"mesh": "cylinder",
+		"size": Vector3(2.6, 3.6, 2.6),
+		"display_prefix": "Clearing House",
 	},
 	"refinery": {
 		"sector": "Tech",

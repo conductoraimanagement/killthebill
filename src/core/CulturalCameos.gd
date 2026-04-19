@@ -517,6 +517,16 @@ const CAMEOS := [
 		"gate": {},
 		"headline": "NetFeed archival run flags today's top headline as identical — to the word — to the top headline two years ago. Editorial 'no comment'.",
 	},
+	{
+		"id": "indexed_debt_whisper",
+		"tier": 1,
+		"archetype": "whistleblower",
+		"name": "Indexed Debt",
+		"min_cycle": 4,
+		"probability": 0.12,
+		"gate": {"senate_alignment": {"min": 50.0}},
+		"headline": "An anonymous account posted every senator's current bank balance at 03:12, sorted descending. The Finance sector called it 'a coordinated defamation'. Nobody retracted a number.",
+	},
 
 	# Additional Tier-2 Brush arcs
 	{
@@ -634,6 +644,29 @@ const CAMEOS := [
 		"timeout_headline": "The compliance AI converged. 'Pattern match confirmed.' Six specific citizens were pulled in overnight. None of them you.",
 		"reward": {"credits": 2200, "security_delta": -15, "stealth_bump": 0.15, "heat_delta": -10},
 	},
+	{
+		"id": "indexed_debt_arc",
+		"tier": 3,
+		"archetype": "whistleblower",
+		"name": "Indexed Debt",
+		"min_cycle": 7,
+		"probability": 0.09,
+		"gate": {
+			"senate_alignment": {"min": 55.0},
+			"public_tension": {"min": 50.0},
+		},
+		"intro_headline": "An indexed spreadsheet of 140,000 Sinks-resident debt records — names, balances, garnishment schedules — leaked onto /gutter/ at 03:12. The Finance sector is scrambling. The source calls itself 'The Ledger-Keeper'.",
+		"objective": {
+			"kind": "leak_sector",
+			"target_ref": "Finance",
+			"label": "leak dirt on the Finance oligarch so the Ledger-Keeper's story crests before the clearing houses patch the breach"
+		},
+		"arc_duration_cycles": 5,
+		"while_active_modifiers": {"public_tension": 2, "senate_alignment": -1},
+		"completion_headline": "The Ledger-Keeper's archive crossed with your leak, and the Finance oligarch went quiet. An emergency 'debt jubilee' was announced overnight for Sinks-tier balances under 5,000 credits. Nobody expected to see that word in writing.",
+		"timeout_headline": "The Ledger-Keeper's archive was ruled 'fabricated' by three indexed outlets. The clearing houses patched the breach. Garnishment schedules continued on time.",
+		"reward": {"credits": 2000, "tension_delta": 12, "senate_alignment_delta": -14, "idealism_bump": 0.12},
+	},
 
 	# Second Tier-4 Takeover — loop_in_time archetype
 	{
@@ -725,10 +758,10 @@ const CAMEOS := [
 				"kind": "action_objective",
 				"objective": {
 					"kind": "sabotage_sector",
-					"target_ref": "Media",
-					"label": "run the first homework — destroy a Media-sector billboard"
+					"target_ref": "Finance",
+					"label": "run the first homework — hit a Finance clearing house so the debt ledgers go dark"
 				},
-				"on_completion_headline": "You ran the first homework. Paper Street notices. The Project hums.",
+				"on_completion_headline": "You ran the first homework. A Finance clearing house went offline for 91 minutes; consumer debt records briefly unreadable. Paper Street notices. The Project hums.",
 			},
 			{
 				"kind": "binary_decision",

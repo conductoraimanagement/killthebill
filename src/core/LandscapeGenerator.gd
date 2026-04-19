@@ -194,7 +194,7 @@ var sabotage_targets: Array = []
 # actually be completed by traveling to a matching region.
 const LANDMARK_RECIPES: Dictionary = {
 	"URBAN_SLUM":     ["food_depot"],
-	"URBAN_ELITE":    ["financial_center", "media_spire"],
+	"URBAN_ELITE":    ["financial_center", "media_spire", "clearing_house"],
 	"INDUSTRIAL":     ["refinery", "power_relay"],
 	"AGRICULTURAL":   ["hydro_vault", "grain_silo"],
 	"ISLAND_RETREAT": ["private_dock"],

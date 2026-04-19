@@ -25,18 +25,21 @@ These variables are the **nerves of the simulation**. They:
 
 ## Sectors
 
-Four core sectors, two optional. Each sector is owned by an Oligarch (see [oligarchs.md](../03-characters/oligarchs.md)) and tied to an economy variable.
+Five core sectors, two optional. Oligarchs are distributed randomly across sectors — **a sector can have multiple oligarchs, or none at all**. You never know which billionaire owns what until the NetFeed tells you (see [oligarchs.md](../03-characters/oligarchs.md)).
 
 | Sector | Tied to | Player leverage |
 |---|---|---|
 | **Food** | `food_price` | Sabotage agricultural infrastructure → price spike → tension rise |
-| **Tech** | `tech_price` | Hack financial grid → wealth drain; destroy refineries → price spike |
+| **Tech** | `tech_price` | Destroy refineries → price spike; disrupt uplinks → blackouts |
 | **Security** | `security_presence` | Political pressure on Senate; assassinate security Oligarch |
 | **Media** | `senate_alignment`, controversy suppression | Leak scandals; destroy media spires; persuade journalists |
+| **Finance** | `food_price` + `tech_price` shock, rent drain | Hack or sabotage clearing houses → 10-day rent-multiplier shock + freeze consumer debt records; Finance sabotage loots 800–1,400 cr and costs +6 heat |
 | **Pharma** *(optional)* | `tech_price` bleed | Similar leverage to Tech |
 | **Energy** *(optional)* | `tech_price` bleed, `security_presence` bleed | Blackouts amplify tension |
 
-Sector ownership is randomized per run — you never know which billionaire owns which sector until the NetFeed tells you.
+**The Finance shock** — sabotaging a Finance landmark (clearing house or financial center) fires `apply_finance_shock()`: the player's daily rent cost is multiplied by 1.15 for 10 daily ticks, and food/tech prices both jump +30. Finance sabotage carries the highest tension wave (+20 vs +15 for other sectors) — credit markets going dark reaches further than a single grain silo does.
+
+**Debt attribution** — if the Finance oligarch exists at run-start, the player's starting rent debt is attributed to them (`debt_held_by_oligarch_id`). Killing that oligarch or completing a debt-jubilee cameo arc (e.g. **Indexed Debt**) can wipe that debt.
 
 ---
 

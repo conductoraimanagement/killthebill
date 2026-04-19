@@ -5,13 +5,13 @@
 ## What's implemented today
 
 - `CulturalCameos` autoload evaluates triggers once per news cycle (3× per day).
-- **26 cameos live across all four tiers**, with Tier-2+ coverage in 9 of 10 archetype families:
+- **28 cameos live across all four tiers**, with Tier-2+ coverage in 9 of 10 archetype families:
 
 | Tier | Count | Cameos |
 |---|---|---|
-| **1 (Whisper)** | 9 | `soap_broadcast`, `mask_in_the_crowd`, `compliance_error_7`, `unsigned_manifesto`, `yellow_hymn`, `kindly_coffee`, `last_login_whisper`, `ballad_brick_kid`, `deja_vu_headline` |
+| **1 (Whisper)** | 10 | `soap_broadcast`, `mask_in_the_crowd`, `compliance_error_7`, `unsigned_manifesto`, `yellow_hymn`, `kindly_coffee`, `last_login_whisper`, `ballad_brick_kid`, `deja_vu_headline`, `indexed_debt_whisper` |
 | **2 (Brush)** | 7 | `bread_thief_arc`, `admin_last_login`, `match_man_arc`, `candy_heir_arc`, `project_dust`, `sidewalk_philosopher`, `ledger_leak` |
-| **3 (Entanglement)** | 7 | `hermit_substrate_fields`, `yellow_priest_arc`, `fifth_november_arc`, `confectioner_arc`, `pattern_match_arc`, `leak_that_got_her_killed`, `sinks_strike`, `breadline_priest` |
+| **3 (Entanglement)** | 8 | `hermit_substrate_fields`, `yellow_priest_arc`, `fifth_november_arc`, `confectioner_arc`, `pattern_match_arc`, `leak_that_got_her_killed`, `sinks_strike`, `breadline_priest`, `indexed_debt_arc` |
 | **4 (Takeover)** | 4 | `soap_man`, `the_revenant`, `the_yellow_king`, `compliance_apotheosis` |
 
 Family-by-family Tier-2+ coverage: chaos_prophet (T2+T4), masked_symbol (T2+T3), lone_manifesto (T2+T3), whistleblower (T2+T3), corporate_priest (T2+T3), cult_of_personality (T3+T4), loop_in_time (T4 only — T2/T3 still open), rogue_ai (T3+T4), folk_hero_from_the_sinks (T2+T3), kindly_stranger (T2+T3).
@@ -27,7 +27,7 @@ Family-by-family Tier-2+ coverage: chaos_prophet (T2+T4), masked_symbol (T2+T3),
 **Tier-4 (Takeover) — 1 arc live**: `soap_man`. Multi-step arc using the new `arc_steps` array:
 
 1. `accept_prompt` — HUD modal pauses the game; player picks TAKE THE SOAP or WALK AWAY. Decline kills the arc with a soft-fallout headline.
-2. `action_objective` — waits for the player to sabotage Media. NetFeed confirms on match.
+2. `action_objective` — waits for the player to sabotage **Finance** (the clearing house / debt ledgers — Fight Club's Project Mayhem literally targeted credit-card companies). NetFeed confirms on match.
 3. `binary_decision` — HUD modal with two options (ABSORB / BETRAY) each with flavor text + distinct effects:
    - ABSORB: +2500 cr, tension +15, senate −10, chaos_preference +0.20, headline *"Paper Street's list is yours."*
    - BETRAY: +500 cr, heat +20, tension −5, ruthlessness +0.15, headline *"Your name surfaces in scandal circulation."*
