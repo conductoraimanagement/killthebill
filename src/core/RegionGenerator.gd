@@ -85,7 +85,12 @@ func _on_world_regions_generated(data: Array) -> void:
 			starting_region = region["name"]
 			region["unlocked"] = true
 			break
-	
+	# For this sprint, all regions are travel-accessible via the
+	# TransitZone pillar. Future work can gate unlocks behind TRANSIT
+	# checkpoint infiltration or story beats.
+	for region in regions:
+		region["unlocked"] = true
+
 	world_generated.emit()
 	print("RegionGenerator: World geography finalized.")
 

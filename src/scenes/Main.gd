@@ -30,6 +30,7 @@ func _ready() -> void:
 
 	_hud.oligarch_picked.connect(_on_oligarch_picked)
 	_hud.politician_bribed.connect(_on_politician_bribed)
+	_hud.travel_requested.connect(_on_travel_requested)
 
 	# Pending loaded config, if any
 	var preloaded: Dictionary = {}
@@ -146,6 +147,16 @@ func _on_landscape_ready(landscape: LandscapeGenerator) -> void:
 		landscape.crowd_spawned.connect(_on_crowd_spawned)
 	for c in landscape.crowd_npcs:
 		_on_crowd_spawned(c)
+
+	# Wire the transit zone — proximity prompt + open travel modal.
+	if landscape.transit_zone:
+		landscape.transit_zone.set_player(_player)
+		if not landscape.transit_zone.became_interactable.is_connected(_on_transit_interactable):
+			landscape.transit_zone.became_interactable.connect(_on_transit_interactable)
+		if not landscape.transit_zone.became_non_interactable.is_connected(_on_target_left):
+			landscape.transit_zone.became_non_interactable.connect(_on_target_left)
+	if not landscape.transit_zone_activated.is_connected(_on_transit_zone_activated):
+		landscape.transit_zone_activated.connect(_on_transit_zone_activated)
 
 	print("Main: landscape ready for '%s' (type=%s, biome=%s). Day clock live." % [
 		str(landscape.region.get("name", "?")),
@@ -302,6 +313,57 @@ func _on_crowd_spawned(crowd: CrowdNPC) -> void:
 
 func _on_crowd_interactable(crowd: CrowdNPC) -> void:
 	_hud.show_prompt(crowd.prompt_text())
+
+
+func _on_transit_interactable(zone: TransitZone) -> void:
+	_hud.show_prompt(zone.prompt_text())
+
+
+func _on_transit_zone_activated(_zone: TransitZone) -> void:
+	_hud.hide_prompt()
+	_hud.show_travel_modal()
+
+
+func _on_travel_requested(region_name: String) -> void:
+	travel_to_region(region_name)
+
+
+# Teardown current landscape + all interactables, regenerate for the
+# target region's data. Keeps autoloaded state (WorldDirector economy,
+# PlayerManager credits/heat, SenateDirector bill history) untouched —
+# travel is a scene-local event, not a run reset.
+func travel_to_region(region_name: String) -> void:
+	print("Main: traveling to %s" % region_name)
+	var region_gen = get_node_or_null("/root/RegionGenerator")
+	if region_gen == null:
+		push_warning("RegionGenerator missing; cannot travel")
+		return
+	var target_data: Dictionary = region_gen.get_region_by_name(region_name)
+	if target_data.is_empty():
+		push_warning("Region '%s' not found" % region_name)
+		return
+
+	# Teardown — queue_free cascades to children (patrols, crowd, transit).
+	if is_instance_valid(_landscape): _landscape.queue_free()
+	if is_instance_valid(_depot):     _depot.queue_free()
+	if is_instance_valid(_terminal):  _terminal.queue_free()
+	if is_instance_valid(_player):    _player.queue_free()
+	if is_instance_valid(_camera):    _camera.queue_free()
+	_landscape = null
+	_depot = null
+	_terminal = null
+	_player = null
+	_camera = null
+
+	WorldDirector.current_region = region_name
+
+	# Rebuild at the new region.
+	_landscape = LandscapeGenerator.new()
+	_landscape.name = "Landscape"
+	add_child(_landscape)
+	if not _landscape.landscape_ready.is_connected(_on_landscape_ready):
+		_landscape.landscape_ready.connect(_on_landscape_ready)
+	_landscape.generate(target_data)
 
 
 func _on_pickpocket_requested(crowd: CrowdNPC) -> void:

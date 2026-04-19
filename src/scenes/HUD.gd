@@ -13,6 +13,7 @@ class_name HUD
 
 signal oligarch_picked(oligarch_id: String, action_id: String)
 signal politician_bribed(politician_id: String, direction: String)
+signal travel_requested(region_name: String)
 
 const COL_BG       := Color(0.05, 0.05, 0.06, 0.88)
 const COL_BG_MODAL := Color(0.02, 0.02, 0.03, 0.92)
@@ -98,6 +99,10 @@ var _hooks_revealed: bool = false
 # End-of-run modal banner label (shared by victory + defeat paths)
 var _endrun_banner: Label
 
+# Travel modal (triggered by TransitZone.activated)
+var _travel_root: Control
+var _travel_list: VBoxContainer
+
 # Enforcer encounter modal (triggered by a patrol's proximity signal)
 var _encounter_root: Control
 var _encounter_heading: Label
@@ -125,6 +130,7 @@ func _ready() -> void:
 	_build_bribe_modal()
 	_build_shop_modal()
 	_build_encounter_modal()
+	_build_travel_modal()
 	_build_jobs_panel()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
@@ -938,6 +944,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 
+	# Travel modal: ESC closes
+	if _travel_root and _travel_root.visible:
+		if event.keycode == KEY_ESCAPE:
+			hide_travel_modal()
+			get_viewport().set_input_as_handled()
+		return
+
 	# Victory modal swallows everything except the save/load shortcuts,
 	# but those have their own buttons on the panel, so just absorb.
 	if _victory_root and _victory_root.visible:
@@ -1450,6 +1463,170 @@ func _on_buy_burner() -> void:
 	_on_bill_proposed(_active_bill)
 	_shop_status.text = "Burner hot. Senate panel now shows the honest rationale."
 	_shop_status.add_theme_color_override("font_color", COL_COOL)
+
+
+# -------------------------------------------------------------
+# Travel modal — pick a region to travel to via a TransitZone
+# -------------------------------------------------------------
+func _build_travel_modal() -> void:
+	_travel_root = Control.new()
+	_travel_root.anchor_right = 1.0
+	_travel_root.anchor_bottom = 1.0
+	_travel_root.visible = false
+	_travel_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_travel_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_travel_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.6)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_travel_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -340
+	panel.offset_top = -260
+	panel.offset_right = 340
+	panel.offset_bottom = 260
+	_travel_root.add_child(panel)
+
+	var title := _make_label("// TRAVEL — SELECT DESTINATION", COL_ACCENT, 15, true)
+	title.offset_left = PANEL_PAD + 4
+	title.offset_top = PANEL_PAD
+	title.offset_right = 680 - PANEL_PAD
+	title.offset_bottom = PANEL_PAD + 22
+	panel.add_child(title)
+
+	var sub := _make_label("Your current region is marked. Travel takes you to a fresh landscape — same world state, new streets.", COL_DIM, 11, false)
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub.offset_left = PANEL_PAD + 4
+	sub.offset_top = PANEL_PAD + 28
+	sub.offset_right = 680 - PANEL_PAD - 4
+	sub.offset_bottom = PANEL_PAD + 60
+	panel.add_child(sub)
+
+	var scroll := ScrollContainer.new()
+	scroll.anchor_right = 1.0
+	scroll.offset_left = PANEL_PAD
+	scroll.offset_top = PANEL_PAD + 66
+	scroll.offset_right = -PANEL_PAD
+	scroll.offset_bottom = -60
+	panel.add_child(scroll)
+
+	_travel_list = VBoxContainer.new()
+	_travel_list.anchor_right = 1.0
+	_travel_list.add_theme_constant_override("separation", 6)
+	scroll.add_child(_travel_list)
+
+	var cancel := Button.new()
+	cancel.text = "CANCEL (Esc)"
+	cancel.anchor_left = 0.0
+	cancel.anchor_top = 1.0
+	cancel.anchor_right = 0.0
+	cancel.anchor_bottom = 1.0
+	cancel.offset_left = PANEL_PAD
+	cancel.offset_top = -44
+	cancel.offset_right = 140
+	cancel.offset_bottom = -PANEL_PAD
+	cancel.add_theme_color_override("font_color", COL_DIM)
+	cancel.add_theme_color_override("font_hover_color", COL_FG)
+	cancel.pressed.connect(hide_travel_modal)
+	panel.add_child(cancel)
+
+
+func show_travel_modal() -> void:
+	_refresh_travel_list()
+	_travel_root.visible = true
+	get_tree().paused = true
+
+
+func hide_travel_modal() -> void:
+	_travel_root.visible = false
+	get_tree().paused = false
+
+
+func _refresh_travel_list() -> void:
+	for child in _travel_list.get_children():
+		child.queue_free()
+
+	var region_gen = get_node_or_null("/root/RegionGenerator")
+	if region_gen == null:
+		var err := Label.new()
+		err.text = "RegionGenerator not loaded."
+		err.add_theme_color_override("font_color", COL_HOT)
+		_travel_list.add_child(err)
+		return
+
+	var current: String = WorldDirector.current_region
+	for region in region_gen.regions:
+		if not bool(region.get("unlocked", false)):
+			continue
+		_travel_list.add_child(_build_travel_row(region, current))
+
+
+func _build_travel_row(region: Dictionary, current: String) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation", 2)
+
+	var name_row := Label.new()
+	var is_current: bool = str(region.get("name", "")) == current
+	var marker: String = "[CURRENT]  " if is_current else ""
+	name_row.text = "%s%s" % [marker, str(region.get("name", "?"))]
+	name_row.add_theme_color_override("font_color", COL_WARN if is_current else COL_FG)
+	name_row.add_theme_font_size_override("font_size", 14)
+	info.add_child(name_row)
+
+	var meta := Label.new()
+	meta.text = "type: %s   biome: %s   tension: %+d   security: %+d" % [
+		str(region.get("type", "?")),
+		str(region.get("visual_biome", "?")),
+		int(region.get("tension_modifier", 0)),
+		int(region.get("security_modifier", 0)),
+	]
+	meta.add_theme_color_override("font_color", COL_DIM)
+	meta.add_theme_font_size_override("font_size", 10)
+	info.add_child(meta)
+
+	var desc: String = str(region.get("short_description", ""))
+	if desc != "":
+		var dlabel := Label.new()
+		dlabel.text = desc
+		dlabel.add_theme_color_override("font_color", COL_COOL)
+		dlabel.add_theme_font_size_override("font_size", 11)
+		dlabel.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		info.add_child(dlabel)
+
+	row.add_child(info)
+
+	if not is_current:
+		var travel_btn := Button.new()
+		travel_btn.text = "TRAVEL"
+		travel_btn.add_theme_color_override("font_color", COL_ACCENT)
+		travel_btn.add_theme_color_override("font_hover_color", COL_FG)
+		travel_btn.pressed.connect(_on_travel_pick.bind(str(region.get("name", ""))))
+		row.add_child(travel_btn)
+	else:
+		var here := Label.new()
+		here.text = "(here)"
+		here.add_theme_color_override("font_color", COL_DIM)
+		here.add_theme_font_size_override("font_size", 11)
+		row.add_child(here)
+
+	return row
+
+
+func _on_travel_pick(region_name: String) -> void:
+	hide_travel_modal()
+	travel_requested.emit(region_name)
 
 
 # -------------------------------------------------------------

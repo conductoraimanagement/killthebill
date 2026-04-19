@@ -25,6 +25,7 @@ class_name LandscapeGenerator
 signal landscape_ready(generator)
 signal patrol_spawned(patrol)
 signal crowd_spawned(crowd)
+signal transit_zone_activated(zone)
 
 const METERS_PER_STORY := 3.0
 const STREET_EVERY_N := 4     # every 4th grid row/column stays clear for streets
@@ -172,6 +173,9 @@ var enforcer_patrols: Array = []
 # day-only and night-only NPCs rotate in and out as time advances.
 var crowd_npcs: Array = []
 
+# Single transit-zone per region (edge of map) for inter-region travel.
+var transit_zone: TransitZone = null
+
 var _nav_region: NavigationRegion3D
 var _rng: RandomNumberGenerator
 var _occupied: Array = []    # 2D array of bool, size [grid_w][grid_h]
@@ -222,6 +226,7 @@ func generate(region_data: Dictionary) -> void:
 	_bake_nav()
 	_spawn_enforcer_patrols()
 	_spawn_crowd()
+	_spawn_transit_zone()
 
 	# Refresh patrols each phase so day→night doubles the presence
 	# and heat spikes don't leave an empty street forever.
@@ -703,6 +708,36 @@ func _despawn_crowd() -> void:
 		if is_instance_valid(c):
 			c.queue_free()
 	crowd_npcs.clear()
+
+
+# -------------------------------------------------------------
+# Transit zone — single edge-of-map pillar for inter-region travel.
+# -------------------------------------------------------------
+func _spawn_transit_zone() -> void:
+	transit_zone = TransitZone.new()
+	add_child(transit_zone)
+	transit_zone.position = _pick_edge_cell()
+	transit_zone.activated.connect(_on_transit_activated)
+
+
+func _on_transit_activated(zone: TransitZone) -> void:
+	transit_zone_activated.emit(zone)
+
+
+func _pick_edge_cell() -> Vector3:
+	# Prefer a street cell within 2 of the map edge so the pillar reads
+	# as "the way out" rather than dropped mid-block.
+	for _try in range(60):
+		var gx: int = _rng.randi_range(0, _grid_w - 1)
+		var gz: int = _rng.randi_range(0, _grid_h - 1)
+		var on_edge: bool = gx < 2 or gx > _grid_w - 3 or gz < 2 or gz > _grid_h - 3
+		if not on_edge:
+			continue
+		if gx % STREET_EVERY_N == 0 or gz % STREET_EVERY_N == 0:
+			_occupied[gx][gz] = true
+			return _cell_center(gx, gz)
+	# Fallback: a corner
+	return _cell_center(2, 2)
 
 
 # -------------------------------------------------------------
