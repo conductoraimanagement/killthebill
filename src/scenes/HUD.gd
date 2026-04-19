@@ -14,6 +14,7 @@ class_name HUD
 signal oligarch_picked(oligarch_id: String, action_id: String)
 signal politician_bribed(politician_id: String, direction: String)
 signal travel_requested(region_name: String)
+signal crowd_pickpocket_requested(crowd)
 
 const COL_BG       := Color(0.05, 0.05, 0.06, 0.88)
 const COL_BG_MODAL := Color(0.02, 0.02, 0.03, 0.92)
@@ -103,6 +104,21 @@ var _endrun_banner: Label
 var _travel_root: Control
 var _travel_list: VBoxContainer
 
+# Crowd interact menu (TALK / PICKPOCKET)
+var _crowd_menu_root: Control
+var _crowd_menu_title: Label
+var _crowd_menu_subtitle: Label
+var _active_crowd = null
+
+# Dialogue modal — chat with an NPC via LLMManager
+var _dialogue_root: Control
+var _dialogue_log: RichTextLabel
+var _dialogue_input: LineEdit
+var _dialogue_send_btn: Button
+var _dialogue_status: Label
+var _dialogue_npc = null
+var _dialogue_in_flight: bool = false
+
 # Enforcer encounter modal (triggered by a patrol's proximity signal)
 var _encounter_root: Control
 var _encounter_heading: Label
@@ -131,6 +147,8 @@ func _ready() -> void:
 	_build_shop_modal()
 	_build_encounter_modal()
 	_build_travel_modal()
+	_build_crowd_menu_modal()
+	_build_dialogue_modal()
 	_build_jobs_panel()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
@@ -150,6 +168,11 @@ func _ready() -> void:
 		pm.credits_changed.connect(_on_credits_or_heat_changed)
 		pm.heat_changed.connect(_on_credits_or_heat_changed)
 		pm.defeat_triggered.connect(_on_defeat)
+
+	# LLM dialogue responses route back via llm_response_received.
+	var llm = get_node_or_null("/root/LLMManager")
+	if llm:
+		llm.llm_response_received.connect(_on_llm_dialogue_response)
 
 	# Job board hooks
 	WorldDirector.job_posted.connect(_on_job_changed)
@@ -951,6 +974,21 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 
+	# Crowd-NPC menu: ESC closes
+	if _crowd_menu_root and _crowd_menu_root.visible:
+		if event.keycode == KEY_ESCAPE:
+			hide_crowd_menu()
+			get_viewport().set_input_as_handled()
+		return
+
+	# Dialogue modal: ESC closes — but lineedit ENTER is handled via
+	# text_submitted, so no collision.
+	if _dialogue_root and _dialogue_root.visible:
+		if event.keycode == KEY_ESCAPE:
+			hide_dialogue_modal()
+			get_viewport().set_input_as_handled()
+		return
+
 	# Victory modal swallows everything except the save/load shortcuts,
 	# but those have their own buttons on the panel, so just absorb.
 	if _victory_root and _victory_root.visible:
@@ -1463,6 +1501,331 @@ func _on_buy_burner() -> void:
 	_on_bill_proposed(_active_bill)
 	_shop_status.text = "Burner hot. Senate panel now shows the honest rationale."
 	_shop_status.add_theme_color_override("font_color", COL_COOL)
+
+
+# -------------------------------------------------------------
+# Crowd-NPC interact menu — TALK / PICKPOCKET / CANCEL
+# -------------------------------------------------------------
+func _build_crowd_menu_modal() -> void:
+	_crowd_menu_root = Control.new()
+	_crowd_menu_root.anchor_right = 1.0
+	_crowd_menu_root.anchor_bottom = 1.0
+	_crowd_menu_root.visible = false
+	_crowd_menu_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_crowd_menu_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_crowd_menu_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.55)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_crowd_menu_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -220
+	panel.offset_top = -140
+	panel.offset_right = 220
+	panel.offset_bottom = 140
+	_crowd_menu_root.add_child(panel)
+
+	_crowd_menu_title = _make_label("// CITIZEN", COL_COOL, 15, true)
+	_crowd_menu_title.offset_left = PANEL_PAD + 4
+	_crowd_menu_title.offset_top = PANEL_PAD
+	_crowd_menu_title.offset_right = 440 - PANEL_PAD
+	_crowd_menu_title.offset_bottom = PANEL_PAD + 22
+	panel.add_child(_crowd_menu_title)
+
+	_crowd_menu_subtitle = _make_label("", COL_DIM, 11, false)
+	_crowd_menu_subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_crowd_menu_subtitle.offset_left = PANEL_PAD + 4
+	_crowd_menu_subtitle.offset_top = PANEL_PAD + 28
+	_crowd_menu_subtitle.offset_right = 440 - PANEL_PAD - 4
+	_crowd_menu_subtitle.offset_bottom = PANEL_PAD + 60
+	panel.add_child(_crowd_menu_subtitle)
+
+	var y := PANEL_PAD + 72
+	var btn_h := 40
+	var gap := 8
+
+	var talk_btn := _make_menu_button(panel, "TALK",
+		"Open a conversation. They may help — or walk away.",
+		COL_COOL, y, btn_h)
+	talk_btn.pressed.connect(_on_crowd_menu_talk)
+	y += btn_h + gap
+
+	var pickpocket_btn := _make_menu_button(panel, "PICKPOCKET",
+		"Stealth-roll lift. Small payout, small heat. Higher risk at high conformity.",
+		COL_WARN, y, btn_h)
+	pickpocket_btn.pressed.connect(_on_crowd_menu_pickpocket)
+	y += btn_h + gap
+
+	var cancel := Button.new()
+	cancel.text = "CANCEL (Esc)"
+	cancel.anchor_right = 1.0
+	cancel.offset_left = PANEL_PAD + 4
+	cancel.offset_top = y + 6
+	cancel.offset_right = -PANEL_PAD - 4
+	cancel.offset_bottom = y + 6 + btn_h
+	cancel.add_theme_color_override("font_color", COL_DIM)
+	cancel.add_theme_color_override("font_hover_color", COL_FG)
+	cancel.pressed.connect(hide_crowd_menu)
+	panel.add_child(cancel)
+
+
+func show_crowd_interact_menu(crowd) -> void:
+	_active_crowd = crowd
+	if crowd.npc_data:
+		var d = crowd.npc_data
+		_crowd_menu_title.text = "// %s" % d.npc_name.to_upper()
+		_crowd_menu_subtitle.text = "%s · trust %d/100 · mood: %s" % [
+			d.get_behavioral_profile(),
+			int(d.trust),
+			d.current_mood,
+		]
+	else:
+		_crowd_menu_title.text = "// CITIZEN"
+		_crowd_menu_subtitle.text = ""
+	_crowd_menu_root.visible = true
+	get_tree().paused = true
+
+
+func hide_crowd_menu() -> void:
+	_crowd_menu_root.visible = false
+	get_tree().paused = false
+	_active_crowd = null
+
+
+func _on_crowd_menu_talk() -> void:
+	var crowd = _active_crowd
+	_crowd_menu_root.visible = false
+	# Dialogue modal will pause again; keep paused through the transition.
+	if crowd:
+		show_dialogue_modal(crowd)
+
+
+func _on_crowd_menu_pickpocket() -> void:
+	var crowd = _active_crowd
+	hide_crowd_menu()
+	if crowd:
+		crowd_pickpocket_requested.emit(crowd)
+
+
+# -------------------------------------------------------------
+# Dialogue modal — text chat with an NPC via LLMManager
+# -------------------------------------------------------------
+func _build_dialogue_modal() -> void:
+	_dialogue_root = Control.new()
+	_dialogue_root.anchor_right = 1.0
+	_dialogue_root.anchor_bottom = 1.0
+	_dialogue_root.visible = false
+	_dialogue_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_dialogue_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_dialogue_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.68)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_dialogue_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -380
+	panel.offset_top = -260
+	panel.offset_right = 380
+	panel.offset_bottom = 260
+	_dialogue_root.add_child(panel)
+
+	_dialogue_status = _make_label("// DIALOGUE", COL_COOL, 13, true)
+	_dialogue_status.offset_left = PANEL_PAD + 4
+	_dialogue_status.offset_top = PANEL_PAD
+	_dialogue_status.offset_right = 760 - PANEL_PAD
+	_dialogue_status.offset_bottom = PANEL_PAD + 22
+	panel.add_child(_dialogue_status)
+
+	# Scrolling dialogue log
+	var scroll := ScrollContainer.new()
+	scroll.anchor_right = 1.0
+	scroll.offset_left = PANEL_PAD
+	scroll.offset_top = PANEL_PAD + 30
+	scroll.offset_right = -PANEL_PAD
+	scroll.offset_bottom = -100
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+
+	_dialogue_log = RichTextLabel.new()
+	_dialogue_log.bbcode_enabled = true
+	_dialogue_log.fit_content = true
+	_dialogue_log.scroll_active = false
+	_dialogue_log.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dialogue_log.anchor_right = 1.0
+	_dialogue_log.add_theme_color_override("default_color", COL_FG)
+	_dialogue_log.add_theme_font_size_override("normal_font_size", 13)
+	_dialogue_log.add_theme_font_size_override("bold_font_size", 13)
+	_dialogue_log.add_theme_font_size_override("italics_font_size", 13)
+	scroll.add_child(_dialogue_log)
+
+	# Input row at the bottom
+	_dialogue_input = LineEdit.new()
+	_dialogue_input.placeholder_text = "Say something..."
+	_dialogue_input.anchor_right = 1.0
+	_dialogue_input.anchor_top = 1.0
+	_dialogue_input.anchor_bottom = 1.0
+	_dialogue_input.offset_left = PANEL_PAD
+	_dialogue_input.offset_top = -90
+	_dialogue_input.offset_right = -PANEL_PAD - 230
+	_dialogue_input.offset_bottom = -50
+	_dialogue_input.text_submitted.connect(_on_dialogue_submit)
+	panel.add_child(_dialogue_input)
+
+	_dialogue_send_btn = Button.new()
+	_dialogue_send_btn.text = "SEND"
+	_dialogue_send_btn.anchor_right = 1.0
+	_dialogue_send_btn.anchor_top = 1.0
+	_dialogue_send_btn.anchor_bottom = 1.0
+	_dialogue_send_btn.offset_left = -PANEL_PAD - 220
+	_dialogue_send_btn.offset_top = -90
+	_dialogue_send_btn.offset_right = -PANEL_PAD
+	_dialogue_send_btn.offset_bottom = -50
+	_dialogue_send_btn.add_theme_color_override("font_color", COL_ACCENT)
+	_dialogue_send_btn.add_theme_color_override("font_hover_color", COL_FG)
+	_dialogue_send_btn.pressed.connect(_on_dialogue_send_pressed)
+	panel.add_child(_dialogue_send_btn)
+
+	var close := Button.new()
+	close.text = "CLOSE (Esc)"
+	close.anchor_left = 0.0
+	close.anchor_top = 1.0
+	close.anchor_right = 0.0
+	close.anchor_bottom = 1.0
+	close.offset_left = PANEL_PAD
+	close.offset_top = -42
+	close.offset_right = 140
+	close.offset_bottom = -PANEL_PAD
+	close.add_theme_color_override("font_color", COL_DIM)
+	close.add_theme_color_override("font_hover_color", COL_FG)
+	close.pressed.connect(hide_dialogue_modal)
+	panel.add_child(close)
+
+
+func show_dialogue_modal(crowd) -> void:
+	_dialogue_npc = crowd
+	_dialogue_in_flight = false
+	_dialogue_input.text = ""
+	_dialogue_input.editable = true
+	_dialogue_send_btn.disabled = false
+	_dialogue_log.text = ""
+	if crowd and crowd.npc_data:
+		var d = crowd.npc_data
+		_dialogue_status.text = "// %s — %s (trust %d/100)" % [
+			d.npc_name.to_upper(),
+			d.get_behavioral_profile(),
+			int(d.trust),
+		]
+		# Opening line from the NPC — just a narrator cue.
+		_append_dialogue("[i][color=#%s]%s glances up at you.[/color][/i]" % [
+			_hex(COL_DIM), d.npc_name,
+		])
+	_dialogue_root.visible = true
+	get_tree().paused = true
+	_dialogue_input.grab_focus()
+
+
+func hide_dialogue_modal() -> void:
+	_dialogue_root.visible = false
+	get_tree().paused = false
+	_dialogue_npc = null
+
+
+func _on_dialogue_submit(text: String) -> void:
+	_send_dialogue(text)
+
+
+func _on_dialogue_send_pressed() -> void:
+	_send_dialogue(_dialogue_input.text)
+
+
+func _send_dialogue(text: String) -> void:
+	if _dialogue_in_flight:
+		return
+	var stripped: String = text.strip_edges()
+	if stripped == "" or _dialogue_npc == null or _dialogue_npc.npc_data == null:
+		return
+	var llm = get_node_or_null("/root/LLMManager")
+	if llm == null:
+		return
+
+	_append_dialogue("[color=#%s]you:[/color] %s" % [_hex(COL_WARN), stripped])
+	_dialogue_input.text = ""
+	_dialogue_in_flight = true
+	_dialogue_send_btn.disabled = true
+	_dialogue_input.editable = false
+	llm.request_npc_action(_dialogue_npc.npc_data, stripped)
+
+
+func _on_llm_dialogue_response(data: Dictionary) -> void:
+	# Only consume responses when our modal is awaiting one.
+	if not _dialogue_in_flight or _dialogue_npc == null or _dialogue_npc.npc_data == null:
+		return
+	_dialogue_in_flight = false
+	_dialogue_send_btn.disabled = false
+	_dialogue_input.editable = true
+	_dialogue_input.grab_focus()
+
+	var dialogue_text: String = str(data.get("dialogue", ""))
+	var goal: String = str(data.get("assigned_goal", "idle"))
+	var success: bool = bool(data.get("success", false))
+
+	var name_str: String = _dialogue_npc.npc_data.npc_name
+	_append_dialogue("[color=#%s]%s:[/color] %s" % [
+		_hex(COL_COOL), name_str, dialogue_text,
+	])
+
+	# Apply assigned_goal side-effects to the NPCData.
+	var d = _dialogue_npc.npc_data
+	match goal:
+		"assist":
+			if success:
+				d.trust = min(100.0, d.trust + 5.0)
+				d.opinion_of_player = min(1.0, d.opinion_of_player + 0.05)
+				_append_dialogue("[i][color=#%s](trust +5)[/color][/i]" % _hex(COL_WARN))
+		"flee":
+			if success:
+				d.knowledge_of_player = min(1.0, d.knowledge_of_player + 0.2)
+				_append_dialogue("[i][color=#%s]%s walks off.[/color][/i]" % [
+					_hex(COL_DIM), name_str,
+				])
+				# Close after a beat so the player can read the last line.
+				await get_tree().create_timer(0.8).timeout
+				hide_dialogue_modal()
+				if _dialogue_npc and _dialogue_npc.has_method("flee"):
+					_dialogue_npc.flee()
+		"attack":
+			# Hostility not yet wired into combat — record it on the NPC.
+			d.opinion_of_player = max(-1.0, d.opinion_of_player - 0.2)
+			_append_dialogue("[i][color=#%s](they'll remember this)[/color][/i]" % _hex(COL_HOT))
+
+	# Refresh the status line with updated trust
+	_dialogue_status.text = "// %s — %s (trust %d/100)" % [
+		name_str.to_upper(),
+		d.get_behavioral_profile(),
+		int(d.trust),
+	]
+
+
+func _append_dialogue(bbcode_line: String) -> void:
+	if _dialogue_log.text != "":
+		_dialogue_log.text += "\n"
+	_dialogue_log.text += bbcode_line
 
 
 # -------------------------------------------------------------

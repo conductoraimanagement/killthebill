@@ -15,7 +15,7 @@ class_name CrowdNPC
 
 signal became_interactable(crowd)
 signal became_non_interactable(crowd)
-signal pickpocket_requested(crowd)
+signal interact_requested(crowd)
 
 const DETECTION_RANGE := 2.6
 const FLEE_SPEED := 6.0
@@ -54,8 +54,8 @@ func set_npc_data(data) -> void:
 
 func prompt_text() -> String:
 	if npc_data != null:
-		return "[E] Pickpocket %s" % npc_data.npc_name
-	return "[E] Pickpocket"
+		return "[E] %s" % npc_data.npc_name
+	return "[E] Interact"
 
 
 func _process(delta: float) -> void:
@@ -81,7 +81,7 @@ func _process(delta: float) -> void:
 		became_non_interactable.emit(self)
 
 	if _in_range and Input.is_action_just_pressed("interact"):
-		pickpocket_requested.emit(self)
+		interact_requested.emit(self)
 
 
 # Called after a successful pickpocket — citizen walks away unaware.

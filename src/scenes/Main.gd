@@ -31,6 +31,7 @@ func _ready() -> void:
 	_hud.oligarch_picked.connect(_on_oligarch_picked)
 	_hud.politician_bribed.connect(_on_politician_bribed)
 	_hud.travel_requested.connect(_on_travel_requested)
+	_hud.crowd_pickpocket_requested.connect(pickpocket_crowd)
 
 	# Pending loaded config, if any
 	var preloaded: Dictionary = {}
@@ -307,8 +308,8 @@ func _on_crowd_spawned(crowd: CrowdNPC) -> void:
 		crowd.became_interactable.connect(_on_crowd_interactable)
 	if not crowd.became_non_interactable.is_connected(_on_target_left):
 		crowd.became_non_interactable.connect(_on_target_left)
-	if not crowd.pickpocket_requested.is_connected(_on_pickpocket_requested):
-		crowd.pickpocket_requested.connect(_on_pickpocket_requested)
+	if not crowd.interact_requested.is_connected(_on_crowd_interact):
+		crowd.interact_requested.connect(_on_crowd_interact)
 
 
 func _on_crowd_interactable(crowd: CrowdNPC) -> void:
@@ -366,8 +367,13 @@ func travel_to_region(region_name: String) -> void:
 	_landscape.generate(target_data)
 
 
-func _on_pickpocket_requested(crowd: CrowdNPC) -> void:
+func _on_crowd_interact(crowd: CrowdNPC) -> void:
 	_hud.hide_prompt()
+	_hud.show_crowd_interact_menu(crowd)
+
+
+# Called by HUD after the player picks PICKPOCKET in the crowd menu.
+func pickpocket_crowd(crowd: CrowdNPC) -> void:
 	var pm = get_node_or_null("/root/PlayerManager")
 	if pm == null or crowd.npc_data == null:
 		return

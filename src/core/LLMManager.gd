@@ -145,7 +145,7 @@ func _build_payload(system_prompt: String, user_prompt: String, max_tokens: int,
 
 func request_npc_action(npc, player_input: String) -> void:
 	if use_offline_fallback:
-		call_deferred("_offline_emit_npc_action", player_input)
+		call_deferred("_offline_emit_npc_action", npc, player_input)
 		return
 	current_request_type = "npc_action"
 	var system_prompt := "You are the Game Master for a systemic immersive sim called KILL THE BILL.\n"
@@ -655,11 +655,62 @@ func _offline_emit_netfeed(world: Dictionary, oligarchs: Dictionary) -> void:
 	netfeed_stream_received.emit(events)
 
 
-func _offline_emit_npc_action(player_input: String) -> void:
+func _offline_emit_npc_action(npc, player_input: String) -> void:
+	# Compose a profile-voiced response without a live model. Grounded in
+	# NPCData's behavioral profile + current mood + trust/opinion.
+	var profile: String = "Anxious Citizen"
+	var trust: float = 0.0
+	var opinion: float = 0.0
+	var quirk: String = ""
+	if npc != null:
+		if npc.has_method("get_behavioral_profile"):
+			profile = npc.get_behavioral_profile()
+		trust = float(npc.trust)
+		opinion = float(npc.opinion_of_player)
+		if npc.quirks != null and npc.quirks.size() > 0:
+			quirk = str(npc.quirks[0])
+
+	var dialogue: String = ""
+	var goal: String = "idle"
+	var success: bool = true
+
+	match profile:
+		"Radical Agitator":
+			dialogue = "Burn it down. You in? Good."
+			goal = "assist"
+		"Broken and Submissive":
+			dialogue = "I don't want trouble. Please — leave me alone."
+			goal = "flee"
+			success = false
+		"Revolutionary Idealist":
+			dialogue = "There's a meeting at midnight. Come or don't. We move either way."
+			goal = "assist"
+		"Opportunistic Exploiter":
+			dialogue = "What's in it for me? Credits. Dirt. Speak."
+			goal = "idle"
+		"Cautiously Stable":
+			dialogue = "Things are quiet here right now. Let's keep them that way."
+			goal = "idle"
+		_:
+			if opinion < -0.3:
+				dialogue = "I know what you did. Not interested."
+				goal = "flee"
+				success = false
+			elif trust > 50.0:
+				dialogue = "Glad it's you. What do you need?"
+				goal = "assist"
+			else:
+				dialogue = "I'm not supposed to talk to strangers. The feed's listening."
+				goal = "idle"
+
+	# Tint with a quirk if we have one — flavor without changing meaning.
+	if quirk != "" and randf() < 0.5:
+		dialogue += "  (%s)" % quirk
+
 	llm_response_received.emit({
-		"success": false,
-		"dialogue": "[offline mode] The NPC stares at you. 'What do you want.' ",
-		"assigned_goal": "idle",
+		"success": success,
+		"dialogue": dialogue,
+		"assigned_goal": goal,
 		"_player_input_echo": player_input,
 	})
 
