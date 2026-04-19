@@ -21,6 +21,33 @@ The starting premise: **the system is killing you because you're jobless, and th
 
 ---
 
+## Severance period (months 1–2)
+
+The year doesn't start at full intensity. Months 1 and 2 are the
+**severance period** — the money you were laid off with is still
+coming in, and the psychological weight hasn't fully landed. During
+these two months:
+
+- Rent still drains (the landlord doesn't wait).
+- **Hope decay is suspended.** No passive drift.
+- Eviction can still happen if credits stay negative 3 days.
+- All other mechanics (heat, cameos, Senate, NPC social graph) proceed.
+
+At the start of month 3, severance ends. A NetFeed note fires:
+*"Your severance ran out this morning. The weight finds you now. Hope starts to drift."* From that moment, the decay curve described below kicks in.
+
+Design intent: you get two months of breathing room to meet people,
+read the world, pick a path. Past that, the clock starts pressing.
+
+## Travel costs time
+
+Dialogue and modals pause the clock — walking around doesn't. Within
+a region, moving at 5 m/s across a 150m map burns ~1–2 game hours
+naturally. **Inter-region travel** via the transit pillar now
+explicitly advances the clock by **6 game hours** (via
+`TimeSystem.skip_hours(6)`). You don't get to skip across the map for
+free.
+
 ## The daily survival tick
 
 `WorldDirector.run_world_cycle` (once per day) calls `PlayerManager.apply_daily_tick`:

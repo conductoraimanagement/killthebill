@@ -149,6 +149,42 @@ func toggle_super_fast_forward() -> void:
 	set_speed(DEFAULT_SPEED if is_super_fast_forward() else SUPER_FAST_SPEED)
 
 
+# Explicit time-skip, used by inter-region travel and (future) rest
+# actions. Properly fires day_advanced / phase_changed / month_advanced
+# / year_ended along the way.
+func skip_hours(hours: float) -> void:
+	if hours <= 0.0 or year_ended_flag:
+		return
+	time_of_day += hours / 24.0
+	var rolled_over: bool = false
+	var month_rolled_over: bool = false
+	while time_of_day >= 1.0:
+		time_of_day -= 1.0
+		day += 1
+		day_of_month += 1
+		rolled_over = true
+		if day_of_month > DAYS_PER_MONTH:
+			day_of_month = 1
+			month += 1
+			month_rolled_over = true
+
+	var new_phase: int = clamp(int(time_of_day * PHASES_PER_DAY), 0, PHASES_PER_DAY - 1)
+	if new_phase != current_phase:
+		current_phase = new_phase
+		phase_changed.emit(current_phase)
+
+	time_of_day_updated.emit(time_of_day)
+	if rolled_over:
+		day_advanced.emit(day)
+	if month_rolled_over:
+		month_advanced.emit(month)
+
+	if month > MONTHS_PER_YEAR and not year_ended_flag:
+		year_ended_flag = true
+		running = false
+		year_ended.emit()
+
+
 # =============================================================
 # QUERIES
 # =============================================================

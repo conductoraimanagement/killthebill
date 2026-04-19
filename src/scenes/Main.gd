@@ -352,6 +352,11 @@ func _on_travel_requested(region_name: String) -> void:
 # target region's data. Keeps autoloaded state (WorldDirector economy,
 # PlayerManager credits/heat, SenateDirector bill history) untouched —
 # travel is a scene-local event, not a run reset.
+#
+# Moving from one region to another costs ~6 in-game hours — transit
+# rides aren't instant, and the clock should reflect that.
+const TRAVEL_HOURS_COST: float = 6.0
+
 func travel_to_region(region_name: String) -> void:
 	print("Main: traveling to %s" % region_name)
 	var region_gen = get_node_or_null("/root/RegionGenerator")
@@ -362,6 +367,12 @@ func travel_to_region(region_name: String) -> void:
 	if target_data.is_empty():
 		push_warning("Region '%s' not found" % region_name)
 		return
+
+	# Burn travel time BEFORE regenerating. If the skip crosses a day
+	# boundary, WorldDirector will tick on day_advanced before the new
+	# region finishes loading — that's correct: sim catches up.
+	if has_node("/root/TimeSystem"):
+		get_node("/root/TimeSystem").skip_hours(TRAVEL_HOURS_COST)
 
 	# Teardown — queue_free cascades to children (patrols, crowd, transit,
 	# sabotage targets). Main-owned entities (player, camera, terminal)

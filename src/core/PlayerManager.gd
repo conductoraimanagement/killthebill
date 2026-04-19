@@ -69,6 +69,10 @@ var _defeat_locked: bool = false
 # (see WorldDirector._maybe_fire_victory).
 var chosen_victory_path: String = "ANY"
 
+# "Severance" period — months 1-2 — paused hope decay. Rent still drains.
+# At start of month 3, severance ends with a NetFeed note. One-shot flag.
+var _severance_end_fired: bool = false
+
 
 func _ready():
 	print("PlayerManager initialized.")
@@ -80,6 +84,7 @@ func initialize_run(seed: ClassSeed = ClassSeed.BLUE_COLLAR) -> void:
 	hope = 50.0
 	homeless = false
 	_rent_arrears_cycles = 0
+	_severance_end_fired = false
 	romantic_partner_ids.clear()
 	player_ruthlessness = 0.0
 	player_idealism = 0.0
@@ -244,19 +249,30 @@ func apply_daily_tick(economy: Dictionary) -> void:
 	elif credits >= 0:
 		_rent_arrears_cycles = 0
 
-	# --- Hope decay ---
-	var hope_delta: float = -1.0   # baseline
-	if credits < 0:
-		hope_delta -= 1.0          # broke compounds the dread
-	if heat > 60:
-		hope_delta -= 1.0          # hunted
-	if homeless:
-		hope_delta -= 1.0          # exposed
+	# --- Severance period (months 1-2) ---
+	# Hope decay suspended. You had severance money coming in for two
+	# months; you could walk around, talk to neighbors, feel almost okay.
+	# Rent still drains — the landlord doesn't wait. At month 3 start,
+	# severance ends with a one-shot NetFeed note.
 	var ts := get_node_or_null("/root/TimeSystem")
-	if ts and int(ts.month) >= 10:
-		hope_delta -= 1.0          # the year's end is heavy
+	var in_severance: bool = ts != null and int(ts.month) <= 2
 
-	_apply_hope(hope_delta, "daily drift")
+	if not in_severance and not _severance_end_fired:
+		_severance_end_fired = true
+		_publish_feed("Your severance ran out this morning. The weight finds you now. Hope starts to drift.")
+
+	# --- Hope decay ---
+	if not in_severance:
+		var hope_delta: float = -1.0   # baseline
+		if credits < 0:
+			hope_delta -= 1.0          # broke compounds the dread
+		if heat > 60:
+			hope_delta -= 1.0          # hunted
+		if homeless:
+			hope_delta -= 1.0          # exposed
+		if ts and int(ts.month) >= 10:
+			hope_delta -= 1.0          # the year's end is heavy
+		_apply_hope(hope_delta, "daily drift")
 
 	# --- Despair defeat ---
 	if hope <= 0.0 and not _defeat_locked:
