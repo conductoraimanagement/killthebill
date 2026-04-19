@@ -35,6 +35,15 @@ var api_key: String = ""
 var active_model: String = ""
 var use_offline_fallback: bool = false
 
+# Appended to system prompts that benefit from real-world resonance —
+# NetFeed, bills, oligarchs, politicians. Offline paths ignore it.
+# Intent: invite the model to echo historical/social-science/tech
+# patterns as thematic resonance, without naming living people, real
+# corporations, or real brands. Concepts are fair game.
+const RESONANCE_NUDGE := """
+You MAY echo real-world events, social-science experiments (e.g. behavioral sinks, conformity studies), labor-market dynamics (e.g. AI-driven layoffs, offshoring), policy patterns, pandemic-era frictions, and cultural movements as thematic resonance. NEVER name living people, real corporations, or real brands directly — but concepts, archetypes, and paraphrased patterns are fair game.
+"""
+
 # Bill generation uses a callback rather than a signal (single-fire, ergonomic
 # from the caller's side). The pending callback is held here for the duration
 # of one in-flight request.
@@ -164,8 +173,11 @@ func request_netfeed_events(world_state: Dictionary, oligarchs: Dictionary) -> v
 	system_prompt += "Evaluate the complex conjecture of the current world state:\n"
 	system_prompt += "Global Economy: " + JSON.stringify(world_state) + "\n"
 	system_prompt += "Oligarchs: " + JSON.stringify(oligarchs) + "\n"
+	system_prompt += _recent_world_context()
 	system_prompt += "Generate an organic stream of events, number varying with gravity of the situation.\n"
 	system_prompt += "Events can be public news, or invisible systemic shifts with no headline.\n"
+	system_prompt += "Where possible, continue threads from prior events — the bread thief's accomplices, Project Mayhem copycats, an oligarch retaliating for a prior sabotage. Make the run feel cumulative, not stateless.\n"
+	system_prompt += RESONANCE_NUDGE
 	system_prompt += "Respond STRICTLY in JSON with key 'events': array of {type: 'NEWS_TICKER'|'SILENT_RIPPLE', headline: string, systemic_impact: string}."
 	_send(system_prompt, "Generate the event stream in JSON.", 1024, 0.8)
 
@@ -179,6 +191,7 @@ func request_oligarch_generation(count: int) -> void:
 	system_prompt += "Generate " + str(count) + " unique corporate oligarchs for a 'Corporate Brutalist / Slum Cyberpunk' dystopia.\n"
 	system_prompt += "Each must be a fully realized character. Provide: first_name, last_name, title (CEO, Chairman, Director-General, Founder, Chief Architect), sector (Food, Tech, Security, Media, Pharma, Energy), 2-3 ambitions, 2-3 quirks.\n"
 	system_prompt += "High diversity. Some ideological, some greedy, some paranoid, some vain.\n"
+	system_prompt += RESONANCE_NUDGE
 	system_prompt += "Respond STRICTLY in JSON with key 'oligarchs' containing an array of objects."
 	_send(system_prompt, "Generate the oligarch roster in JSON.", 2048, 0.9)
 
@@ -217,6 +230,7 @@ func request_politician_generation(count: int) -> void:
 	system_prompt += "Generate " + str(count) + " procedural senators for a cyberpunk dystopia. They sit in a %d-seat chamber that votes on corporate and populist bills.\n" % count
 	system_prompt += "Target faction split (not rigid): CORPORATE_BLOC 3-4, POPULIST 2-3, REFORM 2-3, INDEPENDENT 2-3.\n"
 	system_prompt += "For each: first_name, last_name, title (Senator/Representative/Speaker/Chair), faction, cause (signature issue like 'labor', 'law_and_order'), seat_district, 1-2 quirks.\n"
+	system_prompt += RESONANCE_NUDGE
 	system_prompt += "Respond STRICTLY in JSON with key 'politicians' containing an array of objects."
 	_send(system_prompt, "Generate the Senate roster in JSON.", 2048, 0.9)
 
@@ -237,6 +251,9 @@ func request_bill(request: Dictionary, callback: Callable) -> void:
 	system_prompt += "Active oligarch ambitions: " + JSON.stringify(request.get("active_oligarch_ambitions", [])) + "\n"
 	system_prompt += "Forbidden (don't repeat): " + JSON.stringify(request.get("forbidden_topics", [])) + "\n"
 	system_prompt += "Effect whitelist (stay in range): " + JSON.stringify(request.get("effect_whitelist", {})) + "\n"
+	system_prompt += _recent_world_context()
+	system_prompt += "The bill should feel like a DIRECT response to the run's recent state — not a stock policy drawn from nowhere.\n"
+	system_prompt += RESONANCE_NUDGE
 	system_prompt += "Respond STRICTLY in JSON with keys: title, summary, stated_rationale, honest_rationale, ideological_score (-1..+1), faction_preferences (all 4 factions, -1..+1), proposed_effects (only whitelisted keys), scandal_hooks (array), netfeed_flavor."
 	_send(system_prompt, "Draft the bill in JSON. Specific, concrete framing — not generic policy-speak.", 1024, 0.85)
 
@@ -244,6 +261,68 @@ func request_bill(request: Dictionary, callback: Callable) -> void:
 # =============================================================
 # HTTP pipeline
 # =============================================================
+
+# Compose a block of "what has happened so far in this run" that the
+# model can browse — last N NetFeed headlines, recent Senate outcomes,
+# currently-active cameo arcs. This gives the LLM a working memory so
+# calls within a run can continue threads (the bread thief accomplices,
+# the Soap Man's graffiti echoing, a prior oligarch retaliating) instead
+# of generating disconnected blurbs.
+func _recent_world_context() -> String:
+	var wd := get_node_or_null("/root/WorldDirector")
+	if wd == null:
+		return ""
+
+	var sections: Array = []
+
+	# Last 8 NetFeed headlines, most recent first, skipping silent ripples.
+	var netfeed: Array = wd.netfeed_history
+	if netfeed.size() > 0:
+		var recent_headlines: Array = []
+		for i in range(netfeed.size() - 1, -1, -1):
+			if recent_headlines.size() >= 8:
+				break
+			var h: String = str(netfeed[i].get("headline", ""))
+			if h != "":
+				recent_headlines.append("- " + h)
+		if recent_headlines.size() > 0:
+			sections.append("Recent NetFeed headlines (most recent first):\n" + "\n".join(recent_headlines))
+
+	# Last 3 Senate outcomes
+	var senate := get_node_or_null("/root/SenateDirector")
+	if senate and senate.bill_history.size() > 0:
+		var recent_bills: Array = []
+		var start: int = max(0, senate.bill_history.size() - 3)
+		for i in range(start, senate.bill_history.size()):
+			var b = senate.bill_history[i]
+			recent_bills.append("- %s [%s, margin %+d]" % [
+				str(b.get("title", "")),
+				str(b.get("result", "")),
+				int(b.get("margin", 0)),
+			])
+		if recent_bills.size() > 0:
+			sections.append("Recent Senate outcomes:\n" + "\n".join(recent_bills))
+
+	# Active cameo arcs
+	var cameos := get_node_or_null("/root/CulturalCameos")
+	if cameos and cameos.active_arcs.size() > 0:
+		var active_lines: Array = []
+		for arc in cameos.active_arcs:
+			if bool(arc.get("completed", false)):
+				continue
+			var def: Dictionary = arc.get("definition", {})
+			active_lines.append("- %s (%s, %d cycles left)" % [
+				str(def.get("name", "")),
+				str(def.get("archetype", "")),
+				int(arc.get("cycles_left", 0)),
+			])
+		if active_lines.size() > 0:
+			sections.append("Ongoing cultural arcs (do NOT restate their intro, but you may echo their tone):\n" + "\n".join(active_lines))
+
+	if sections.is_empty():
+		return ""
+	return "\n# Run history so far\n\n" + "\n\n".join(sections) + "\n"
+
 
 func _send(system_prompt: String, user_prompt: String, max_tokens: int, temperature: float) -> void:
 	if active_provider == "":
