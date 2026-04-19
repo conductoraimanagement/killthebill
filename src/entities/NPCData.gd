@@ -102,6 +102,12 @@ class_name NPCData
 @export var current_objective: String = "" # e.g., "Distract guards at Depot 7", "Smuggle intel to sector B"
 @export var objective_willingness: float = 0.0 # 0-1: How willing they are to do what's asked
 
+## Romantic/jealousy bookkeeping — flips true when this partner
+## discovers the player has other partners. Reaction fires once
+## and resolves based on personality. See PopulationDirector.
+@export var infidelity_known: bool = false
+@export var infidelity_reacted: bool = false
+
 ## Returns true if the NPC can be recruited as an agent
 func can_recruit() -> bool:
 	# Must have at least Friend-level bond and sufficient trust

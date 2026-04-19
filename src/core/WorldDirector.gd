@@ -386,7 +386,10 @@ func run_world_cycle() -> void:
 
 	# NPC mortality — accident + murder rolls for every alive NPC.
 	if has_node("/root/PopulationDirector"):
-		get_node("/root/PopulationDirector").evaluate_deaths(global_economy, cycle)
+		var pd = get_node("/root/PopulationDirector")
+		pd.evaluate_deaths(global_economy, cycle)
+		# Romantic partners discover each other — trait-driven reactions.
+		pd.evaluate_infidelity_discoveries(cycle)
 
 	# Year-arc ambient tension drift — the world tightens around you.
 	if has_node("/root/TimeSystem"):

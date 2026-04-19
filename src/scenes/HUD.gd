@@ -137,6 +137,7 @@ var _dialogue_root: Control
 var _dialogue_log: RichTextLabel
 var _dialogue_input: LineEdit
 var _dialogue_send_btn: Button
+var _dialogue_commit_btn: Button
 var _dialogue_status: Label
 var _dialogue_npc = null
 var _dialogue_in_flight: bool = false
@@ -2387,6 +2388,24 @@ func _build_dialogue_modal() -> void:
 	close.pressed.connect(hide_dialogue_modal)
 	panel.add_child(close)
 
+	# COMMIT button — courting. Available when trust ≥ 60 and NPC isn't
+	# already a partner. Unlocks polyamorous commitment; existing
+	# partners may discover, with trait-driven consequences.
+	_dialogue_commit_btn = Button.new()
+	_dialogue_commit_btn.text = "COMMIT (need trust ≥ 60)"
+	_dialogue_commit_btn.anchor_left = 0.0
+	_dialogue_commit_btn.anchor_top = 1.0
+	_dialogue_commit_btn.anchor_right = 0.0
+	_dialogue_commit_btn.anchor_bottom = 1.0
+	_dialogue_commit_btn.offset_left = 150
+	_dialogue_commit_btn.offset_top = -42
+	_dialogue_commit_btn.offset_right = 340
+	_dialogue_commit_btn.offset_bottom = -PANEL_PAD
+	_dialogue_commit_btn.add_theme_color_override("font_color", COL_WARN)
+	_dialogue_commit_btn.add_theme_color_override("font_hover_color", COL_FG)
+	_dialogue_commit_btn.pressed.connect(_on_dialogue_commit)
+	panel.add_child(_dialogue_commit_btn)
+
 
 func show_dialogue_modal(crowd) -> void:
 	_dialogue_npc = crowd
@@ -2397,18 +2416,70 @@ func show_dialogue_modal(crowd) -> void:
 	_dialogue_log.text = ""
 	if crowd and crowd.npc_data:
 		var d = crowd.npc_data
-		_dialogue_status.text = "// %s — %s (trust %d/100)" % [
+		var header: String = "// %s — %s (trust %d/100)" % [
 			d.npc_name.to_upper(),
 			d.get_behavioral_profile(),
 			int(d.trust),
 		]
+		var pm = get_node_or_null("/root/PlayerManager")
+		if pm and pm.is_romantic_partner(d.npc_id):
+			header += "   ♥"
+		_dialogue_status.text = header
 		# Opening line from the NPC — just a narrator cue.
 		_append_dialogue("[i][color=#%s]%s glances up at you.[/color][/i]" % [
 			_hex(COL_DIM), d.npc_name,
 		])
+		_refresh_commit_button()
 	_dialogue_root.visible = true
 	get_tree().paused = true
 	_dialogue_input.grab_focus()
+
+
+func _refresh_commit_button() -> void:
+	if _dialogue_npc == null or _dialogue_npc.npc_data == null:
+		_dialogue_commit_btn.visible = false
+		return
+	var d = _dialogue_npc.npc_data
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm and pm.is_romantic_partner(d.npc_id):
+		_dialogue_commit_btn.text = "PARTNER ♥"
+		_dialogue_commit_btn.disabled = true
+		_dialogue_commit_btn.visible = true
+	elif d.trust >= 60.0:
+		_dialogue_commit_btn.text = "COURT %s" % d.npc_name.split(" ")[0]
+		_dialogue_commit_btn.disabled = false
+		_dialogue_commit_btn.visible = true
+	else:
+		_dialogue_commit_btn.text = "COMMIT (need trust ≥ 60)"
+		_dialogue_commit_btn.disabled = true
+		_dialogue_commit_btn.visible = true
+
+
+func _on_dialogue_commit() -> void:
+	if _dialogue_npc == null or _dialogue_npc.npc_data == null:
+		return
+	var d = _dialogue_npc.npc_data
+	if d.trust < 60.0:
+		return
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm == null:
+		return
+	if pm.is_romantic_partner(d.npc_id):
+		return
+
+	d.relationship_type = 4  # Romantic
+	pm.add_romantic_partner(d.npc_id)
+	pm.add_hope(10.0, "new relationship with %s" % d.npc_name)
+
+	_append_dialogue("[color=#%s]%s nods, eyes bright. 'Okay. Okay.'[/color]" % [
+		_hex(COL_WARN), d.npc_name,
+	])
+	var others: int = pm.romantic_partner_ids.size() - 1
+	if others > 0:
+		_append_dialogue("[i][color=#%s]You carry %d other names. Sooner or later, someone compares notes.[/color][/i]" % [
+			_hex(COL_DIM), others,
+		])
+	_refresh_commit_button()
 
 
 func hide_dialogue_modal() -> void:

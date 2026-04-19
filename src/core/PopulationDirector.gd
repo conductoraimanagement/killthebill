@@ -218,6 +218,126 @@ func _kill_npc(npc, cause: String, cycle: int, wd, pm) -> void:
 	print("NPC died: %s (%s)" % [npc.npc_name, cause])
 
 
+# Called by WorldDirector each day. For each romantic partner who
+# doesn't yet know about the others, roll a discovery chance. On
+# discovery, fire the partner's personality-based reaction once.
+func evaluate_infidelity_discoveries(cycle: int) -> void:
+	var pm := get_node_or_null("/root/PlayerManager")
+	if pm == null or pm.romantic_partner_ids.size() < 2:
+		return
+	var wd := get_node_or_null("/root/WorldDirector")
+
+	for partner_id in pm.romantic_partner_ids:
+		var p = _find_by_id(partner_id)
+		if p == null or not p.alive:
+			continue
+		if p.infidelity_reacted:
+			continue
+
+		# Conformist NPCs pay attention to social norms and find out sooner.
+		# Scale with partner count — more partners = harder to hide.
+		var base: float = 0.03   # 3%/day baseline
+		var conformity_bump: float = float(p.conformity) * 0.05
+		var partner_count_bump: float = float(pm.romantic_partner_ids.size() - 1) * 0.02
+		var chance: float = base + conformity_bump + partner_count_bump
+		if randf() < chance:
+			p.infidelity_known = true
+			_apply_infidelity_reaction(p, pm, wd)
+
+
+func _apply_infidelity_reaction(p, pm, wd) -> void:
+	p.infidelity_reacted = true
+	var name_str: String = p.npc_name
+
+	# Personality-driven fork. Each reaction fires once per partner.
+	if p.empathy > 0.6:
+		# Polyamorous acceptance (with cost). Trust dips slightly.
+		p.trust = max(0.0, p.trust - 5.0)
+		_emit_relationship_note(wd, "%s tells you she knows about the others. 'I understand.' Her hand stays on yours a half-beat longer than normal." % name_str)
+		pm.add_hope(-2.0, "quiet forgiveness costs")
+		return
+
+	if p.aggression > 0.6:
+		# Confrontation — may get physical, heat spikes, they may become hostile.
+		p.trust = max(0.0, p.trust - 40.0)
+		p.opinion_of_player = max(-1.0, p.opinion_of_player - 0.5)
+		p.knowledge_of_player = min(1.0, p.knowledge_of_player + 0.4)
+		p.relationship_type = 1  # Acquaintance — no longer romantic
+		pm.remove_romantic_partner(p.npc_id)
+		pm.add_heat(20, "partner called in a favor")
+		pm.add_hope(-10.0, "it got ugly with %s" % name_str)
+		_emit_relationship_note(wd, "%s cornered you. Voices carried. A neighbor called the patrol." % name_str)
+		return
+
+	if p.conformity > 0.6 and p.empathy < 0.4:
+		# Public denunciation — scandal in the feed.
+		p.trust = max(0.0, p.trust - 30.0)
+		p.opinion_of_player = max(-1.0, p.opinion_of_player - 0.4)
+		p.relationship_type = 1
+		pm.remove_romantic_partner(p.npc_id)
+		pm.add_hope(-15.0, "%s denounced you" % name_str)
+		_emit_relationship_note(wd, "%s posted a long message on the block's bulletin — names, dates, the whole list. The Sinks read it twice." % name_str)
+		return
+
+	if p.greed > 0.6:
+		# Hush money demand.
+		var demand: int = 500
+		var paid: bool = false
+		if pm.can_afford(demand):
+			pm.spend_credits(demand, "hush money to %s" % name_str)
+			paid = true
+			p.trust = max(0.0, p.trust - 10.0)
+			pm.add_hope(-4.0, "bought silence")
+			_emit_relationship_note(wd, "%s wanted 500 credits 'for silence'. You paid. The silence held." % name_str)
+		else:
+			# Can't afford → full scandal treatment.
+			p.trust = max(0.0, p.trust - 30.0)
+			p.opinion_of_player = max(-1.0, p.opinion_of_player - 0.4)
+			p.relationship_type = 1
+			pm.remove_romantic_partner(p.npc_id)
+			pm.add_hope(-10.0, "%s cashed out on you" % name_str)
+			_emit_relationship_note(wd, "%s wanted 500 credits for silence. You couldn't pay. The story is out." % name_str)
+		return
+
+	if p.idealism > 0.6:
+		# Quiet idealistic breakup — they expected better.
+		p.trust = max(0.0, p.trust - 25.0)
+		p.opinion_of_player = max(-1.0, p.opinion_of_player - 0.2)
+		p.relationship_type = 2  # Friend tier, they still care
+		pm.remove_romantic_partner(p.npc_id)
+		pm.add_hope(-12.0, "%s expected more" % name_str)
+		p.hope = max(0.0, p.hope - 15.0)   # their hope drops too
+		_emit_relationship_note(wd, "%s sent a note. Short. 'I thought we were building something.' She's still speaking to you. Differently." % name_str)
+		return
+
+	# Default quiet fallout — trust erodes, relationship downgrades.
+	p.trust = max(0.0, p.trust - 20.0)
+	p.opinion_of_player = max(-1.0, p.opinion_of_player - 0.2)
+	p.relationship_type = 2
+	pm.remove_romantic_partner(p.npc_id)
+	pm.add_hope(-8.0, "%s quietly stepped away" % name_str)
+	_emit_relationship_note(wd, "%s stopped calling. Didn't say why. Didn't need to." % name_str)
+
+
+func _find_by_id(npc_id: String):
+	for n in roster:
+		if n.npc_id == npc_id:
+			return n
+	return null
+
+
+func _emit_relationship_note(wd, text: String) -> void:
+	if wd == null:
+		return
+	var event := {
+		"type": "NEWS_TICKER",
+		"headline": text,
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	wd.netfeed_history.append(event)
+	wd.netfeed_event_generated.emit(event)
+
+
 func _headline_for_death(npc, cause: String, is_lover: bool, is_ally: bool) -> String:
 	if is_lover:
 		return "The name you whispered last week is in this morning's death notices. The system did not pause for %s." % npc.npc_name
