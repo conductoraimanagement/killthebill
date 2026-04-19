@@ -63,21 +63,28 @@ Comprehensive list in [progression.md](progression.md#heat-system). Representati
 
 ### Spawning
 
-`LandscapeGenerator._spawn_enforcer_patrols()` runs at landscape build time and on every `TimeSystem.phase_changed` (despawning the previous batch first).
+`LandscapeGenerator._spawn_enforcer_patrols()` runs at landscape build time and on every `TimeSystem.phase_changed` (despawning the previous batch first). **Also mid-phase** whenever the player's heat crosses 30 / 60 / 80 upward — the street reshapes faster than it used to.
 
 ```
 base_count = 2
-+ max(0, (security_presence - 50) / 15)   # +0..+3 from Enforcer saturation
-+ max(0, (heat - 30) / 20)                # +0..+3 from your own heat
-× 1.8 if is_night                         # night doubles patrol density
-clamp 0..8
++ max(0, (security_presence - 50) / 15)    # +0..+3 from Enforcer saturation
++ max(0, (heat - 30) / 20)                 # +0..+3 from your own heat
+× 1.8 if is_night                          # night doubles patrol density
+× TimeSystem.patrol_count_multiplier()     # 0.9→1.5 by pacing band (year-arc)
+clamp 0..8 (cap 12 during active alert)
 ```
 
-- A calm slum in the morning: 2 patrols.
-- The same slum at night, security = 70: `2 + 1 = 3`, ×1.8 = **5** patrols.
-- Endgame heat = 90, security = 80: `2 + 2 + 3 = 7`, ×1.8 at night = **8** (capped) patrols.
+- A calm slum in the morning, month 2 (Settling ×0.9): ~2 patrols.
+- Same slum at night, security=70, month 7 (Escalation ×1.15): `2 + 1 = 3`, ×1.8 = 5, ×1.15 = ~**6** patrols.
+- Endgame month 13 (Year's End ×1.5), night, heat 90, security 80: `2 + 2 + 3 = 7`, ×1.8 = 13, ×1.5 = 20 → **capped at 8** (or 12 during active alert).
 
 Patrols walk between two random street cells (street-aligned grid rows/columns), looping indefinitely. Each has a 6-meter detection radius. When the player enters that radius *and* `heat ≥ 30`, the patrol fires its `encountered_player` signal and the HUD pauses for an encounter modal.
+
+### Alert memory + reinforcements
+
+The landscape holds `_last_known_player_position`, set on any fired encounter. For 2 phase boundaries after the event, new patrols spawn biased toward that point (within 30m). Existing patrols have their A↔B waypoints lerp toward it and a **red strobe** lights on their shoulder strap — you can see alerted patrols converging at distance.
+
+**On a failed flee** from the encounter modal, `LandscapeGenerator.raise_alert(player_pos, spawn_reinforcements=true)` fires. Three reinforcement patrols spawn within ~15m of the player's position (cap relaxed to 12 in this emergency). Alerted patrols move 1.4× faster. Over ~3 real minutes of play the alert decays; the world forgets where you were.
 
 ### Day/night bias
 

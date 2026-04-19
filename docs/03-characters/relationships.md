@@ -103,7 +103,71 @@ Loyal Operatives (tier 5) are rare and permanent — if they survive. A run with
 
 ---
 
+---
+
+## Romance — polyamorous, personality-consequenced
+
+> **Status:** Implemented. Relationship tier 4 (Romantic) is now an active mechanic. Commit via HUD dialogue modal at trust ≥ 60.
+
+The player can court and commit to any number of NPCs. Polyamory is legal; consequences are per-partner and driven entirely by each partner's personality.
+
+### Committing
+
+In the dialogue modal, a **COMMIT** button appears once the NPC's `trust ≥ 60`. Pressing it:
+- Sets `NPCData.relationship_type = 4` (Romantic)
+- Adds `npc_id` to `PlayerManager.romantic_partner_ids`
+- Grants the player +10 hope immediately
+- If other partners exist, the dialogue log warns: *"You carry N other names. Sooner or later, someone compares notes."*
+
+Romantic partners get slight ×0.75 protection on accident + murder rolls — you look out for them.
+
+### Infidelity discovery
+
+`PopulationDirector.evaluate_infidelity_discoveries` runs daily when the player has ≥2 partners. For each partner not-yet-aware, roll a chance:
+
+```
+chance = 0.03 + 0.05 × partner.conformity
+              + 0.02 × (other_partner_count - 1)
+```
+
+Conformist partners find out sooner. More partners = faster compounding reveal. Discovery sets `NPCData.infidelity_known = true`; each partner reacts once, set by **their** traits:
+
+| Trait gate | Reaction | Effects |
+|---|---|---|
+| `empathy > 0.6` | Understands, stays together | Trust −5, -2 hope. "She understands. Her hand stays on yours a half-beat longer." |
+| `aggression > 0.6` | Confronts, calls patrol | Trust −40, opinion −0.5, +20 heat, relationship ends, −10 hope |
+| `conformity > 0.6` AND `empathy < 0.4` | Public denunciation (scandal) | Trust −30, relationship ends, −15 hope, NetFeed scandal |
+| `greed > 0.6` | Hush-money demand (500 cr) | If paid: trust −10, -4 hope. If can't afford: full scandal treatment. |
+| `idealism > 0.6` | Quiet idealistic breakup | Trust −25, relationship drops to Friend, −12 hope, THEIR hope drops too |
+| (default) | Quiet fallout, they stop calling | Trust −20, relationship drops to Friend, −8 hope |
+
+Each partner's reaction is a dedicated NetFeed line voiced to personality. Players see exactly how each betrayal shapes.
+
+### Hope on partner death
+
+Scales **inversely** with partner count — more partners = less per-death cost. Thematic: "obviously if player has more, it means the relationships are less critical to the player's hope."
+
+| Partners | Hope hit on loss |
+|---|---|
+| 1 | −40 (catastrophic) |
+| 2 | −20 |
+| 3 | −13 |
+| 4+ | −10 (floor) |
+
+A monogamous player can spiral into DESPAIR from a single partner's death. A polyamorous player absorbs it.
+
+### Tradeoffs, summary
+
+| Polyamorous strategy | Cost |
+|---|---|
+| Less emotional risk per lover | More discovery surface — more partners, faster + more cascading reveals |
+| Each reveal is permanent per partner | Each successful relationship can still end in trait-specific ways that hurt |
+| Forgiving partners (high empathy) are safe | But they still take small costs on each reveal |
+
+---
+
 ## See also
-- [NPCs](npcs.md) — the character sheet
+- [NPCs](npcs.md) — character sheets + NPC death + social graph
 - [Heat & Evasion](../04-player/heat.md) — how operatives absorb heat
 - [Cultural Cameos](cultural-cameos.md) — cameos can *occupy* the operative slot for the length of their arc
+- [Progression](../04-player/progression.md) — hope-cost math interacting with romance

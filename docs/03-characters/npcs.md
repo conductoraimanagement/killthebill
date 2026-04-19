@@ -48,6 +48,63 @@ Six traits, 0.0–1.0, set at generation. Class biases applied on top:
 | `radicalization` | 0–100 | How close to action |
 | `knowledge_of_player` | 0.0–1.0 | How much they know about the player's activities |
 | `opinion_of_player` | −1.0…+1.0 | How they feel |
+| `trust` | 0–100 | Bond with the player specifically |
+| `alive` | bool | NPCs can die this run — see **Mortality** below |
+| `death_cause` | String | "accident" \| "murder" on dead NPCs |
+| `died_on_cycle` | int | Cycle when they died (−1 if alive) |
+| `active_phase` | "day"/"night"/"both" | When this NPC is visible / reachable |
+| `npc_bonds` | Dict{npc_id: strength 0-100} | Bonds to other NPCs (social graph) |
+| `npc_partner_id` | String | NPC-NPC romantic partner (independent of player) |
+| `infidelity_known` / `infidelity_reacted` | bool | For player's romantic partners: have they found out about the others yet? |
+
+---
+
+## Mortality — NPCs can die
+
+Each day, `PopulationDirector.evaluate_deaths` rolls two independent death chances per alive NPC: accident and murder.
+
+**Accident** (base 0.2%/cycle):
+- +0.2% if `food_price > 250` (food poisoning, starvation)
+- +0.2% if `stress_level > 70` (health collapse)
+- +0.2% if Destitute AND `food_price > 200`
+
+**Murder** (base 0.2%/cycle):
+- +0.4% if `radicalization > 70` AND `security_presence > 60` (silenced as agitator)
+- +0.3% if `knowledge_of_player > 0.6` AND player heat > 70 (they saw too much)
+- +0.2% × (tension/100) (ambient violence)
+
+Romantic partners get a ×0.75 modifier on both rates — you look out for them. The world isn't selectively targeting them.
+
+**Hope hit on death** (for the player):
+
+| Ties | Hope hit |
+|---|---|
+| Stranger | −2 |
+| Ally (trust ≥ 30) | −10 |
+| Lover, 1 partner | −40 (catastrophic) |
+| Lover, 2 partners | −20 |
+| Lover, 3 | −13 |
+| Lover, 4+ | −10 (floor) |
+
+More partners = less per-death cost. That's a choice the player makes about their stakes.
+
+NPC-NPC partner death cascades: survivor loses 30 hope + 15 stress, `npc_partner_id` clears, NetFeed narrates the grief.
+
+Dead NPCs drop from: crowd spawn, fixer-job candidates, hostile/ally snitch counts, social-graph interactions. The fixed roster is no longer fixed.
+
+---
+
+## Social graph — NPCs have a life of their own
+
+`PopulationDirector.tick_social_graph(cycle)` runs each day. Picks 8 random pairs from the currently-active-phase pool. For each pair:
+
+1. **Bond bump** (+2.5, capped at 100). First crossing of strength 30 → NetFeed note. `npc_bond_formed` signal.
+2. **Mood contagion** — hope and stress partially equalize, bond-weighted. Clusters of hope and despair both propagate.
+3. **Radicalization spread** — if one is radicalized (>70) and the other cautious (<40) with low conformity, the cautious one ticks up +2. Conformist citizens resist the infection.
+4. **Opinion-of-player diffusion** — 15% chance per pair. The stronger opinion drags the weaker toward it. Allies' friends come around; enemies' friends turn.
+5. **NPC-NPC romance** — at bond ≥ 75, both unpartnered, 6% chance → pair. Both get +10 hope, NetFeed note, `npc_romance_formed` signal.
+
+Over a 390-day run, ~3100 interactions. The roster visibly stratifies — radical cells form, bonded couples emerge, despair clusters gather — even if the player never touches any of them.
 
 ### World pressure loop
 

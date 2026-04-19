@@ -21,16 +21,34 @@ Each fires `WorldDirector.victory_achieved(kind, title, flavor)` exactly once; H
 
 ---
 
-## The two defeat paths
-
-Added as part of the heat/enforcement work.
+## The four defeat paths
 
 | Path | Trigger | Flavor |
 |---|---|---|
-| **ARRESTED** | `PlayerManager.heat == 100` | *"Heat maxed. Compliance AI picked up your scent; Enforcers kicked the safehouse door at dawn. Run ends here."* |
-| **SURRENDERED** | Player picks SUBMIT on an Enforcer encounter modal | *"You walked up with hands visible. The shackles came out. The Enclave breathes easier tonight."* |
+| **ARRESTED** | `PlayerManager.heat == 100` | *"Heat maxed. Compliance AI picked up your scent; Enforcers kicked the safehouse door at dawn."* |
+| **SURRENDERED** | SUBMIT on an Enforcer encounter modal | *"You walked up with hands visible. The shackles came out. The Enclave breathes easier tonight."* |
+| **DESPAIR_WITHDRAWAL** | `PlayerManager.hope == 0` | *"You stopped leaving the apartment three days ago. The NetFeed moved on. The run ended quietly, the way most of them do."* |
+| **TIMEOUT_ABSORBED** | Month 14 reached without a victory | *"Thirteen months passed. No oligarch fell by your hand. No revolution took the streets. No reform passed the chamber. No collapse bent the Enclave's balance sheet. The year ended. The year absorbed you."* |
 
-Both route through `PlayerManager.fire_defeat(kind, title, flavor)` → HUD shows the same end-of-run modal, but with `// DEFEAT //` **hot-red banner** and the title in hot-red too. Same four buttons.
+All four route through `PlayerManager.fire_defeat(kind, title, flavor)` (or for ARRESTED, automatically from `add_heat` at cap) → HUD shows the same end-of-run modal, but with `// DEFEAT //` **hot-red banner** and the title in hot-red too.
+
+---
+
+## Goal-choice modal (run start)
+
+Fresh playthroughs (not loaded from a world config) open with a forced prompt: `// 13 MONTHS — One goal. Pick it, or let the year decide.` Five options:
+
+| Choice | What wins your run |
+|---|---|
+| `DIRECT_ACTION` | Only direct-action triggers victory |
+| `POLITICAL_REVOLUTION` | Only revolution triggers victory |
+| `POLITICAL_REFORM` | Only reform triggers victory |
+| `SYSTEMIC_COLLAPSE` | Only collapse triggers victory |
+| `ANY` (let the year decide) | Any victory path triggers, same as legacy behavior |
+
+Stored in `PlayerManager.chosen_victory_path`. When a non-chosen path *would* fire, `WorldDirector._maybe_fire_victory` notes it in the NetFeed — *"A POLITICAL REVOLUTION condition fired — but that wasn't the path you chose. The run continues."* — and the year rolls on.
+
+Option B from the 13-month design is the default mode: committed to a single narrative.
 
 ---
 
@@ -51,9 +69,19 @@ If two would trigger the same cycle (e.g., you assassinate the last oligarch whi
 
 ## Rolling credits (no credits)
 
-There is no credits sequence. The end-of-run modal is the ending — title, flavor, buttons. The player's next act is typically SAVE WORLD (bookmark the seed that produced this outcome) then RESTART (fresh roll, same or different seed).
+There is no credits sequence. The end-of-run modal is the ending — title, flavor, buttons. The player's next act is typically **VIEW CHRONICLE** (see the 13-month story laid out in text), then SAVE WORLD (bookmark the seed that produced this outcome), then RESTART or CONTINUE.
 
-CONTINUE (sandbox) keeps the world running after a win. Post-victory, all other victory/defeat conditions still fire — you could win by revolution and then lose by arrest while sandboxing in the aftermath.
+### Buttons on the end-of-run modal
+
+| Button | Effect |
+|---|---|
+| **SAVE WORLD** | Opens the Save modal — capture this run's world config as a JSON file |
+| **LOAD WORLD…** | Opens the Load modal — pick a saved config to start a new run |
+| **VIEW CHRONICLE** | Opens the Chronicle — 13 monthly recaps laid out as narrative text, exportable to clipboard |
+| **RESTART** | Reload current scene — fresh procedural roll |
+| **CONTINUE (sandbox)** | Keep world running post-victory; other conditions still fire in the aftermath |
+
+See [Save and Share](../05-systems/save-and-share.md) for how world configs work, and `Chronicle` autoload source for the run artifact.
 
 ---
 
