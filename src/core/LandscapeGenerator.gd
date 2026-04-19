@@ -26,6 +26,7 @@ signal landscape_ready(generator)
 signal patrol_spawned(patrol)
 signal crowd_spawned(crowd)
 signal transit_zone_activated(zone)
+signal sabotage_target_spawned(target)
 
 const METERS_PER_STORY := 3.0
 const STREET_EVERY_N := 4     # every 4th grid row/column stays clear for streets
@@ -176,6 +177,24 @@ var crowd_npcs: Array = []
 # Single transit-zone per region (edge of map) for inter-region travel.
 var transit_zone: TransitZone = null
 
+# Sabotage targets for this region. 1-2 depending on type. Owned by the
+# landscape — queue_freed when the landscape despawns on travel.
+var sabotage_targets: Array = []
+
+# Per region-type landmark recipe. Determines which InteractableTarget
+# kinds spawn here. Every type lists 1-2 sabotage targets whose sector
+# is thematically appropriate, which means cameo objectives that name
+# a sector (e.g. the Bread Thief asking for a Security sabotage) can
+# actually be completed by traveling to a matching region.
+const LANDMARK_RECIPES: Dictionary = {
+	"URBAN_SLUM":     ["food_depot"],
+	"URBAN_ELITE":    ["financial_center", "media_spire"],
+	"INDUSTRIAL":     ["refinery", "power_relay"],
+	"AGRICULTURAL":   ["hydro_vault", "grain_silo"],
+	"ISLAND_RETREAT": ["private_dock"],
+	"TRANSIT":        ["checkpoint_scanner"],
+}
+
 var _nav_region: NavigationRegion3D
 var _rng: RandomNumberGenerator
 var _occupied: Array = []    # 2D array of bool, size [grid_w][grid_h]
@@ -227,6 +246,7 @@ func generate(region_data: Dictionary) -> void:
 	_spawn_enforcer_patrols()
 	_spawn_crowd()
 	_spawn_transit_zone()
+	_spawn_sabotage_targets()
 
 	# Refresh patrols each phase so day→night doubles the presence
 	# and heat spikes don't leave an empty street forever.
@@ -470,11 +490,11 @@ func _spawn_building(gx: int, gz: int, h_range: Vector2i, materials: Array) -> v
 # Landmark spawns (reserve two empty cells for the interactables)
 # -------------------------------------------------------------
 func _place_landmarks() -> void:
+	# Reserve a cell for the datashard terminal only — sabotage targets
+	# reserve their own via _spawn_sabotage_targets so they can pick
+	# kinds that vary per region type.
 	landmark_spawns = {}
-	var kinds: Array = ["food_depot", "datashard_terminal"]
-	for kind in kinds:
-		var pos: Vector3 = _reserve_empty_cell()
-		landmark_spawns[kind] = pos
+	landmark_spawns["datashard_terminal"] = _reserve_empty_cell()
 
 
 func _reserve_empty_cell() -> Vector3:
@@ -708,6 +728,31 @@ func _despawn_crowd() -> void:
 		if is_instance_valid(c):
 			c.queue_free()
 	crowd_npcs.clear()
+
+
+# -------------------------------------------------------------
+# Sabotage targets — per-region-type InteractableTarget entities.
+# Each region type has a recipe in LANDMARK_RECIPES; the generator
+# spawns one of each kind in the recipe. Cameo objectives that name
+# a sector (e.g. "Security") can now actually be satisfied by
+# traveling to a TRANSIT or ISLAND_RETREAT region.
+# -------------------------------------------------------------
+func _spawn_sabotage_targets() -> void:
+	var type_key: String = str(region.get("type", "URBAN_SLUM"))
+	var recipe: Array = LANDMARK_RECIPES.get(type_key, ["food_depot"])
+	var region_name: String = str(region.get("name", "Region"))
+
+	for kind in recipe:
+		var cfg: Dictionary = InteractableTarget.KIND_CONFIGS.get(kind, {})
+		var prefix: String = str(cfg.get("display_prefix", "Facility"))
+
+		var target := InteractableTarget.new()
+		target.set_landmark_kind(kind)
+		target.depot_name = "%s %s" % [region_name, prefix]
+		target.position = _reserve_empty_cell()
+		add_child(target)
+		sabotage_targets.append(target)
+		sabotage_target_spawned.emit(target)
 
 
 # -------------------------------------------------------------

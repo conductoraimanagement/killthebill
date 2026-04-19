@@ -135,14 +135,24 @@ Each biome seed nudges the base config — density, heights, palette, fog, accen
 
 ### Landmark & spawn resolution
 
-`LandscapeGenerator` reserves grid cells for the food depot and the datashard terminal, and picks a safe spawn for the player near the center. Main reads them off the generator after `landscape_ready`:
+`LandscapeGenerator` reserves grid cells for the datashard terminal, places a transit-zone pillar at the map edge, and spawns 1–2 sabotage targets whose kind is chosen by the region's type. It picks a safe spawn for the player near the center and emits `sabotage_target_spawned` per target so Main can wire interaction signals without needing a fixed list.
 
-```gdscript
-func _on_landscape_ready(landscape: LandscapeGenerator) -> void:
-    _spawn_player(landscape.player_spawn)
-    _spawn_depot(landscape.landmark_spawns["food_depot"], landscape.region)
-    _spawn_terminal(landscape.landmark_spawns["datashard_terminal"])
-```
+### Per-region landmark recipes
+
+Each region type gets sector-appropriate sabotage targets so cameo objectives that name a sector (e.g. *"disrupt Security"*) can actually be satisfied by traveling to a matching region:
+
+| Region type | Sabotage kinds | Sector(s) covered |
+|---|---|---|
+| `URBAN_SLUM` | food_depot | Food |
+| `URBAN_ELITE` | financial_center + media_spire | Tech + Media |
+| `INDUSTRIAL` | refinery + power_relay | Tech + Energy |
+| `AGRICULTURAL` | hydro_vault + grain_silo | Food |
+| `ISLAND_RETREAT` | private_dock | Security |
+| `TRANSIT` | checkpoint_scanner | Security |
+
+**Financial Center** (new) — tall cyan glass column, Tech-sector sabotage target. Unique to `URBAN_ELITE` — the Enclave's money lives in glass. Same ripple as any Tech-sector hit: `tech_price +150`, `+4 heat`, the Tech oligarch loses 50k wealth.
+
+Visual profile per kind lives in `InteractableTarget.KIND_CONFIGS` — mesh shape (box / tall_box / cylinder), size, albedo + emission color, display prefix. One entity class, many kinds.
 
 ---
 

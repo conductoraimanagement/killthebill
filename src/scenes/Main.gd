@@ -20,7 +20,7 @@ var _landscape: LandscapeGenerator
 var _player: CharacterBody3D
 var _camera: CameraController
 var _hud: HUD
-var _depot: InteractableTarget
+var _sabotage_targets: Array = []   # list of InteractableTarget spawned by the landscape
 var _terminal: DatashardTerminal
 
 
@@ -116,16 +116,20 @@ func _current_region_data() -> Dictionary:
 
 func _on_landscape_ready(landscape: LandscapeGenerator) -> void:
 	var spawn: Vector3 = landscape.player_spawn
-	var depot_pos: Vector3 = landscape.landmark_spawns.get("food_depot", Vector3(10, 0, -8))
 	var terminal_pos: Vector3 = landscape.landmark_spawns.get("datashard_terminal", Vector3(-10, 0, -6))
-	# Lift landmarks slightly so they sit on the ground.
-	depot_pos.y = 0
 	terminal_pos.y = 0
 
 	_spawn_player(spawn)
 	_setup_camera()
-	_spawn_depot(depot_pos, landscape.region)
 	_spawn_terminal(terminal_pos)
+
+	# Sabotage targets are spawned by the landscape itself — we just wire
+	# interaction signals for each. Clear old refs from any previous region.
+	_sabotage_targets.clear()
+	if not landscape.sabotage_target_spawned.is_connected(_on_sabotage_target_spawned):
+		landscape.sabotage_target_spawned.connect(_on_sabotage_target_spawned)
+	for t in landscape.sabotage_targets:
+		_on_sabotage_target_spawned(t)
 
 	# Landscape now listens to TimeSystem for day/night blending.
 	if has_node("/root/TimeSystem"):
@@ -221,18 +225,24 @@ func _setup_camera() -> void:
 # -------------------------------------------------------------
 # Interactables
 # -------------------------------------------------------------
-func _spawn_depot(at: Vector3, region_data: Dictionary) -> void:
-	_depot = InteractableTarget.new()
-	_depot.name = "FoodDepot"
-	_depot.sector = "Food"
-	var region_name: String = str(region_data.get("name", "Region"))
-	_depot.depot_name = "%s Food Depot" % region_name
-	add_child(_depot)
-	_depot.position = at
-	_depot.set_player(_player)
-	_depot.became_interactable.connect(_on_depot_interactable)
-	_depot.became_non_interactable.connect(_on_target_left)
-	_depot.sabotaged_signal.connect(_on_depot_sabotaged)
+func _on_sabotage_target_spawned(target: InteractableTarget) -> void:
+	if _player:
+		target.set_player(_player)
+	if not target.became_interactable.is_connected(_on_sabotage_target_interactable):
+		target.became_interactable.connect(_on_sabotage_target_interactable)
+	if not target.became_non_interactable.is_connected(_on_target_left):
+		target.became_non_interactable.connect(_on_target_left)
+	if not target.sabotaged_signal.is_connected(_on_sabotage_target_sabotaged):
+		target.sabotaged_signal.connect(_on_sabotage_target_sabotaged)
+	_sabotage_targets.append(target)
+
+
+func _on_sabotage_target_interactable(target: InteractableTarget) -> void:
+	_hud.show_prompt(target.prompt_text())
+
+
+func _on_sabotage_target_sabotaged(target: InteractableTarget) -> void:
+	print("Main: target '%s' (sector=%s) sabotaged." % [target.depot_name, target.sector])
 
 
 func _spawn_terminal(at: Vector3) -> void:
@@ -255,10 +265,6 @@ func _setup_hud() -> void:
 # -------------------------------------------------------------
 # Interactable glue
 # -------------------------------------------------------------
-func _on_depot_interactable(target: InteractableTarget) -> void:
-	_hud.show_prompt(target.prompt_text())
-
-
 func _on_terminal_interactable(term: DatashardTerminal) -> void:
 	if WorldDirector.get_living_oligarchs().is_empty():
 		_hud.show_prompt("[E] %s — no targets yet" % term.terminal_name)
@@ -268,10 +274,6 @@ func _on_terminal_interactable(term: DatashardTerminal) -> void:
 
 func _on_target_left(_target) -> void:
 	_hud.hide_prompt()
-
-
-func _on_depot_sabotaged(target: InteractableTarget) -> void:
-	print("Main: depot '%s' sabotaged — economy ripples applied." % target.depot_name)
 
 
 func _on_terminal_activated(_terminal_node: DatashardTerminal) -> void:
@@ -344,17 +346,18 @@ func travel_to_region(region_name: String) -> void:
 		push_warning("Region '%s' not found" % region_name)
 		return
 
-	# Teardown — queue_free cascades to children (patrols, crowd, transit).
+	# Teardown — queue_free cascades to children (patrols, crowd, transit,
+	# sabotage targets). Main-owned entities (player, camera, terminal)
+	# must be freed explicitly.
 	if is_instance_valid(_landscape): _landscape.queue_free()
-	if is_instance_valid(_depot):     _depot.queue_free()
 	if is_instance_valid(_terminal):  _terminal.queue_free()
 	if is_instance_valid(_player):    _player.queue_free()
 	if is_instance_valid(_camera):    _camera.queue_free()
 	_landscape = null
-	_depot = null
 	_terminal = null
 	_player = null
 	_camera = null
+	_sabotage_targets.clear()
 
 	WorldDirector.current_region = region_name
 
