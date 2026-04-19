@@ -820,10 +820,28 @@ func _cameo_arc_row(arc: Dictionary) -> String:
 	var badge: String = "CAMEO T%d" % tier
 	var cycles_left: int = int(arc.get("cycles_left", 0))
 	var ttl_color: Color = COL_HOT if cycles_left <= 1 else COL_DIM
-	var obj: Dictionary = def.get("objective", {})
+
+	# Multi-step arcs (Tier 4) show the CURRENT step's objective; legacy
+	# single-step arcs fall back to def.objective.
+	var objective_label: String = ""
+	var waiting_note: String = ""
+	var steps: Array = def.get("arc_steps", [])
+	if steps.is_empty():
+		var obj: Dictionary = def.get("objective", {})
+		objective_label = str(obj.get("label", ""))
+	else:
+		var idx: int = int(arc.get("current_step_index", 0))
+		if idx < steps.size():
+			var step: Dictionary = steps[idx]
+			match str(step.get("kind", "")):
+				"action_objective":
+					objective_label = str(step.get("objective", {}).get("label", ""))
+				"accept_prompt":
+					waiting_note = "awaiting decision: accept or decline"
+				"binary_decision":
+					waiting_note = "awaiting decision: the choice"
 
 	var row: String = ""
-	# Magenta-ish badge — distinct from CONTRACT (red) and FIXER (cyan)
 	var badge_color: Color = Color(0.85, 0.35, 1.00)
 	row += "[color=#%s]▸ %s[/color]  [color=#%s]%d cycles left[/color]\n" % [
 		_hex(badge_color),
@@ -833,7 +851,10 @@ func _cameo_arc_row(arc: Dictionary) -> String:
 	]
 	row += "[b][color=#%s]%s[/color][/b]\n" % [_hex(COL_FG), str(def.get("name", ""))]
 	row += "[color=#%s]%s[/color]\n" % [_hex(COL_DIM), str(def.get("intro_headline", ""))]
-	row += "  → [color=#%s]%s[/color]" % [_hex(COL_WARN), str(obj.get("label", ""))]
+	if waiting_note != "":
+		row += "  [color=#%s]⧗ %s[/color]" % [_hex(COL_WARN), waiting_note]
+	elif objective_label != "":
+		row += "  → [color=#%s]%s[/color]" % [_hex(COL_WARN), objective_label]
 	return row
 
 

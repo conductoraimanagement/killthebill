@@ -5,14 +5,22 @@
 ## What's implemented today
 
 - `CulturalCameos` autoload evaluates triggers once per news cycle (3× per day).
-- **Tier-1 (Whisper) pool — 6 cameos, NetFeed-only flavor**: `soap_broadcast`, `mask_in_the_crowd`, `compliance_error_7`, `unsigned_manifesto`, `yellow_hymn`, `kindly_coffee`.
-- **Tier-2 (Brush) pool — 2 arcs with concrete objectives**: `bread_thief_arc` (sabotage Security to let the Bread Thief escape — 3 cycles, 800 cr + tension −8), `admin_last_login` (leak on Tech oligarch — 4 cycles, 700 cr).
-- **Tier-3 (Entanglement) pool — 2 multi-cycle arcs with while-active modifiers**: `hermit_substrate_fields` (disrupt Food for the manifesto — 6 cycles, `+1 public_tension per day while running`, 1500 cr + tension +10 on success), `yellow_priest_arc` (leak on Media to shield the cult — 5 cycles, `+2 tension/day`, 1800 cr).
-- Each cameo gates on world state (`public_tension`, `senate_alignment`) + player profile (`player_chaos_preference`, `player_idealism`, `player_heat`, `player_ruthlessness`) + `min_cycle`.
+- **18 cameos live across all four tiers**, covering 8 of the 10 archetype families:
+
+| Tier | Count | Cameos |
+|---|---|---|
+| **1 (Whisper)** | 9 | `soap_broadcast`, `mask_in_the_crowd`, `compliance_error_7`, `unsigned_manifesto`, `yellow_hymn`, `kindly_coffee`, `last_login_whisper`, `ballad_brick_kid`, `deja_vu_headline` |
+| **2 (Brush)** | 4 | `bread_thief_arc`, `admin_last_login`, `match_man_arc`, `candy_heir_arc` |
+| **3 (Entanglement)** | 4 | `hermit_substrate_fields`, `yellow_priest_arc`, `fifth_november_arc`, `confectioner_arc` (+ `pattern_match_arc` for `rogue_ai`) |
+| **4 (Takeover)** | 2 | `soap_man`, `the_revenant` |
+
+- Each cameo gates on world state (`public_tension`, `senate_alignment`, `security_presence`) + player profile (`player_chaos_preference`, `player_idealism`, `player_heat`, `player_ruthlessness`, `player_stealth_preference`) + `min_cycle`.
 - **Arc lifecycle**: intro NetFeed on trigger → active_arcs tracks TTL + while-active modifiers on each day tick → a matching player action (`sabotage_sector`, `leak_oligarch`, `leak_sector`) completes for the reward → timeout fires a silent-fallout headline.
+- **Tier-4 multi-step arcs** (soap_man, the_revenant) use `arc_steps: [...]` with `accept_prompt` → `action_objective` → `binary_decision` steps, surfacing two dedicated HUD modals.
 - **At most one Tier-3+ arc concurrent** (MAX_HIGH_TIER_ACTIVE = 1). The world can sustain one hijacking, not three.
 - Each cameo fires at most once per run (`fired_ids` tracks; `reset()` clears on new run).
-- **HUD**: active arcs render in the JOB BOARD panel (press J) with a `CAMEO T2` / `CAMEO T3` magenta badge.
+- **HUD**: active arcs render in the JOB BOARD panel (press J) with a `CAMEO T2` / `CAMEO T3` / `CAMEO T4` magenta badge.
+- **Unified effect applier** (`_apply_effects`) supports: `credits`, `heat_delta`, `tension_delta`, `senate_alignment_delta`, `security_delta`, `chaos_bump`, `ruthless_bump`, `idealism_bump`, `stealth_bump`. Used by both the legacy single-step reward path and multi-step decision-option effects.
 
 **Tier-4 (Takeover) — 1 arc live**: `soap_man`. Multi-step arc using the new `arc_steps` array:
 

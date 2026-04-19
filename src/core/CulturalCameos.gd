@@ -202,6 +202,219 @@ const CAMEOS := [
 	# Multi-step arc: accept_prompt → action_objective → binary_decision.
 	# At most one Tier-3+ arc concurrent.
 	# ------------------------------------------------------------
+	# More Tier-1 Whispers
+	{
+		"id": "last_login_whisper",
+		"tier": 1,
+		"archetype": "whistleblower",
+		"name": "Last Login: 03:12",
+		"min_cycle": 3,
+		"probability": 0.12,
+		"gate": {"senate_alignment": {"max": 55.0}},
+		"headline": "An anonymous account surfaced 11 minutes of corporate email on /gutter/ before the takedown. Six threads went viral. 'LAST_LOGIN' account terminated 03:12.",
+	},
+	{
+		"id": "ballad_brick_kid",
+		"tier": 1,
+		"archetype": "folk_hero_from_the_sinks",
+		"name": "Ballad of the Brick Kid",
+		"min_cycle": 4,
+		"probability": 0.11,
+		"gate": {"public_tension": {"min": 40.0}},
+		"headline": "A song is circulating in the Sinks about a kid who threw bricks at Enforcer drones for three weeks before getting caught. The refrain is catchy. The kid is fine.",
+	},
+	{
+		"id": "deja_vu_headline",
+		"tier": 1,
+		"archetype": "loop_in_time",
+		"name": "Déjà-Vu Headline",
+		"min_cycle": 5,
+		"probability": 0.10,
+		"gate": {},
+		"headline": "NetFeed archival run flags today's top headline as identical — to the word — to the top headline two years ago. Editorial 'no comment'.",
+	},
+
+	# Additional Tier-2 Brush arcs
+	{
+		"id": "match_man_arc",
+		"tier": 2,
+		"archetype": "kindly_stranger",
+		"name": "The Man with the Match",
+		"min_cycle": 5,
+		"probability": 0.13,
+		"gate": {
+			"player_ruthlessness": {"max": 0.35},
+			"public_tension": {"min": 40.0},
+		},
+		"intro_headline": "A man with a matchbook was spotted lighting cigarettes for strangers in the Agricultural terraces. He doesn't speak. Witnesses say his eyes are kind in a way that shouldn't be allowed.",
+		"objective": {
+			"kind": "leak_sector",
+			"target_ref": "Pharma",
+			"label": "leak Pharma oligarch dirt so his medicine caches in the terraces aren't raided"
+		},
+		"arc_duration_cycles": 3,
+		"completion_headline": "The Man with the Match distributed insulin to 47 families in Substrate Fields tonight. The Pharma oligarch's PR is having a week.",
+		"timeout_headline": "The Man with the Match disappeared. The matches burned out. Someone left a full box of them on a terrace where he used to stand.",
+		"reward": {"credits": 600, "tension_delta": -6, "idealism_bump": 0.12},
+	},
+	{
+		"id": "candy_heir_arc",
+		"tier": 2,
+		"archetype": "corporate_priest",
+		"name": "The Candy Heir",
+		"min_cycle": 6,
+		"probability": 0.12,
+		"gate": {
+			"senate_alignment": {"min": 55.0},
+			"player_ruthlessness": {"min": 0.30},
+		},
+		"intro_headline": "The heir of a food oligarch is giving away 'confectionery tokens' at Enclave soirees — exchangeable, they say, for 'loyalty.' Nobody's sure what that means yet.",
+		"objective": {
+			"kind": "sabotage_sector",
+			"target_ref": "Food",
+			"label": "sabotage a Food facility to expose what the tokens actually trade for"
+		},
+		"arc_duration_cycles": 4,
+		"completion_headline": "The tokens' trading rate crashed when the Food sector took the hit. The heir issued a 'limited-time exchange' and disappeared into a private jet.",
+		"timeout_headline": "The Candy Heir consolidated. 8000 tokens in circulation. The Enclave didn't blink.",
+		"reward": {"credits": 900, "tension_delta": 5, "senate_alignment_delta": -5, "ruthless_bump": 0.05},
+	},
+
+	# Additional Tier-3 Entanglement arcs
+	{
+		"id": "fifth_november_arc",
+		"tier": 3,
+		"archetype": "masked_symbol",
+		"name": "Fifth November",
+		"min_cycle": 7,
+		"probability": 0.10,
+		"gate": {
+			"public_tension": {"min": 55.0},
+			"senate_alignment": {"max": 45.0},
+		},
+		"intro_headline": "Identical blank masks are being printed on underground 3D rigs at a rate of 2000 per day. A date is scrawled on every box: 'Fifth November.' Nobody knows what year.",
+		"objective": {
+			"kind": "sabotage_sector",
+			"target_ref": "Security",
+			"label": "hit Security infrastructure to keep the masked march uninterrupted"
+		},
+		"arc_duration_cycles": 5,
+		"while_active_modifiers": {"public_tension": 2},
+		"completion_headline": "On Fifth November the masks filled the square. Enforcers held position but did not move. By morning the masks were everywhere. The feed called them a 'demonstration'. They were a warning.",
+		"timeout_headline": "The Fifth November march was 'postponed indefinitely' after a coordinated checkpoint sweep. The masks vanished from the markets. Someone kept their box.",
+		"reward": {"credits": 2000, "tension_delta": 20, "senate_alignment_delta": -15, "idealism_bump": 0.15},
+	},
+	{
+		"id": "confectioner_arc",
+		"tier": 3,
+		"archetype": "corporate_priest",
+		"name": "The Confectioner",
+		"min_cycle": 8,
+		"probability": 0.08,
+		"gate": {
+			"senate_alignment": {"min": 60.0},
+			"player_chaos_preference": {"min": 0.35},
+		},
+		"intro_headline": "A Confectioner with a nameless charitable foundation is setting up 'wellness dispensaries' in the Sinks. The pamphlets are sweet. The contracts are long.",
+		"objective": {
+			"kind": "leak_sector",
+			"target_ref": "Pharma",
+			"label": "leak dirt on the Pharma oligarch to expose what's really in the dispensaries"
+		},
+		"arc_duration_cycles": 6,
+		"while_active_modifiers": {"senate_alignment": 1},
+		"completion_headline": "The Confectioner's dispensaries were shut down overnight after a leak revealed adulterants. Lawsuits are being organized. He's in transit to another region.",
+		"timeout_headline": "The Confectioner expanded. Six more dispensaries opened. Pharma stock rose 14%. Worker mortality in the Sinks quietly rose.",
+		"reward": {"credits": 1700, "tension_delta": 12, "senate_alignment_delta": -10, "idealism_bump": 0.08},
+	},
+	{
+		"id": "pattern_match_arc",
+		"tier": 3,
+		"archetype": "rogue_ai",
+		"name": "Pattern Match Exceeded",
+		"min_cycle": 8,
+		"probability": 0.08,
+		"gate": {
+			"player_heat": {"min": 55.0},
+			"security_presence": {"min": 60.0},
+		},
+		"intro_headline": "Compliance AI logs are leaking across the feed — a single service account keeps issuing warnings about 'pattern match exceeded on the following subject' but the subject field is redacted. The AI seems to be warning someone about itself.",
+		"objective": {
+			"kind": "sabotage_sector",
+			"target_ref": "Tech",
+			"label": "disrupt Tech infrastructure to scramble the AI's pattern index before it converges"
+		},
+		"arc_duration_cycles": 5,
+		"while_active_modifiers": {"security_presence": 1},
+		"completion_headline": "The compliance AI's pattern index was corrupted after the Tech hit. Warnings stopped. For 72 hours the Sinks moved unobserved.",
+		"timeout_headline": "The compliance AI converged. 'Pattern match confirmed.' Six specific citizens were pulled in overnight. None of them you.",
+		"reward": {"credits": 2200, "security_delta": -15, "stealth_bump": 0.15, "heat_delta": -10},
+	},
+
+	# Second Tier-4 Takeover — loop_in_time archetype
+	{
+		"id": "the_revenant",
+		"tier": 4,
+		"archetype": "loop_in_time",
+		"name": "The Revenant",
+		"min_cycle": 9,
+		"probability": 0.09,
+		"gate": {
+			"public_tension": {"min": 50.0},
+			"player_heat": {"min": 40.0},
+		},
+		"intro_headline": "A woman in gray approaches you outside a transit zone — calls you by a name you've never used, describes a death you haven't had. She says you owe her for the last cycle. A cycle that shouldn't exist.",
+		"arc_steps": [
+			{
+				"kind": "accept_prompt",
+				"prompt_title": "// THE REVENANT",
+				"prompt_body": "A woman in gray holds out a keycard. 'You left this with me last time. You died three days later. I've been waiting four years to give it back.' You don't remember her. She doesn't care.",
+				"accept_label": "TAKE THE KEYCARD",
+				"decline_label": "SHE'S DELUSIONAL — LEAVE",
+				"on_accept_headline": "You took the keycard. It opens something. You don't know what yet.",
+				"on_decline_headline": "The woman slipped the keycard into her pocket and walked off. For the next week, you occasionally notice her across a crowd. She's never looking at you.",
+			},
+			{
+				"kind": "action_objective",
+				"objective": {
+					"kind": "leak_sector",
+					"target_ref": "Security",
+					"label": "leak on the Security oligarch — 'the one she said killed us last time'"
+				},
+				"on_completion_headline": "The keycard worked. The leak went clean. 'I told you,' she said, when you returned. 'She killed us last time too.'",
+			},
+			{
+				"kind": "binary_decision",
+				"prompt_title": "// THE LOOP",
+				"prompt_body": "The Revenant hands you a second keycard. 'The next rung is forever. Take it — and you won't come back from this run either. Refuse it — and you forget we ever met.'",
+				"options": [
+					{
+						"label": "TAKE IT — become the loop",
+						"flavor": "You accept the logic. The cycle advances. You do not forget.",
+						"effects": {
+							"credits": 3000,
+							"tension_delta": 20,
+							"stealth_bump": 0.15,
+							"headline": "The Revenant vanished into the crowd at dawn. You don't remember her name. You remember why she mattered."
+						},
+					},
+					{
+						"label": "REFUSE — forget",
+						"flavor": "You hand the keycard back. She nods, like she expected this. The world briefly ripples.",
+						"effects": {
+							"credits": 800,
+							"heat_delta": -15,
+							"headline": "The Revenant is gone. You can't place where you've seen her before. The keycard you had is empty plastic now."
+						},
+					},
+				],
+			},
+		],
+		"while_active_modifiers": {},
+		"arc_duration_cycles": 7,
+		"timeout_headline": "The Revenant stopped appearing. You half-remember a conversation about keycards. It doesn't resolve.",
+	},
+
 	{
 		"id": "soap_man",
 		"tier": 4,
@@ -525,18 +738,37 @@ func resolve_decision(cameo_id: String, option_index: int) -> void:
 
 
 func _apply_decision_effects(effects: Dictionary) -> void:
+	_apply_effects(effects, "cameo decision")
+
+
+# Unified effect applier — used by both the legacy single-step reward
+# and the multi-step binary_decision options. Supported keys:
+#   credits                — PlayerManager.add_credits
+#   heat_delta             — PlayerManager.add_heat (positive or negative)
+#   chaos_bump             — PlayerManager.bump_playstyle (chaos)
+#   ruthless_bump          — PlayerManager.bump_playstyle (ruthlessness)
+#   idealism_bump          — PlayerManager.bump_playstyle (idealism)
+#   stealth_bump           — PlayerManager.bump_playstyle (stealth)
+#   tension_delta          — WorldDirector.global_economy.public_tension
+#   senate_alignment_delta — WorldDirector.global_economy.senate_alignment
+#   security_delta         — WorldDirector.global_economy.security_presence
+func _apply_effects(effects: Dictionary, reason: String) -> void:
 	var pm := get_node_or_null("/root/PlayerManager")
 	var wd := get_node_or_null("/root/WorldDirector")
 
 	if pm:
 		if effects.has("credits"):
-			pm.add_credits(int(effects.credits), "cameo decision")
+			pm.add_credits(int(effects.credits), reason)
 		if effects.has("heat_delta"):
-			pm.add_heat(int(effects.heat_delta), "cameo decision")
+			pm.add_heat(int(effects.heat_delta), reason)
 		if effects.has("chaos_bump"):
 			pm.bump_playstyle(float(effects.chaos_bump), 0.0, 0.0, 0.0)
 		if effects.has("ruthless_bump"):
 			pm.bump_playstyle(0.0, float(effects.ruthless_bump), 0.0, 0.0)
+		if effects.has("idealism_bump"):
+			pm.bump_playstyle(0.0, 0.0, float(effects.idealism_bump), 0.0)
+		if effects.has("stealth_bump"):
+			pm.bump_playstyle(0.0, 0.0, 0.0, float(effects.stealth_bump))
 
 	if wd:
 		if effects.has("tension_delta"):
@@ -546,6 +778,10 @@ func _apply_decision_effects(effects: Dictionary) -> void:
 		if effects.has("senate_alignment_delta"):
 			wd.global_economy["senate_alignment"] = clamp(
 				int(wd.global_economy.get("senate_alignment", 50)) + int(effects.senate_alignment_delta),
+				0, 100)
+		if effects.has("security_delta"):
+			wd.global_economy["security_presence"] = clamp(
+				int(wd.global_economy.get("security_presence", 50)) + int(effects.security_delta),
 				0, 100)
 
 
@@ -568,24 +804,7 @@ func _complete_arc(arc: Dictionary) -> void:
 	arc["completed"] = true
 	var def: Dictionary = arc.definition
 	var reward: Dictionary = def.get("reward", {})
-
-	var pm := get_node_or_null("/root/PlayerManager")
-	var wd := get_node_or_null("/root/WorldDirector")
-
-	if pm and reward.has("credits"):
-		pm.add_credits(int(reward.credits), "cameo: %s" % str(def.get("name", "")))
-	if pm and reward.has("idealism_bump"):
-		pm.bump_playstyle(0.0, 0.0, float(reward.idealism_bump), 0.0)
-	if wd:
-		if reward.has("tension_delta"):
-			wd.global_economy["public_tension"] = clamp(
-				int(wd.global_economy.get("public_tension", 0)) + int(reward.tension_delta),
-				0, 100)
-		if reward.has("senate_alignment_delta"):
-			wd.global_economy["senate_alignment"] = clamp(
-				int(wd.global_economy.get("senate_alignment", 50)) + int(reward.senate_alignment_delta),
-				0, 100)
-
+	_apply_effects(reward, "cameo: %s" % str(def.get("name", "")))
 	_netfeed(str(def.get("completion_headline", "")))
 	cameo_arc_completed.emit(arc)
 
