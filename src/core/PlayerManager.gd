@@ -12,6 +12,7 @@ extends Node
 
 signal credits_changed(new_total: int, delta: int, reason: String)
 signal heat_changed(new_total: int, delta: int, reason: String)
+signal defeat_triggered(kind: String, title: String, flavor: String)
 
 enum ClassSeed { WHITE_COLLAR, BLUE_COLLAR }
 
@@ -32,6 +33,8 @@ var player_idealism: float = 0.0
 var player_stealth_preference: float = 0.0
 var player_chaos_preference: float = 0.0
 
+var _defeat_locked: bool = false
+
 
 func _ready():
 	print("PlayerManager initialized.")
@@ -44,6 +47,7 @@ func initialize_run(seed: ClassSeed = ClassSeed.BLUE_COLLAR) -> void:
 	player_idealism = 0.0
 	player_stealth_preference = 0.0
 	player_chaos_preference = 0.0
+	_defeat_locked = false
 
 	match current_class:
 		ClassSeed.WHITE_COLLAR:
@@ -117,6 +121,36 @@ func add_heat(amount: int, reason: String = "") -> void:
 	if delta != 0:
 		print("%+d heat (%s). Total: %d." % [delta, reason, heat])
 		heat_changed.emit(heat, delta, reason)
+
+	# NetFeed ambient warnings on threshold crossings (up direction only).
+	if heat >= 30 and before < 30:
+		_publish_heat_note("Enforcer patrols thicken near the Sinks. Someone's on the list.")
+	if heat >= 60 and before < 60:
+		_publish_heat_note("Compliance AI flags a person of interest. Biometric cameras on alert.")
+	if heat >= 80 and before < 80:
+		_publish_heat_note("Arrest warrants issued. Checkpoints running live facial scans.")
+
+	# Defeat at heat cap.
+	if heat >= HEAT_MAX and not _defeat_locked:
+		_defeat_locked = true
+		defeat_triggered.emit(
+			"ARRESTED",
+			"ARRESTED",
+			"Heat maxed. Compliance AI picked up your scent; Enforcers kicked the safehouse door at dawn. Run ends here."
+		)
+
+
+func _publish_heat_note(text: String) -> void:
+	var wd := get_node_or_null("/root/WorldDirector")
+	if wd == null:
+		return
+	var event := {
+		"type": "NEWS_TICKER",
+		"headline": text,
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	wd.netfeed_history.append(event)
+	wd.netfeed_event_generated.emit(event)
 
 
 func cool_heat(amount: int = 1) -> void:

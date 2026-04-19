@@ -87,6 +87,17 @@ var _jobs_panel: Panel
 var _jobs_text: RichTextLabel
 var _jobs_visible: bool = false
 
+# Shop modal (terminal menu → SHOP)
+var _shop_root: Control
+var _shop_status: Label
+
+# Burner datashard reveal — when true, the senate panel shows the
+# active bill's honest_rationale + scandal_hooks. Cleared on bill resolve.
+var _hooks_revealed: bool = false
+
+# End-of-run modal banner label (shared by victory + defeat paths)
+var _endrun_banner: Label
+
 
 func _ready() -> void:
 	layer = 10
@@ -101,6 +112,7 @@ func _ready() -> void:
 	_build_load_modal()
 	_build_terminal_menu_modal()
 	_build_bribe_modal()
+	_build_shop_modal()
 	_build_jobs_panel()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
@@ -114,11 +126,12 @@ func _ready() -> void:
 		senate.bill_proposed.connect(_on_bill_proposed)
 		senate.bill_resolved.connect(_on_bill_resolved)
 
-	# PlayerManager hooks (credits + heat)
+	# PlayerManager hooks (credits + heat + defeat)
 	var pm = get_node_or_null("/root/PlayerManager")
 	if pm:
 		pm.credits_changed.connect(_on_credits_or_heat_changed)
 		pm.heat_changed.connect(_on_credits_or_heat_changed)
+		pm.defeat_triggered.connect(_on_defeat)
 
 	# Job board hooks
 	WorldDirector.job_posted.connect(_on_job_changed)
@@ -438,6 +451,11 @@ func _build_senate_panel() -> void:
 
 
 func _on_bill_proposed(bill: Dictionary) -> void:
+	# Preserve hooks_revealed state when this runs as an in-place refresh
+	# after a burner-datashard purchase (same bill). Reset it when a new
+	# bill truly proposes (different bill_id).
+	if not _active_bill.is_empty() and str(bill.get("bill_id", "")) != str(_active_bill.get("bill_id", "")):
+		_hooks_revealed = false
 	_active_bill = bill
 	_last_vote_record = []
 	var sponsor_id: String = str(bill.get("sponsor_id", ""))
@@ -445,6 +463,8 @@ func _on_bill_proposed(bill: Dictionary) -> void:
 	var title: String = str(bill.get("title", "Untitled Bill"))
 	var rationale: String = str(bill.get("stated_rationale", ""))
 	var summary: String = str(bill.get("summary", ""))
+	var honest: String = str(bill.get("honest_rationale", ""))
+	var hooks: Array = bill.get("scandal_hooks", [])
 
 	var lines := PackedStringArray()
 	lines.append("[color=#%s]IN DEBATE[/color]   [color=#%s]%s[/color]" % [
@@ -456,6 +476,14 @@ func _on_bill_proposed(bill: Dictionary) -> void:
 	lines.append("[color=#%s]%s[/color]" % [_hex(COL_DIM), summary])
 	if rationale != "":
 		lines.append("[i][color=#%s]Stated: %s[/color][/i]" % [_hex(COL_COOL), rationale])
+	if _hooks_revealed:
+		if honest != "":
+			lines.append("[color=#%s]Honest:[/color] [i][color=#%s]%s[/color][/i]" % [
+				_hex(COL_HOT), _hex(COL_WARN), honest,
+			])
+		if hooks.size() > 0:
+			for hook in hooks:
+				lines.append("[color=#%s]  ⚠ %s[/color]" % [_hex(COL_HOT), str(hook)])
 	_senate_text.text = "\n".join(lines)
 
 	if _pol_visible:
@@ -465,6 +493,7 @@ func _on_bill_proposed(bill: Dictionary) -> void:
 func _on_bill_resolved(bill: Dictionary, result: String, vote_record: Array) -> void:
 	_last_vote_record = vote_record
 	_active_bill = {}
+	_hooks_revealed = false
 
 	var margin: int = int(bill.get("margin", 0))
 	var yes := 0
@@ -890,6 +919,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 
+	# Shop modal: ESC closes
+	if _shop_root and _shop_root.visible:
+		if event.keycode == KEY_ESCAPE:
+			hide_shop_modal()
+			get_viewport().set_input_as_handled()
+		return
+
 	# Victory modal swallows everything except the save/load shortcuts,
 	# but those have their own buttons on the panel, so just absorb.
 	if _victory_root and _victory_root.visible:
@@ -957,17 +993,17 @@ func _build_victory_modal() -> void:
 	panel.offset_bottom = 220
 	_victory_root.add_child(panel)
 
-	# Top banner — VICTORY
-	var banner := _make_label("// VICTORY //", COL_ACCENT, 14, true)
-	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	banner.anchor_left = 0.0
-	banner.anchor_top = 0.0
-	banner.anchor_right = 1.0
-	banner.offset_left = PANEL_PAD
-	banner.offset_top = PANEL_PAD + 4
-	banner.offset_right = -PANEL_PAD
-	banner.offset_bottom = PANEL_PAD + 28
-	panel.add_child(banner)
+	# Top banner — VICTORY (or DEFEAT, styled in _on_defeat)
+	_endrun_banner = _make_label("// VICTORY //", COL_ACCENT, 14, true)
+	_endrun_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_endrun_banner.anchor_left = 0.0
+	_endrun_banner.anchor_top = 0.0
+	_endrun_banner.anchor_right = 1.0
+	_endrun_banner.offset_left = PANEL_PAD
+	_endrun_banner.offset_top = PANEL_PAD + 4
+	_endrun_banner.offset_right = -PANEL_PAD
+	_endrun_banner.offset_bottom = PANEL_PAD + 28
+	panel.add_child(_endrun_banner)
 
 	# Kind (small, e.g. "DIRECT_ACTION")
 	_victory_kind_label = _make_label("", COL_DIM, 11, true)
@@ -1052,6 +1088,20 @@ func _on_victory_load() -> void:
 
 
 func _on_victory(kind: String, title: String, flavor: String) -> void:
+	_endrun_banner.text = "// VICTORY //"
+	_endrun_banner.add_theme_color_override("font_color", COL_ACCENT)
+	_victory_title_label.add_theme_color_override("font_color", COL_FG)
+	_victory_kind_label.text = kind
+	_victory_title_label.text = title
+	_victory_flavor_label.text = flavor
+	_victory_root.visible = true
+	get_tree().paused = true
+
+
+func _on_defeat(kind: String, title: String, flavor: String) -> void:
+	_endrun_banner.text = "// DEFEAT //"
+	_endrun_banner.add_theme_color_override("font_color", COL_HOT)
+	_victory_title_label.add_theme_color_override("font_color", COL_HOT)
 	_victory_kind_label.text = kind
 	_victory_title_label.text = title
 	_victory_flavor_label.text = flavor
@@ -1098,29 +1148,29 @@ func _build_terminal_menu_modal() -> void:
 	panel.anchor_top = 0.5
 	panel.anchor_right = 0.5
 	panel.anchor_bottom = 0.5
-	panel.offset_left = -220
-	panel.offset_top = -170
-	panel.offset_right = 220
-	panel.offset_bottom = 170
+	panel.offset_left = -240
+	panel.offset_top = -260
+	panel.offset_right = 240
+	panel.offset_bottom = 260
 	_terminal_menu_root.add_child(panel)
 
 	var title := _make_label("// DATASHARD TERMINAL", COL_COOL, 15, true)
 	title.offset_left = PANEL_PAD + 4
 	title.offset_top = PANEL_PAD
-	title.offset_right = 440 - PANEL_PAD
+	title.offset_right = 480 - PANEL_PAD
 	title.offset_bottom = PANEL_PAD + 22
 	panel.add_child(title)
 
 	var sub := _make_label("Pick a move.", COL_DIM, 11, false)
 	sub.offset_left = PANEL_PAD + 4
 	sub.offset_top = PANEL_PAD + 28
-	sub.offset_right = 440 - PANEL_PAD
+	sub.offset_right = 480 - PANEL_PAD
 	sub.offset_bottom = PANEL_PAD + 46
 	panel.add_child(sub)
 
 	var y := PANEL_PAD + 58
-	var btn_h := 44
-	var gap := 10
+	var btn_h := 42
+	var gap := 8
 
 	var leak_btn := _make_menu_button(panel, "LEAK SCANDAL TO NETFEED",
 		"Public hit. Tension rises, senate nudges populist. No payout.",
@@ -1134,19 +1184,31 @@ func _build_terminal_menu_modal() -> void:
 	sell_btn.pressed.connect(_on_terminal_sell)
 	y += btn_h + gap
 
+	var hack_btn := _make_menu_button(panel, "HACK THE GRID",
+		"Big payout. Tech oligarch hunts you. +8 heat.",
+		COL_HOT, y, btn_h)
+	hack_btn.pressed.connect(_on_terminal_hack)
+	y += btn_h + gap
+
 	var lobby_btn := _make_menu_button(panel, "LOBBY A POLITICIAN",
 		"Bribe a senator to flip their vote on the active bill.",
 		COL_COOL, y, btn_h)
 	lobby_btn.pressed.connect(_on_terminal_lobby)
 	y += btn_h + gap
 
+	var shop_btn := _make_menu_button(panel, "SHOP",
+		"Forged IDs (−heat), Burner Datashard (reveals bill's hidden hooks).",
+		COL_COOL, y, btn_h)
+	shop_btn.pressed.connect(_on_terminal_shop)
+	y += btn_h + gap
+
 	var cancel := Button.new()
 	cancel.text = "CANCEL (Esc)"
 	cancel.anchor_right = 1.0
 	cancel.offset_left = PANEL_PAD + 4
-	cancel.offset_top = y + 8
+	cancel.offset_top = y + 6
 	cancel.offset_right = -PANEL_PAD - 4
-	cancel.offset_bottom = y + 8 + btn_h
+	cancel.offset_bottom = y + 6 + btn_h
 	cancel.add_theme_color_override("font_color", COL_DIM)
 	cancel.add_theme_color_override("font_hover_color", COL_FG)
 	cancel.pressed.connect(hide_terminal_menu)
@@ -1195,6 +1257,183 @@ func _on_terminal_lobby() -> void:
 	_terminal_menu_root.visible = false
 	get_tree().paused = false
 	show_bribe_modal()
+
+
+func _on_terminal_hack() -> void:
+	_terminal_menu_root.visible = false
+	get_tree().paused = false
+	# The hack action is route-able through trigger_event with no target.
+	WorldDirector.trigger_event("hack_grid", "")
+
+
+func _on_terminal_shop() -> void:
+	_terminal_menu_root.visible = false
+	get_tree().paused = false
+	show_shop_modal()
+
+
+# -------------------------------------------------------------
+# Shop modal — forged IDs + burner datashard
+# -------------------------------------------------------------
+const SHOP_FORGED_IDS_COST := 500
+const SHOP_FORGED_IDS_HEAT_REDUCTION := 25
+const SHOP_BURNER_COST := 1200
+
+func _build_shop_modal() -> void:
+	_shop_root = Control.new()
+	_shop_root.anchor_right = 1.0
+	_shop_root.anchor_bottom = 1.0
+	_shop_root.visible = false
+	_shop_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_shop_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_shop_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.6)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_shop_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -280
+	panel.offset_top = -200
+	panel.offset_right = 280
+	panel.offset_bottom = 200
+	_shop_root.add_child(panel)
+
+	var title := _make_label("// BLACK-MARKET SHOP", COL_COOL, 15, true)
+	title.offset_left = PANEL_PAD + 4
+	title.offset_top = PANEL_PAD
+	title.offset_right = 560 - PANEL_PAD
+	title.offset_bottom = PANEL_PAD + 22
+	panel.add_child(title)
+
+	var sub := _make_label("Two items on the rack tonight.", COL_DIM, 11, false)
+	sub.offset_left = PANEL_PAD + 4
+	sub.offset_top = PANEL_PAD + 28
+	sub.offset_right = 560 - PANEL_PAD
+	sub.offset_bottom = PANEL_PAD + 46
+	panel.add_child(sub)
+
+	# Forged IDs item
+	_make_shop_row(panel, 60,
+		"Forged IDs",
+		"Knocks heat down %d on purchase. Standing inventory." % SHOP_FORGED_IDS_HEAT_REDUCTION,
+		SHOP_FORGED_IDS_COST,
+		_on_buy_forged_ids)
+
+	# Burner Datashard
+	_make_shop_row(panel, 150,
+		"Burner Datashard",
+		"Decrypts the current bill's honest rationale and scandal hooks. Works only while a bill is in debate.",
+		SHOP_BURNER_COST,
+		_on_buy_burner)
+
+	_shop_status = _make_label("", COL_DIM, 11, true)
+	_shop_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_shop_status.anchor_right = 1.0
+	_shop_status.offset_left = PANEL_PAD + 4
+	_shop_status.offset_top = -72
+	_shop_status.offset_right = -PANEL_PAD - 4
+	_shop_status.offset_bottom = -46
+	_shop_status.anchor_top = 1.0
+	_shop_status.anchor_bottom = 1.0
+	panel.add_child(_shop_status)
+
+	var cancel := Button.new()
+	cancel.text = "CLOSE (Esc)"
+	cancel.anchor_left = 0.0
+	cancel.anchor_top = 1.0
+	cancel.anchor_right = 0.0
+	cancel.anchor_bottom = 1.0
+	cancel.offset_left = PANEL_PAD
+	cancel.offset_top = -44
+	cancel.offset_right = 140
+	cancel.offset_bottom = -PANEL_PAD
+	cancel.add_theme_color_override("font_color", COL_DIM)
+	cancel.add_theme_color_override("font_hover_color", COL_FG)
+	cancel.pressed.connect(hide_shop_modal)
+	panel.add_child(cancel)
+
+
+func _make_shop_row(panel: Panel, top: int, name: String, desc: String, cost: int, on_buy: Callable) -> void:
+	var nm := _make_label(name, COL_FG, 14, true)
+	nm.offset_left = PANEL_PAD + 8
+	nm.offset_top = PANEL_PAD + top
+	nm.offset_right = 360
+	nm.offset_bottom = PANEL_PAD + top + 20
+	panel.add_child(nm)
+
+	var ds := _make_label(desc, COL_DIM, 11, false)
+	ds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ds.offset_left = PANEL_PAD + 8
+	ds.offset_top = PANEL_PAD + top + 20
+	ds.offset_right = 360
+	ds.offset_bottom = PANEL_PAD + top + 70
+	panel.add_child(ds)
+
+	var buy := Button.new()
+	buy.text = "BUY — %d cr" % cost
+	buy.anchor_right = 1.0
+	buy.offset_left = -PANEL_PAD - 160
+	buy.offset_top = PANEL_PAD + top + 12
+	buy.offset_right = -PANEL_PAD - 4
+	buy.offset_bottom = PANEL_PAD + top + 52
+	buy.add_theme_color_override("font_color", COL_COOL)
+	buy.add_theme_color_override("font_hover_color", COL_FG)
+	buy.pressed.connect(on_buy)
+	panel.add_child(buy)
+
+
+func show_shop_modal() -> void:
+	_shop_status.text = ""
+	_shop_status.add_theme_color_override("font_color", COL_DIM)
+	_shop_root.visible = true
+	get_tree().paused = true
+
+
+func hide_shop_modal() -> void:
+	_shop_root.visible = false
+	get_tree().paused = false
+
+
+func _on_buy_forged_ids() -> void:
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm == null:
+		return
+	if not pm.can_afford(SHOP_FORGED_IDS_COST):
+		_shop_status.text = "Not enough credits."
+		_shop_status.add_theme_color_override("font_color", COL_HOT)
+		return
+	pm.spend_credits(SHOP_FORGED_IDS_COST, "forged IDs")
+	pm.add_heat(-SHOP_FORGED_IDS_HEAT_REDUCTION, "forged IDs")
+	_shop_status.text = "Paid %d cr. Heat down %d." % [SHOP_FORGED_IDS_COST, SHOP_FORGED_IDS_HEAT_REDUCTION]
+	_shop_status.add_theme_color_override("font_color", COL_COOL)
+
+
+func _on_buy_burner() -> void:
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm == null:
+		return
+	if _active_bill.is_empty():
+		_shop_status.text = "No bill in debate. Burner has nothing to decrypt."
+		_shop_status.add_theme_color_override("font_color", COL_HOT)
+		return
+	if not pm.can_afford(SHOP_BURNER_COST):
+		_shop_status.text = "Not enough credits."
+		_shop_status.add_theme_color_override("font_color", COL_HOT)
+		return
+	pm.spend_credits(SHOP_BURNER_COST, "burner datashard")
+	_hooks_revealed = true
+	# Re-render the senate panel so the new section shows up.
+	_on_bill_proposed(_active_bill)
+	_shop_status.text = "Burner hot. Senate panel now shows the honest rationale."
+	_shop_status.add_theme_color_override("font_color", COL_COOL)
 
 
 # -------------------------------------------------------------
@@ -1334,10 +1573,16 @@ func _build_bribe_row(p) -> Control:
 		bribe_note = "  [bribed: YES]"
 	elif p.pending_bribe_direction < 0:
 		bribe_note = "  [bribed: NO]"
-	meta.text = "predicted: %s%s   cost: %d" % [
+	var effective_cost: int = WorldDirector.effective_bribe_cost(p)
+	var base_cost: int = p.get_bribe_cost()
+	var cost_display: String = str(effective_cost)
+	if effective_cost != base_cost:
+		# Heat surcharge in play — flag it so the player sees why it's high.
+		cost_display = "%d (heat surcharge)" % effective_cost
+	meta.text = "predicted: %s%s   cost: %s" % [
 		predicted if predicted != "" else "—",
 		bribe_note,
-		p.get_bribe_cost(),
+		cost_display,
 	]
 	meta.add_theme_color_override("font_color", COL_DIM)
 	meta.add_theme_font_size_override("font_size", 11)
@@ -1360,9 +1605,9 @@ func _build_bribe_row(p) -> Control:
 	no_btn.pressed.connect(_on_bribe_pick.bind(p.politician_id, "NO"))
 	row.add_child(no_btn)
 
-	# Disable if player can't afford
+	# Disable if player can't afford (effective cost, post-heat multiplier)
 	var pm = get_node_or_null("/root/PlayerManager")
-	if pm and not pm.can_afford(p.get_bribe_cost()):
+	if pm and not pm.can_afford(effective_cost):
 		yes_btn.disabled = true
 		no_btn.disabled = true
 

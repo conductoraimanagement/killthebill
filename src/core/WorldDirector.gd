@@ -462,9 +462,12 @@ func _ripple_sabotage(target_sector: String):
 	netfeed_event_generated.emit(event)
 
 	# Loot & heat — see docs/04-player/progression.md (income mechanism #1).
+	# Heat threshold: above 60, your haste halves the loot you can carry.
 	if has_node("/root/PlayerManager"):
 		var pm = get_node("/root/PlayerManager")
 		var loot: int = _sabotage_loot_for(target_sector)
+		if pm.heat > 60:
+			loot = int(loot * 0.5)
 		var heat_amt: int = _sabotage_heat_for(target_sector)
 		pm.add_credits(loot, "sabotage loot: %s" % target_sector)
 		pm.add_heat(heat_amt, "sabotage: %s" % target_sector)
@@ -533,12 +536,39 @@ func _ripple_assassination(target_id: String):
 			break
 
 func _ripple_grid_hack():
+	# The player's biggest one-shot payout. Hitting the financial grid
+	# siphons credits from the Tech Oligarch's holdings; they notice, and
+	# hunt back. See docs/04-player/progression.md income mechanism #6.
+	var tech_oligarch: OligarchData = null
 	for o in oligarchs:
 		if o.sector_of_influence == "Tech" and o.alive:
-			o.wealth -= 10000
+			tech_oligarch = o
 			break
-	global_economy["security_presence"] = max(0, global_economy["security_presence"] - 20)
-	print("Ripple: Grid hacked. Security blinded temporarily.")
+
+	var payout: int = randi_range(1500, 3000)
+
+	if tech_oligarch:
+		tech_oligarch.wealth = max(0, tech_oligarch.wealth - 15000)
+		tech_oligarch.paranoia = clamp(tech_oligarch.paranoia + 30.0, 0.0, 100.0)
+		tech_oligarch.awareness_of_player = clamp(tech_oligarch.awareness_of_player + 25.0, 0.0, 100.0)
+
+	global_economy["security_presence"] = clamp(global_economy["security_presence"] - 20, 0, 100)
+
+	if has_node("/root/PlayerManager"):
+		var pm = get_node("/root/PlayerManager")
+		pm.add_credits(payout, "grid hack")
+		pm.add_heat(8, "grid hack")
+		pm.bump_playstyle(0.06, 0.04, 0.0, 0.15)  # chaos + stealth
+
+	var event := {
+		"type": "NEWS_TICKER",
+		"headline": "Financial grid breached overnight. Unusual asset movement reported in the Tech sector. Investigation 'ongoing'.",
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	netfeed_history.append(event)
+	netfeed_event_generated.emit(event)
+
+	print("Ripple: Grid hacked. Siphoned %d credits; security -20; Tech oligarch paranoia spiked." % payout)
 
 func _ripple_political_pressure(target_faction: String):
 	if target_faction == "Sinks":
@@ -625,10 +655,10 @@ func _ripple_bribe_politician(politician_id: String, direction: String) -> void:
 	if p == null or not p.alive:
 		return
 
-	var cost: int = p.get_bribe_cost()
 	if not has_node("/root/PlayerManager"):
 		return
 	var pm = get_node("/root/PlayerManager")
+	var cost: int = effective_bribe_cost(p)
 	if not pm.spend_credits(cost, "bribe: %s" % p.politician_name):
 		return
 
@@ -782,6 +812,17 @@ func _fire_victory(kind: String, title: String, flavor: String) -> void:
 	_victory_locked = true
 	print("VICTORY: [%s] %s — %s" % [kind, title, flavor])
 	victory_achieved.emit(kind, title, flavor)
+
+
+# Bribe cost with heat multiplier applied. Centralized so HUD and the
+# _ripple_bribe_politician ripple agree on the number.
+func effective_bribe_cost(p: PoliticianData) -> int:
+	var base: int = p.get_bribe_cost()
+	if has_node("/root/PlayerManager"):
+		var heat: int = int(get_node("/root/PlayerManager").heat)
+		if heat > 80:
+			return base * 2
+	return base
 
 
 # ---------------------------------------------------------

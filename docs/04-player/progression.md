@@ -109,10 +109,17 @@ Ambient crowd-NPCs and Enforcer patrols in the streets. Interact → stealth rol
 
 **Tradeoff**: reliable-ish chunks of income but heat compounds. Can't sustain on this alone.
 
-### 6. Hack ATM / financial node *(designed, not implemented)*
-`URBAN_ELITE` landscapes host `financial_server` landmarks. Hack to siphon credits; leaves a trail the Tech Oligarch notices.
+### 6. Hack the grid ✓ *(implemented)*
+Open the Datashard Terminal menu → `HACK THE GRID`. No target picker — the hack flows through the Tech Oligarch by default. Payload:
 
-**Tradeoff**: biggest one-shot payout (1000–3000) but dedicated counter-intel from the victim Oligarch. Paranoia ramps, investigators deploy.
+- `PlayerManager.credits +1500-3000` (biggest single payout in the game)
+- `+8 heat` (most visible act)
+- Tech Oligarch's `wealth -15000`, `paranoia +30`, `awareness_of_player +25` — they notice, and hunt
+- `security_presence -20` (grid was controlling it; hacking blinds it temporarily)
+- NetFeed: *"Financial grid breached overnight. Unusual asset movement reported in the Tech sector…"*
+- `player_chaos_preference +0.06`, `player_stealth_preference +0.15` (gates cameos)
+
+**Tradeoff**: the top income mechanism, but dedicated counter-intel from the victim. Tech Oligarch's bumped paranoia makes them more likely to fund militias; bumped awareness of you makes them deploy investigators. If you repeat the hack, the Tech Oligarch finds you faster each time.
 
 ---
 
@@ -131,12 +138,20 @@ A scandal-riddled, corrupt senator runs ~100 credits to flip. A clean, principle
 
 **Sabotage / leak-scandal** (existing) — no credit cost, but heat cost.
 
-### Designed, not implemented
+### Implemented — Shop at the Datashard Terminal
+
+Terminal menu → `SHOP` opens the black-market shop. Two items on the rack:
+
+| Item | Cost | Effect |
+|---|---|---|
+| **Forged IDs** | 500 | `PlayerManager.heat -25` instantly |
+| **Burner Datashard** | 1200 | Reveals the current bill's `honest_rationale` + `scandal_hooks` in the Senate panel (only works while a bill is in debate; reveal resets when the bill resolves) |
+
+### Designed, not yet implemented
 
 | Action | Cost range | What it unlocks |
 |---|---|---|
-| Buy intel from a fixer | 200–800 | Reveals `scandal_hooks` on pending bills, or a random oligarch's current ambition |
-| Forged IDs | 500 | Drops heat by 25 |
+| Buy intel from a fixer | 200–800 | Reveals a random oligarch's current ambition |
 | Safehouse bribe | 200/cycle | Passive heat decay while paid up |
 | Black-market weapon | 800–2500 | Unlocks the combat lever (future) |
 | Recruit cameo operative | 3000+ | When a cultural cameo arc resolves with recruitment |
@@ -157,16 +172,22 @@ A scandal-riddled, corrupt senator runs ~100 credits to flip. A clean, principle
 | Assassinate oligarch *(existing)* | Sets heat to max |
 | Cycle tick *(passive)* | −1 (heat slowly cools) |
 
-At high heat, the landscape gets hostile:
-- `heat > 30`: Enforcer patrols spawn ambient in slum/transit landscapes *(future)*
-- `heat > 60`: NPCs refuse to talk to you; fixer jobs dry up *(future)*
-- `heat > 80`: compliance AI actively hunts; every interactable has a trap roll *(future)*
-- `heat == 100`: martial hunt — single mistake ends the run *(future)*
+Threshold effects (currently implemented):
+
+| Threshold | Effect | Status |
+|---|---|---|
+| `heat ≥ 30` | NetFeed warning: *"Enforcer patrols thicken near the Sinks."* | ✓ |
+| `heat ≥ 60` | Sabotage loot halved; NetFeed warning: *"Compliance AI flags a person of interest."* | ✓ |
+| `heat ≥ 80` | Bribe costs **doubled** (heat surcharge flagged in bribe modal); NetFeed warning: *"Arrest warrants issued…"* | ✓ |
+| `heat == 100` | **Run ends.** `PlayerManager.defeat_triggered` fires; HUD shows the end-of-run modal with the `// DEFEAT //` banner and `ARRESTED` kind. | ✓ |
+| `heat > 30` | Enforcer patrols spawn ambient in landscape *(future)* | — |
+| `heat > 60` | NPCs refuse to talk; fixer jobs dry up *(future)* | — |
+| `heat > 80` | Compliance AI actively hunts the player *(future)* | — |
 
 Cooling mechanisms:
-- Idle time (passive decay)
-- Forged IDs (designed, not yet implemented)
-- Safehouse bribe (designed)
+- Passive decay (−1 per day cycle)
+- **Forged IDs** at the Shop: −25 heat, 500 cr ✓
+- Safehouse bribe *(designed)*
 - Travel to a low-security region *(requires multi-region travel, future)*
 
 ---
