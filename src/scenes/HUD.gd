@@ -110,6 +110,20 @@ var _crowd_menu_title: Label
 var _crowd_menu_subtitle: Label
 var _active_crowd = null
 
+# Cameo prompt + decision modals (Tier 4 arcs)
+var _cameo_prompt_root: Control
+var _cameo_prompt_title: Label
+var _cameo_prompt_body: Label
+var _cameo_prompt_accept_btn: Button
+var _cameo_prompt_decline_btn: Button
+
+var _cameo_decision_root: Control
+var _cameo_decision_title: Label
+var _cameo_decision_body: Label
+var _cameo_decision_options_box: VBoxContainer
+
+var _active_cameo_arc_id: String = ""
+
 # Dialogue modal — chat with an NPC via LLMManager
 var _dialogue_root: Control
 var _dialogue_log: RichTextLabel
@@ -149,6 +163,8 @@ func _ready() -> void:
 	_build_travel_modal()
 	_build_crowd_menu_modal()
 	_build_dialogue_modal()
+	_build_cameo_prompt_modal()
+	_build_cameo_decision_modal()
 	_build_jobs_panel()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
@@ -184,6 +200,8 @@ func _ready() -> void:
 		cameos.cameo_arc_started.connect(_on_job_changed)
 		cameos.cameo_arc_completed.connect(_on_job_changed)
 		cameos.cameo_arc_expired.connect(_on_job_changed)
+		cameos.cameo_arc_prompt.connect(_on_cameo_arc_prompt)
+		cameos.cameo_arc_decision.connect(_on_cameo_arc_decision)
 
 	# TimeSystem hooks — refresh state panel on time/phase/speed changes.
 	var ts = get_node_or_null("/root/TimeSystem")
@@ -1035,6 +1053,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _encounter_root and _encounter_root.visible:
 		return
 
+	# Cameo prompt / decision modals: forced choice, no ESC out.
+	if _cameo_prompt_root and _cameo_prompt_root.visible:
+		return
+	if _cameo_decision_root and _cameo_decision_root.visible:
+		return
+
 	# Oligarch-target modal: ESC closes it; otherwise fall through to nothing
 	if _modal_root and _modal_root.visible:
 		if event.keycode == KEY_ESCAPE:
@@ -1650,6 +1674,235 @@ func _on_crowd_menu_pickpocket() -> void:
 	hide_crowd_menu()
 	if crowd:
 		crowd_pickpocket_requested.emit(crowd)
+
+
+# -------------------------------------------------------------
+# Cameo prompt modal (Tier-4 accept_prompt step)
+# -------------------------------------------------------------
+func _build_cameo_prompt_modal() -> void:
+	_cameo_prompt_root = Control.new()
+	_cameo_prompt_root.anchor_right = 1.0
+	_cameo_prompt_root.anchor_bottom = 1.0
+	_cameo_prompt_root.visible = false
+	_cameo_prompt_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_cameo_prompt_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_cameo_prompt_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.02, 0.01, 0.06, 0.82)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_cameo_prompt_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -340
+	panel.offset_top = -200
+	panel.offset_right = 340
+	panel.offset_bottom = 200
+	_cameo_prompt_root.add_child(panel)
+
+	var banner := _make_label("// CAMEO — INVITATION", Color(0.85, 0.35, 1.00), 13, true)
+	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner.anchor_right = 1.0
+	banner.offset_left = PANEL_PAD
+	banner.offset_top = PANEL_PAD + 4
+	banner.offset_right = -PANEL_PAD
+	banner.offset_bottom = PANEL_PAD + 26
+	panel.add_child(banner)
+
+	_cameo_prompt_title = _make_label("", COL_FG, 22, true)
+	_cameo_prompt_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cameo_prompt_title.anchor_right = 1.0
+	_cameo_prompt_title.offset_left = PANEL_PAD
+	_cameo_prompt_title.offset_top = PANEL_PAD + 34
+	_cameo_prompt_title.offset_right = -PANEL_PAD
+	_cameo_prompt_title.offset_bottom = PANEL_PAD + 72
+	panel.add_child(_cameo_prompt_title)
+
+	_cameo_prompt_body = _make_label("", COL_DIM, 14, false)
+	_cameo_prompt_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cameo_prompt_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_cameo_prompt_body.anchor_right = 1.0
+	_cameo_prompt_body.offset_left = PANEL_PAD + 20
+	_cameo_prompt_body.offset_top = PANEL_PAD + 80
+	_cameo_prompt_body.offset_right = -PANEL_PAD - 20
+	_cameo_prompt_body.offset_bottom = PANEL_PAD + 220
+	panel.add_child(_cameo_prompt_body)
+
+	_cameo_prompt_accept_btn = Button.new()
+	_cameo_prompt_accept_btn.anchor_left = 0.5
+	_cameo_prompt_accept_btn.anchor_top = 1.0
+	_cameo_prompt_accept_btn.anchor_right = 0.5
+	_cameo_prompt_accept_btn.anchor_bottom = 1.0
+	_cameo_prompt_accept_btn.offset_left = 10
+	_cameo_prompt_accept_btn.offset_top = -44
+	_cameo_prompt_accept_btn.offset_right = 300
+	_cameo_prompt_accept_btn.offset_bottom = -14
+	_cameo_prompt_accept_btn.add_theme_color_override("font_color", COL_ACCENT)
+	_cameo_prompt_accept_btn.add_theme_color_override("font_hover_color", COL_FG)
+	_cameo_prompt_accept_btn.pressed.connect(_on_cameo_prompt_accept)
+	panel.add_child(_cameo_prompt_accept_btn)
+
+	_cameo_prompt_decline_btn = Button.new()
+	_cameo_prompt_decline_btn.anchor_left = 0.5
+	_cameo_prompt_decline_btn.anchor_top = 1.0
+	_cameo_prompt_decline_btn.anchor_right = 0.5
+	_cameo_prompt_decline_btn.anchor_bottom = 1.0
+	_cameo_prompt_decline_btn.offset_left = -300
+	_cameo_prompt_decline_btn.offset_top = -44
+	_cameo_prompt_decline_btn.offset_right = -10
+	_cameo_prompt_decline_btn.offset_bottom = -14
+	_cameo_prompt_decline_btn.add_theme_color_override("font_color", COL_DIM)
+	_cameo_prompt_decline_btn.add_theme_color_override("font_hover_color", COL_FG)
+	_cameo_prompt_decline_btn.pressed.connect(_on_cameo_prompt_decline)
+	panel.add_child(_cameo_prompt_decline_btn)
+
+
+func _on_cameo_arc_prompt(arc: Dictionary, step: Dictionary) -> void:
+	_active_cameo_arc_id = str(arc.get("cameo_id", ""))
+	_cameo_prompt_title.text = str(step.get("prompt_title", "// CAMEO"))
+	_cameo_prompt_body.text = str(step.get("prompt_body", ""))
+	_cameo_prompt_accept_btn.text = str(step.get("accept_label", "ACCEPT"))
+	_cameo_prompt_decline_btn.text = str(step.get("decline_label", "DECLINE"))
+	_cameo_prompt_root.visible = true
+	get_tree().paused = true
+
+
+func _on_cameo_prompt_accept() -> void:
+	var cameos = get_node_or_null("/root/CulturalCameos")
+	_cameo_prompt_root.visible = false
+	get_tree().paused = false
+	if cameos:
+		cameos.resolve_prompt(_active_cameo_arc_id, true)
+	_active_cameo_arc_id = ""
+
+
+func _on_cameo_prompt_decline() -> void:
+	var cameos = get_node_or_null("/root/CulturalCameos")
+	_cameo_prompt_root.visible = false
+	get_tree().paused = false
+	if cameos:
+		cameos.resolve_prompt(_active_cameo_arc_id, false)
+	_active_cameo_arc_id = ""
+
+
+# -------------------------------------------------------------
+# Cameo decision modal (Tier-4 binary_decision step)
+# -------------------------------------------------------------
+func _build_cameo_decision_modal() -> void:
+	_cameo_decision_root = Control.new()
+	_cameo_decision_root.anchor_right = 1.0
+	_cameo_decision_root.anchor_bottom = 1.0
+	_cameo_decision_root.visible = false
+	_cameo_decision_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_cameo_decision_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_cameo_decision_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.03, 0.01, 0.04, 0.88)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_cameo_decision_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -380
+	panel.offset_top = -280
+	panel.offset_right = 380
+	panel.offset_bottom = 280
+	_cameo_decision_root.add_child(panel)
+
+	var banner := _make_label("// CAMEO — THE CHOICE", Color(0.85, 0.35, 1.00), 13, true)
+	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner.anchor_right = 1.0
+	banner.offset_left = PANEL_PAD
+	banner.offset_top = PANEL_PAD + 4
+	banner.offset_right = -PANEL_PAD
+	banner.offset_bottom = PANEL_PAD + 26
+	panel.add_child(banner)
+
+	_cameo_decision_title = _make_label("", COL_FG, 22, true)
+	_cameo_decision_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cameo_decision_title.anchor_right = 1.0
+	_cameo_decision_title.offset_left = PANEL_PAD
+	_cameo_decision_title.offset_top = PANEL_PAD + 34
+	_cameo_decision_title.offset_right = -PANEL_PAD
+	_cameo_decision_title.offset_bottom = PANEL_PAD + 74
+	panel.add_child(_cameo_decision_title)
+
+	_cameo_decision_body = _make_label("", COL_DIM, 13, false)
+	_cameo_decision_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cameo_decision_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_cameo_decision_body.anchor_right = 1.0
+	_cameo_decision_body.offset_left = PANEL_PAD + 20
+	_cameo_decision_body.offset_top = PANEL_PAD + 82
+	_cameo_decision_body.offset_right = -PANEL_PAD - 20
+	_cameo_decision_body.offset_bottom = PANEL_PAD + 170
+	panel.add_child(_cameo_decision_body)
+
+	_cameo_decision_options_box = VBoxContainer.new()
+	_cameo_decision_options_box.anchor_right = 1.0
+	_cameo_decision_options_box.offset_left = PANEL_PAD + 20
+	_cameo_decision_options_box.offset_top = PANEL_PAD + 180
+	_cameo_decision_options_box.offset_right = -PANEL_PAD - 20
+	_cameo_decision_options_box.offset_bottom = -PANEL_PAD
+	_cameo_decision_options_box.add_theme_constant_override("separation", 10)
+	panel.add_child(_cameo_decision_options_box)
+
+
+func _on_cameo_arc_decision(arc: Dictionary, step: Dictionary) -> void:
+	_active_cameo_arc_id = str(arc.get("cameo_id", ""))
+	_cameo_decision_title.text = str(step.get("prompt_title", "// THE CHOICE"))
+	_cameo_decision_body.text = str(step.get("prompt_body", ""))
+
+	# Rebuild option buttons
+	for child in _cameo_decision_options_box.get_children():
+		child.queue_free()
+
+	var options: Array = step.get("options", [])
+	for i in range(options.size()):
+		var opt: Dictionary = options[i]
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 2)
+
+		var btn := Button.new()
+		btn.text = str(opt.get("label", "OPTION"))
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.add_theme_color_override("font_color", COL_WARN if i == 0 else COL_COOL)
+		btn.add_theme_color_override("font_hover_color", COL_FG)
+		btn.add_theme_font_size_override("font_size", 14)
+		btn.pressed.connect(_on_cameo_decision_pick.bind(i))
+		box.add_child(btn)
+
+		var flavor := Label.new()
+		flavor.text = "   " + str(opt.get("flavor", ""))
+		flavor.add_theme_color_override("font_color", COL_DIM)
+		flavor.add_theme_font_size_override("font_size", 11)
+		flavor.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(flavor)
+
+		_cameo_decision_options_box.add_child(box)
+
+	_cameo_decision_root.visible = true
+	get_tree().paused = true
+
+
+func _on_cameo_decision_pick(option_index: int) -> void:
+	var cameos = get_node_or_null("/root/CulturalCameos")
+	_cameo_decision_root.visible = false
+	get_tree().paused = false
+	if cameos:
+		cameos.resolve_decision(_active_cameo_arc_id, option_index)
+	_active_cameo_arc_id = ""
 
 
 # -------------------------------------------------------------

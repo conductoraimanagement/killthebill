@@ -14,7 +14,17 @@
 - Each cameo fires at most once per run (`fired_ids` tracks; `reset()` clears on new run).
 - **HUD**: active arcs render in the JOB BOARD panel (press J) with a `CAMEO T2` / `CAMEO T3` magenta badge.
 
-**Tier-4 (Takeover) arcs are still designed-only** — the Soap Man decision-point flow (accept/betray) is the next logical slice and requires dedicated arc-step UI.
+**Tier-4 (Takeover) — 1 arc live**: `soap_man`. Multi-step arc using the new `arc_steps` array:
+
+1. `accept_prompt` — HUD modal pauses the game; player picks TAKE THE SOAP or WALK AWAY. Decline kills the arc with a soft-fallout headline.
+2. `action_objective` — waits for the player to sabotage Media. NetFeed confirms on match.
+3. `binary_decision` — HUD modal with two options (ABSORB / BETRAY) each with flavor text + distinct effects:
+   - ABSORB: +2500 cr, tension +15, senate −10, chaos_preference +0.20, headline *"Paper Street's list is yours."*
+   - BETRAY: +500 cr, heat +20, tension −5, ruthlessness +0.15, headline *"Your name surfaces in scandal circulation."*
+
+While active: `public_tension +1/day` (the Project hums). Arc-duration 8 cycles. Gates on `public_tension ≥ 50` + `player_chaos_preference ≥ 0.45` + `min_cycle ≥ 6`.
+
+Added `cameo_arc_prompt` and `cameo_arc_decision` signals. HUD owns two new modals — cameo prompt modal (title, body, accept/decline buttons) and cameo decision modal (title, body, N option buttons each with flavor line). Both pause the tree; no ESC out — they're forced choices. CulturalCameos exposes `resolve_prompt(cameo_id, accepted)` and `resolve_decision(cameo_id, option_index)` for HUD to call back.
 
 ---
 
