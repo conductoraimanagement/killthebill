@@ -182,3 +182,68 @@ func clock_string() -> String:
 func day_brightness() -> float:
 	var phase_rad: float = (time_of_day - 0.25) * TAU
 	return (cos(phase_rad) + 1.0) * 0.5
+
+
+# =============================================================
+# NARRATIVE PACING
+# The 13-month arc has bands — the world ages around the player.
+# Other systems call into these helpers rather than hardcoding.
+# =============================================================
+
+func pacing_band() -> String:
+	if month <= 2:  return "Settling"
+	if month <= 5:  return "Pressure"
+	if month <= 9:  return "Escalation"
+	if month <= 12: return "Climactic"
+	return "Year's End"
+
+
+func cameo_probability_multiplier() -> float:
+	match pacing_band():
+		"Settling":    return 0.75
+		"Pressure":    return 1.00
+		"Escalation":  return 1.25
+		"Climactic":   return 1.40
+		"Year's End":  return 1.60
+	return 1.0
+
+
+func patrol_count_multiplier() -> float:
+	match pacing_band():
+		"Settling":    return 0.90
+		"Pressure":    return 1.00
+		"Escalation":  return 1.15
+		"Climactic":   return 1.30
+		"Year's End":  return 1.50
+	return 1.0
+
+
+# Positive drift applied to public_tension each world cycle as the year
+# hardens. The world tightens whether or not the player acts.
+func tension_drift_per_cycle() -> int:
+	match pacing_band():
+		"Settling":    return 0
+		"Pressure":    return 0
+		"Escalation":  return 1
+		"Climactic":   return 2
+		"Year's End":  return 3
+	return 0
+
+
+# Multiplier on passive heat decay. 1.0 = standard (−1/cycle).
+# Late-game, the world remembers harder.
+func heat_decay_multiplier() -> float:
+	match pacing_band():
+		"Climactic":   return 0.5   # decay halved
+		"Year's End":  return 0.25  # decay near-zero
+	return 1.0
+
+
+# Victory thresholds soften on the final month — the world bends
+# toward resolution. Used by WorldDirector._check_systemic_collapse.
+func year_end_softness() -> int:
+	# Positive = victory slack. Tension wins at (100 - softness), senate
+	# wins at (0 + softness), wealth wins at (100000 + softness * 5000).
+	if month == MONTHS_PER_YEAR:
+		return 10
+	return 0

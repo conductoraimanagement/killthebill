@@ -25,6 +25,7 @@ SenateDirector="*res://src/core/SenateDirector.gd"
 WorldConfigManager="*res://src/core/WorldConfigManager.gd"
 TimeSystem="*res://src/core/TimeSystem.gd"
 CulturalCameos="*res://src/core/CulturalCameos.gd"
+Chronicle="*res://src/core/Chronicle.gd"
 WorldDirector="*res://src/core/WorldDirector.gd"
 PlayerManager="*res://src/core/PlayerManager.gd"
 

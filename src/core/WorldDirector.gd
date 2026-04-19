@@ -110,6 +110,10 @@ func initialize_playthrough(preloaded_config: Dictionary = {}) -> void:
 	if has_node("/root/CulturalCameos"):
 		get_node("/root/CulturalCameos").reset()
 
+	# Fresh chronicle — clear prior-run recaps and snapshot starting state.
+	if has_node("/root/Chronicle"):
+		get_node("/root/Chronicle").reset()
+
 	# If the user loaded a saved world config, inject it directly and skip
 	# LLM generation entirely. Otherwise fall through to the async generator
 	# chain that hits LLMManager (with offline fallback).
@@ -368,9 +372,20 @@ func _assign_oligarch_territories(region_gen) -> void:
 func run_world_cycle() -> void:
 	cycle += 1
 
-	# Passive heat decay — idle playing cools you off slowly.
+	# Passive heat decay — multiplier drops in Climactic + Year's End bands.
 	if has_node("/root/PlayerManager"):
-		get_node("/root/PlayerManager").cool_heat(1)
+		var decay: int = 1
+		if has_node("/root/TimeSystem"):
+			decay = max(0, int(round(1.0 * get_node("/root/TimeSystem").heat_decay_multiplier())))
+		if decay > 0:
+			get_node("/root/PlayerManager").cool_heat(decay)
+
+	# Year-arc ambient tension drift — the world tightens around you.
+	if has_node("/root/TimeSystem"):
+		var drift: int = int(get_node("/root/TimeSystem").tension_drift_per_cycle())
+		if drift != 0:
+			global_economy["public_tension"] = clamp(
+				int(global_economy.get("public_tension", 0)) + drift, 0, 100)
 
 	_expire_jobs()
 
@@ -877,6 +892,19 @@ func _check_systemic_collapse():
 	if _victory_locked:
 		return
 
+	# Year's End softens thresholds by a chosen amount. Makes month 13
+	# the resolution month — the world bends toward an ending.
+	var softness: int = 0
+	if has_node("/root/TimeSystem"):
+		softness = int(get_node("/root/TimeSystem").year_end_softness())
+
+	# Chosen victory path — if the player picked one at run start, only
+	# that triggers a win. Others fire a muted NetFeed note (close but
+	# not the path you chose) and the run continues.
+	var chosen_path: String = "ANY"
+	if has_node("/root/PlayerManager"):
+		chosen_path = str(get_node("/root/PlayerManager").chosen_victory_path)
+
 	var all_dead: bool = oligarchs.size() > 0
 	for o in oligarchs:
 		if o.alive:
@@ -884,31 +912,53 @@ func _check_systemic_collapse():
 			break
 
 	if all_dead:
-		_fire_victory("DIRECT_ACTION",
+		_maybe_fire_victory("DIRECT_ACTION",
 			"DIRECT ACTION",
-			"All oligarchs eliminated. The Enclave falls. A new order writes itself.")
+			"All oligarchs eliminated. The Enclave falls. A new order writes itself.",
+			chosen_path)
 		return
 
-	if int(global_economy.get("public_tension", 0)) >= 100:
-		_fire_victory("POLITICAL_REVOLUTION",
+	if int(global_economy.get("public_tension", 0)) >= (100 - softness):
+		_maybe_fire_victory("POLITICAL_REVOLUTION",
 			"POLITICAL REVOLUTION",
-			"Tension hits 100. The masses storm The Enclave. The NetFeed goes silent.")
+			"Tension crosses the revolution threshold. The masses storm The Enclave. The NetFeed goes silent.",
+			chosen_path)
 		return
 
-	if int(global_economy.get("senate_alignment", 50)) <= 0:
-		_fire_victory("POLITICAL_REFORM",
+	if int(global_economy.get("senate_alignment", 50)) <= (0 + softness):
+		_maybe_fire_victory("POLITICAL_REFORM",
 			"POLITICAL REFORM",
-			"Senate alignment collapses. Corporate charters dissolved by vote.")
+			"Senate alignment collapses. Corporate charters dissolved by vote.",
+			chosen_path)
 		return
 
 	var total_wealth: int = 0
 	for o in oligarchs:
 		total_wealth += o.wealth
-	if total_wealth < 100000 and oligarchs.size() > 0:
-		_fire_victory("SYSTEMIC_COLLAPSE",
+	var wealth_threshold: int = 100000 + softness * 5000
+	if total_wealth < wealth_threshold and oligarchs.size() > 0:
+		_maybe_fire_victory("SYSTEMIC_COLLAPSE",
 			"SYSTEMIC COLLAPSE",
-			"Combined oligarch wealth collapses below survival. The Enclave is bankrupt.")
+			"Combined oligarch wealth collapses below survival. The Enclave is bankrupt.",
+			chosen_path)
 		return
+
+
+# Bounce through chosen-path gate. If the detected victory kind matches
+# the player's chosen path (or they picked "ANY"), fire it. Otherwise
+# note the near-miss in NetFeed and keep the run going.
+func _maybe_fire_victory(kind: String, title: String, flavor: String, chosen_path: String) -> void:
+	if chosen_path == "ANY" or chosen_path == kind:
+		_fire_victory(kind, title, flavor)
+		return
+	# Close but not the path you chose.
+	var event := {
+		"type": "NEWS_TICKER",
+		"headline": "A %s condition fired — but that wasn't the path you chose. The run continues." % kind.replace("_", " ").to_lower(),
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	netfeed_history.append(event)
+	netfeed_event_generated.emit(event)
 
 
 func _fire_victory(kind: String, title: String, flavor: String) -> void:

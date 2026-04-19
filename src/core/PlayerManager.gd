@@ -35,6 +35,11 @@ var player_chaos_preference: float = 0.0
 
 var _defeat_locked: bool = false
 
+# Chosen victory path — set at run start by the goal-choice modal.
+# "ANY" means any path wins. Otherwise only the matching kind fires
+# (see WorldDirector._maybe_fire_victory).
+var chosen_victory_path: String = "ANY"
+
 
 func _ready():
 	print("PlayerManager initialized.")

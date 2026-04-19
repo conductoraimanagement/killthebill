@@ -43,6 +43,8 @@ func _ready() -> void:
 
 	if preloaded.is_empty():
 		_hud.show_loading("> generating world…  regions, oligarchs, senate, citizens")
+		# Offer the 13-month goal choice while the world generates behind it.
+		_hud.show_goal_choice_modal()
 	else:
 		_hud.show_loading("> loading saved world: %s" % str(preloaded.get("name", "unknown")))
 

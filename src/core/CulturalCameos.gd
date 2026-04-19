@@ -785,13 +785,21 @@ func reset() -> void:
 # Called by WorldDirector.trigger_news_cycle — one evaluation per
 # phase boundary (3× per day), NOT per day.
 func evaluate_triggers() -> void:
+	# Probability scales with the month's pacing band (Settling .75×,
+	# Pressure 1×, Escalation 1.25×, Climactic 1.4×, Year's End 1.6×).
+	var pacing_mult: float = 1.0
+	var ts := get_node_or_null("/root/TimeSystem")
+	if ts:
+		pacing_mult = float(ts.cameo_probability_multiplier())
+
 	for cameo in CAMEOS:
 		var cameo_id: String = str(cameo.get("id", ""))
 		if cameo_id in fired_ids:
 			continue
 		if not _is_gate_satisfied(cameo):
 			continue
-		if randf() < float(cameo.get("probability", 0.0)):
+		var effective_prob: float = float(cameo.get("probability", 0.0)) * pacing_mult
+		if randf() < effective_prob:
 			_fire(cameo)
 
 

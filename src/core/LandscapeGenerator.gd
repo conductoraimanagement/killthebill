@@ -644,6 +644,10 @@ func _spawn_enforcer_patrols() -> void:
 	if ts and ts.is_night():
 		count = int(ceil(count * 1.8))       # night doubles patrol density (rounded)
 
+	# Year-arc scaling — Enclave security tightens as the months pass.
+	if ts:
+		count = int(ceil(float(count) * ts.patrol_count_multiplier()))
+
 	count = clamp(count, 0, 8)
 
 	for i in range(count):

@@ -111,6 +111,13 @@ var _crowd_menu_title: Label
 var _crowd_menu_subtitle: Label
 var _active_crowd = null
 
+# Goal-choice modal (shown at run start)
+var _goal_choice_root: Control
+
+# Chronicle viewer modal (from end-of-run modal)
+var _chronicle_root: Control
+var _chronicle_text: RichTextLabel
+
 # Cameo prompt + decision modals (Tier 4 arcs)
 var _cameo_prompt_root: Control
 var _cameo_prompt_title: Label
@@ -166,6 +173,8 @@ func _ready() -> void:
 	_build_dialogue_modal()
 	_build_cameo_prompt_modal()
 	_build_cameo_decision_modal()
+	_build_goal_choice_modal()
+	_build_chronicle_modal()
 	_build_jobs_panel()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
@@ -1128,6 +1137,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _cameo_decision_root and _cameo_decision_root.visible:
 		return
 
+	# Goal-choice modal: forced at run start, no ESC.
+	if _goal_choice_root and _goal_choice_root.visible:
+		return
+
+	# Chronicle modal: ESC closes.
+	if _chronicle_root and _chronicle_root.visible:
+		if event.keycode == KEY_ESCAPE:
+			hide_chronicle_modal()
+			get_viewport().set_input_as_handled()
+		return
+
 	# Oligarch-target modal: ESC closes it; otherwise fall through to nothing
 	if _modal_root and _modal_root.visible:
 		if event.keycode == KEY_ESCAPE:
@@ -1158,6 +1178,228 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_F9:
 			show_load_modal()
 			get_viewport().set_input_as_handled()
+
+
+# -------------------------------------------------------------
+# Goal-choice modal — pick one victory path at run start
+# -------------------------------------------------------------
+func _build_goal_choice_modal() -> void:
+	_goal_choice_root = Control.new()
+	_goal_choice_root.anchor_right = 1.0
+	_goal_choice_root.anchor_bottom = 1.0
+	_goal_choice_root.visible = false
+	_goal_choice_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_goal_choice_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_goal_choice_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.02, 0.02, 0.04, 0.96)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_goal_choice_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -380
+	panel.offset_top = -280
+	panel.offset_right = 380
+	panel.offset_bottom = 280
+	_goal_choice_root.add_child(panel)
+
+	var banner := _make_label("// 13 MONTHS", COL_ACCENT, 18, true)
+	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner.anchor_right = 1.0
+	banner.offset_left = PANEL_PAD
+	banner.offset_top = PANEL_PAD + 6
+	banner.offset_right = -PANEL_PAD
+	banner.offset_bottom = PANEL_PAD + 32
+	panel.add_child(banner)
+
+	var sub := _make_label("One goal. Pick it, or let the year decide.", COL_DIM, 12, false)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.anchor_right = 1.0
+	sub.offset_left = PANEL_PAD
+	sub.offset_top = PANEL_PAD + 38
+	sub.offset_right = -PANEL_PAD
+	sub.offset_bottom = PANEL_PAD + 56
+	panel.add_child(sub)
+
+	var options: Array = [
+		{"path": "DIRECT_ACTION",        "label": "DIRECT ACTION",        "flavor": "Kill the oligarchs. The rarest, loudest path.",                      "color": COL_HOT},
+		{"path": "POLITICAL_REVOLUTION", "label": "POLITICAL REVOLUTION", "flavor": "Push public_tension to 100. The masses storm.",                      "color": COL_ACCENT},
+		{"path": "POLITICAL_REFORM",     "label": "POLITICAL REFORM",     "flavor": "Drive senate_alignment to 0. Bribe, leak, organize.",                "color": COL_COOL},
+		{"path": "SYSTEMIC_COLLAPSE",    "label": "SYSTEMIC COLLAPSE",    "flavor": "Grind combined oligarch wealth below survival. The grind path.",    "color": COL_WARN},
+		{"path": "ANY",                  "label": "LET THE YEAR DECIDE",  "flavor": "Any condition wins. Less committed, less narrative.",                "color": COL_DIM},
+	]
+
+	var y: int = PANEL_PAD + 72
+	var btn_h: int = 64
+	var gap: int = 8
+
+	for opt in options:
+		var box := VBoxContainer.new()
+		box.anchor_right = 1.0
+		box.offset_left = PANEL_PAD
+		box.offset_top = y
+		box.offset_right = -PANEL_PAD
+		box.offset_bottom = y + btn_h
+		box.add_theme_constant_override("separation", 0)
+		panel.add_child(box)
+
+		var btn := Button.new()
+		btn.text = str(opt.label)
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.add_theme_color_override("font_color", opt.color)
+		btn.add_theme_color_override("font_hover_color", COL_FG)
+		btn.add_theme_font_size_override("font_size", 15)
+		btn.pressed.connect(_on_goal_picked.bind(str(opt.path)))
+		box.add_child(btn)
+
+		var flavor := Label.new()
+		flavor.text = "   " + str(opt.flavor)
+		flavor.add_theme_color_override("font_color", COL_DIM)
+		flavor.add_theme_font_size_override("font_size", 11)
+		flavor.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(flavor)
+
+		y += btn_h + gap
+
+
+func show_goal_choice_modal() -> void:
+	_goal_choice_root.visible = true
+	# Don't pause the tree — let the world finish generating in the
+	# background while the player decides. The modal will just absorb
+	# input.
+
+
+func hide_goal_choice_modal() -> void:
+	_goal_choice_root.visible = false
+
+
+func _on_goal_picked(path: String) -> void:
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm:
+		pm.chosen_victory_path = path
+	hide_goal_choice_modal()
+
+
+# -------------------------------------------------------------
+# Chronicle modal — 13-month narrative log, shown from end-of-run
+# -------------------------------------------------------------
+func _build_chronicle_modal() -> void:
+	_chronicle_root = Control.new()
+	_chronicle_root.anchor_right = 1.0
+	_chronicle_root.anchor_bottom = 1.0
+	_chronicle_root.visible = false
+	_chronicle_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_chronicle_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_chronicle_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.01, 0.01, 0.02, 0.96)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_chronicle_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -460
+	panel.offset_top = -360
+	panel.offset_right = 460
+	panel.offset_bottom = 360
+	_chronicle_root.add_child(panel)
+
+	var title := _make_label("// THE CHRONICLE", COL_ACCENT, 15, true)
+	title.offset_left = PANEL_PAD + 4
+	title.offset_top = PANEL_PAD
+	title.offset_right = 920 - PANEL_PAD
+	title.offset_bottom = PANEL_PAD + 22
+	panel.add_child(title)
+
+	var scroll := ScrollContainer.new()
+	scroll.anchor_right = 1.0
+	scroll.offset_left = PANEL_PAD
+	scroll.offset_top = PANEL_PAD + 30
+	scroll.offset_right = -PANEL_PAD
+	scroll.offset_bottom = -60
+	panel.add_child(scroll)
+
+	_chronicle_text = RichTextLabel.new()
+	_chronicle_text.bbcode_enabled = false
+	_chronicle_text.fit_content = true
+	_chronicle_text.scroll_active = false
+	_chronicle_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chronicle_text.anchor_right = 1.0
+	_chronicle_text.add_theme_color_override("default_color", COL_FG)
+	_chronicle_text.add_theme_font_size_override("normal_font_size", 12)
+	scroll.add_child(_chronicle_text)
+
+	var close := Button.new()
+	close.text = "CLOSE (Esc)"
+	close.anchor_left = 0.0
+	close.anchor_top = 1.0
+	close.anchor_right = 0.0
+	close.anchor_bottom = 1.0
+	close.offset_left = PANEL_PAD
+	close.offset_top = -44
+	close.offset_right = 160
+	close.offset_bottom = -PANEL_PAD
+	close.add_theme_color_override("font_color", COL_DIM)
+	close.add_theme_color_override("font_hover_color", COL_FG)
+	close.pressed.connect(hide_chronicle_modal)
+	panel.add_child(close)
+
+	var copy := Button.new()
+	copy.text = "COPY TO CLIPBOARD"
+	copy.anchor_left = 1.0
+	copy.anchor_top = 1.0
+	copy.anchor_right = 1.0
+	copy.anchor_bottom = 1.0
+	copy.offset_left = -240
+	copy.offset_top = -44
+	copy.offset_right = -PANEL_PAD
+	copy.offset_bottom = -PANEL_PAD
+	copy.add_theme_color_override("font_color", COL_COOL)
+	copy.add_theme_color_override("font_hover_color", COL_FG)
+	copy.pressed.connect(_on_chronicle_copy)
+	panel.add_child(copy)
+
+
+func show_chronicle_modal() -> void:
+	var chronicle = get_node_or_null("/root/Chronicle")
+	if chronicle:
+		_chronicle_text.text = chronicle.to_text()
+	else:
+		_chronicle_text.text = "Chronicle unavailable."
+	_chronicle_root.visible = true
+	get_tree().paused = true
+
+
+func hide_chronicle_modal() -> void:
+	_chronicle_root.visible = false
+	# If the end-of-run flow is active (kind label non-empty), bring
+	# the victory/defeat modal back up so the player can still pick
+	# RESTART / CONTINUE / etc.
+	var kind_label_text: String = str(_victory_kind_label.text) if _victory_kind_label else ""
+	if kind_label_text != "":
+		_victory_root.visible = true
+		get_tree().paused = true
+	else:
+		get_tree().paused = false
+
+
+func _on_chronicle_copy() -> void:
+	var chronicle = get_node_or_null("/root/Chronicle")
+	if chronicle:
+		DisplayServer.clipboard_set(chronicle.to_text())
 
 
 # -------------------------------------------------------------
@@ -1244,25 +1486,29 @@ func _build_victory_modal() -> void:
 	_victory_flavor_label.offset_bottom = PANEL_PAD + 250
 	panel.add_child(_victory_flavor_label)
 
-	# Buttons — 4 across, bottom-centered
-	var save_btn := _make_modal_button("SAVE WORLD", COL_COOL, -340, -180)
+	# Buttons — top row: save / load / chronicle; bottom row: restart / continue
+	var save_btn := _make_modal_button("SAVE WORLD", COL_COOL, -340, -180, -88)
 	save_btn.pressed.connect(_on_victory_save)
 	panel.add_child(save_btn)
 
-	var load_btn := _make_modal_button("LOAD WORLD…", COL_COOL, -170, -10)
+	var load_btn := _make_modal_button("LOAD WORLD…", COL_COOL, -170, -10, -88)
 	load_btn.pressed.connect(_on_victory_load)
 	panel.add_child(load_btn)
 
-	var restart := _make_modal_button("RESTART", COL_ACCENT, 10, 170)
+	var chronicle_btn := _make_modal_button("VIEW CHRONICLE", COL_WARN, 10, 340, -88)
+	chronicle_btn.pressed.connect(_on_victory_chronicle)
+	panel.add_child(chronicle_btn)
+
+	var restart := _make_modal_button("RESTART", COL_ACCENT, -170, -10, -44)
 	restart.pressed.connect(_restart_playthrough)
 	panel.add_child(restart)
 
-	var continue_btn := _make_modal_button("CONTINUE (sandbox)", COL_DIM, 180, 340)
+	var continue_btn := _make_modal_button("CONTINUE (sandbox)", COL_DIM, 10, 340, -44)
 	continue_btn.pressed.connect(_dismiss_victory)
 	panel.add_child(continue_btn)
 
 
-func _make_modal_button(text: String, color: Color, left: float, right: float) -> Button:
+func _make_modal_button(text: String, color: Color, left: float, right: float, top_offset: float = -44) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.anchor_left = 0.5
@@ -1270,12 +1516,19 @@ func _make_modal_button(text: String, color: Color, left: float, right: float) -
 	b.anchor_right = 0.5
 	b.anchor_bottom = 1.0
 	b.offset_left = left
-	b.offset_top = -44
+	b.offset_top = top_offset
 	b.offset_right = right
-	b.offset_bottom = -20
+	b.offset_bottom = top_offset + 28
 	b.add_theme_color_override("font_color", color)
 	b.add_theme_color_override("font_hover_color", COL_FG)
 	return b
+
+
+func _on_victory_chronicle() -> void:
+	# Hide victory modal briefly, show chronicle; closing chronicle
+	# returns here (tree stays paused).
+	_victory_root.visible = false
+	show_chronicle_modal()
 
 
 func _on_victory_save() -> void:
