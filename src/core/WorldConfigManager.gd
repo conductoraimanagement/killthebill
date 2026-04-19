@@ -171,6 +171,13 @@ func rehydrate_oligarch(o_dict: Dictionary) -> OligarchData:
 	# Seed ambition_progress from keys
 	for ambition in o.ambitions:
 		o.ambition_progress[ambition] = 0.0
+	# Restore ambition evolution bookkeeping if present
+	var last_adv = o_dict.get("ambition_last_advance", {})
+	if last_adv is Dictionary:
+		o.ambition_last_advance = last_adv.duplicate(true)
+	var abandoned = o_dict.get("abandoned_ambitions", [])
+	if abandoned is Array:
+		o.abandoned_ambitions = Array(abandoned, TYPE_STRING, &"", null)
 	return o
 
 
@@ -301,6 +308,8 @@ func _oligarch_to_dict(o: OligarchData) -> Dictionary:
 		"political_influence": o.political_influence,
 		"awareness_of_player": o.awareness_of_player,
 		"threat_assessment": o.threat_assessment,
+		"ambition_last_advance": o.ambition_last_advance,
+		"abandoned_ambitions": Array(o.abandoned_ambitions),
 	}
 
 

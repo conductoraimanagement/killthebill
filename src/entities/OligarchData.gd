@@ -53,6 +53,12 @@ class_name OligarchData
 @export var ambition_progress: Dictionary = {}
 ## Tracks progress toward each ambition. E.g., {"Monopolize food supply": 0.35}
 
+@export var ambition_last_advance: Dictionary = {}
+## Cycle number when each ambition last advanced. Used to detect stagnation.
+
+@export var abandoned_ambitions: Array[String] = []
+## Ambitions the oligarch gave up on. Never re-selected.
+
 # =============================================================
 # QUIRKS — Human details for LLM dialogue
 # =============================================================
@@ -81,8 +87,23 @@ class_name OligarchData
 # BEHAVIORAL AI — Personality-driven decisions each cycle
 # =============================================================
 
+const AMBITION_POOL: Array[String] = [
+	"Monopolize supply",
+	"Achieve political immortality",
+	"Build a legacy",
+	"Escape",
+	"Crush the resistance",
+	"Control the narrative",
+	"Transcend humanity",
+	"Purge The Sinks",
+]
+
+const STAGNATION_CYCLES_THRESHOLD: int = 8   # no progress for this many days → abandon
+const STAGNATION_PROGRESS_THRESHOLD: float = 0.3  # ambition below this + stagnant → abandon
+
+
 ## Evaluate the world and take action based on personality + ambitions
-func process_world_state(economy: Dictionary, all_oligarchs: Array) -> Array[Dictionary]:
+func process_world_state(economy: Dictionary, all_oligarchs: Array, current_cycle: int = 0) -> Array[Dictionary]:
 	var actions_taken: Array[Dictionary] = []
 	if not alive:
 		return actions_taken
@@ -144,9 +165,88 @@ func process_world_state(economy: Dictionary, all_oligarchs: Array) -> Array[Dic
 	for ambition in ambitions:
 		var action = _pursue_ambition(ambition, economy)
 		if action.size() > 0:
+			ambition_last_advance[ambition] = current_cycle
 			actions_taken.append(action)
-	
+
 	return actions_taken
+
+
+# Called by WorldDirector after process_world_state each cycle. If an
+# ambition has progressed less than STAGNATION_PROGRESS_THRESHOLD and
+# hasn't advanced in STAGNATION_CYCLES_THRESHOLD cycles, the oligarch
+# abandons it and picks a replacement weighted by their Nature traits.
+# Returns a list of {from, to} pairs so WorldDirector can fire NetFeed
+# headlines for each swap.
+func reevaluate_ambitions(current_cycle: int) -> Array:
+	var swapped: Array = []
+	if ambitions.is_empty():
+		return swapped
+
+	var kept: Array[String] = []
+	var abandoned_now: Array[String] = []
+	for ambition in ambitions:
+		var last_adv: int = int(ambition_last_advance.get(ambition, current_cycle))
+		var progress: float = float(ambition_progress.get(ambition, 0.0))
+		if progress < STAGNATION_PROGRESS_THRESHOLD and (current_cycle - last_adv) > STAGNATION_CYCLES_THRESHOLD:
+			abandoned_now.append(ambition)
+			if ambition not in abandoned_ambitions:
+				abandoned_ambitions.append(ambition)
+		else:
+			kept.append(ambition)
+
+	if abandoned_now.is_empty():
+		return swapped
+
+	# Pick replacements trait-weighted. Don't re-select abandoned ones.
+	while kept.size() < ambitions.size():
+		var pick: String = _pick_trait_weighted_ambition(kept)
+		if pick == "":
+			break
+		kept.append(pick)
+		ambition_progress[pick] = 0.0
+		ambition_last_advance[pick] = current_cycle
+		var old: String = abandoned_now.pop_front() if abandoned_now.size() > 0 else ""
+		swapped.append({"from": old, "to": pick})
+
+	ambitions = Array(kept, TYPE_STRING, &"", null)
+	return swapped
+
+
+func _pick_trait_weighted_ambition(avoid: Array) -> String:
+	var weights: Dictionary = {}
+	for ambition in AMBITION_POOL:
+		if ambition in avoid:
+			continue
+		if ambition in abandoned_ambitions:
+			continue
+		weights[ambition] = _trait_weight_for(ambition)
+	if weights.is_empty():
+		return ""
+
+	var total: float = 0.0
+	for w in weights.values():
+		total += float(w)
+	var roll: float = randf() * total
+	for key in weights.keys():
+		roll -= float(weights[key])
+		if roll <= 0.0:
+			return str(key)
+	return str(weights.keys()[weights.size() - 1])
+
+
+func _trait_weight_for(ambition: String) -> float:
+	# Higher weight → more likely fallback given this oligarch's nature.
+	# Frustration falls on character.
+	match ambition:
+		"Monopolize supply":             return 0.5 + greed * 0.8
+		"Achieve political immortality": return 0.3 + ideology * 0.7
+		"Build a legacy":                return 0.3 + vanity * 0.9
+		"Escape":                        return 0.2 + paranoia_base * 1.2
+		"Crush the resistance":          return 0.3 + ruthlessness * 1.0
+		"Control the narrative":         return 0.3 + intelligence * 0.8
+		"Transcend humanity":            return 0.2 + ideology * 0.5
+		"Purge The Sinks":               return 0.1 + ruthlessness * 1.3
+	return 0.3
 
 ## Process a single ambition
 func _pursue_ambition(ambition: String, economy: Dictionary) -> Dictionary:

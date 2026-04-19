@@ -425,10 +425,27 @@ func _apply_social_pressure() -> void:
 
 func _evolve_oligarchs() -> void:
 	for o in oligarchs:
-		var actions = o.process_world_state(global_economy, oligarchs)
+		var actions = o.process_world_state(global_economy, oligarchs, cycle)
 		for action in actions:
 			_apply_oligarch_action(action)
 			oligarch_action_taken.emit(action)
+
+		# Check for stagnant ambitions. If any get swapped, NetFeed flags it.
+		var swaps: Array = o.reevaluate_ambitions(cycle)
+		for swap in swaps:
+			var from_txt: String = str(swap.get("from", ""))
+			var to_txt: String = str(swap.get("to", ""))
+			if from_txt == "" or to_txt == "":
+				continue
+			var event := {
+				"type": "NEWS_TICKER",
+				"headline": "%s quietly shifts strategy — analysts note the abandoned '%s' and a new focus on '%s'." % [
+					o.oligarch_name, from_txt, to_txt,
+				],
+				"timestamp": Time.get_unix_time_from_system(),
+			}
+			netfeed_history.append(event)
+			netfeed_event_generated.emit(event)
 
 func _apply_oligarch_action(action: Dictionary) -> void:
 	var impact = action.get("impact", {})
