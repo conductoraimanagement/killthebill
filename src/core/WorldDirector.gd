@@ -351,6 +351,12 @@ func run_world_cycle() -> void:
 		get_node("/root/PlayerManager").cool_heat(1)
 
 	_expire_jobs()
+
+	# Tick active cultural-cameo arcs once per day — apply while-active
+	# modifiers and decrement TTLs.
+	if has_node("/root/CulturalCameos"):
+		get_node("/root/CulturalCameos").tick_daily()
+
 	_evolve_oligarchs()
 
 	# Evolve NPCs
@@ -478,6 +484,8 @@ func _ripple_sabotage(target_sector: String):
 		pm.bump_playstyle(0.08, 0.02, 0.0, 0.0)
 
 	_check_jobs_match("sabotage_sector", target_sector)
+	if has_node("/root/CulturalCameos"):
+		get_node("/root/CulturalCameos").check_action_match("sabotage_sector", target_sector)
 
 
 func _sabotage_loot_for(sector: String) -> int:
@@ -603,6 +611,10 @@ func _ripple_leak_scandal(target_id: String):
 				get_node("/root/PlayerManager").bump_playstyle(0.05, 0.0, 0.1, 0.02)
 
 			_check_jobs_match("leak_oligarch", target_id)
+			if has_node("/root/CulturalCameos"):
+				var cameos = get_node("/root/CulturalCameos")
+				cameos.check_action_match("leak_oligarch", target_id)
+				cameos.check_action_match("leak_sector", o.sector_of_influence)
 			break
 
 

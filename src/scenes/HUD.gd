@@ -174,10 +174,16 @@ func _ready() -> void:
 	if llm:
 		llm.llm_response_received.connect(_on_llm_dialogue_response)
 
-	# Job board hooks
+	# Job board hooks (jobs + cameo arcs render together)
 	WorldDirector.job_posted.connect(_on_job_changed)
 	WorldDirector.job_completed.connect(_on_job_changed)
 	WorldDirector.job_expired.connect(_on_job_changed)
+
+	var cameos = get_node_or_null("/root/CulturalCameos")
+	if cameos:
+		cameos.cameo_arc_started.connect(_on_job_changed)
+		cameos.cameo_arc_completed.connect(_on_job_changed)
+		cameos.cameo_arc_expired.connect(_on_job_changed)
 
 	# TimeSystem hooks — refresh state panel on time/phase/speed changes.
 	var ts = get_node_or_null("/root/TimeSystem")
@@ -771,7 +777,10 @@ func _on_job_changed(_job) -> void:
 
 
 func _refresh_jobs() -> void:
-	if WorldDirector.active_jobs.is_empty():
+	var cameos = get_node_or_null("/root/CulturalCameos")
+	var cameo_arcs: Array = cameos.active_arcs if cameos else []
+
+	if WorldDirector.active_jobs.is_empty() and cameo_arcs.is_empty():
 		_jobs_text.text = "[i][color=#%s]> no active jobs. wait for the next news cycle.[/color][/i]" % _hex(COL_DIM)
 		return
 
@@ -779,7 +788,35 @@ func _refresh_jobs() -> void:
 	for j in WorldDirector.active_jobs:
 		lines.append(_job_row(j))
 		lines.append("")
+	for arc in cameo_arcs:
+		if bool(arc.get("completed", false)):
+			continue
+		lines.append(_cameo_arc_row(arc))
+		lines.append("")
 	_jobs_text.text = "\n".join(lines)
+
+
+func _cameo_arc_row(arc: Dictionary) -> String:
+	var def: Dictionary = arc.definition
+	var tier: int = int(def.get("tier", 2))
+	var badge: String = "CAMEO T%d" % tier
+	var cycles_left: int = int(arc.get("cycles_left", 0))
+	var ttl_color: Color = COL_HOT if cycles_left <= 1 else COL_DIM
+	var obj: Dictionary = def.get("objective", {})
+
+	var row: String = ""
+	# Magenta-ish badge — distinct from CONTRACT (red) and FIXER (cyan)
+	var badge_color: Color = Color(0.85, 0.35, 1.00)
+	row += "[color=#%s]▸ %s[/color]  [color=#%s]%d cycles left[/color]\n" % [
+		_hex(badge_color),
+		badge,
+		_hex(ttl_color),
+		cycles_left,
+	]
+	row += "[b][color=#%s]%s[/color][/b]\n" % [_hex(COL_FG), str(def.get("name", ""))]
+	row += "[color=#%s]%s[/color]\n" % [_hex(COL_DIM), str(def.get("intro_headline", ""))]
+	row += "  → [color=#%s]%s[/color]" % [_hex(COL_WARN), str(obj.get("label", ""))]
+	return row
 
 
 func _job_row(job: Dictionary) -> String:

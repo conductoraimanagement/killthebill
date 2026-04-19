@@ -5,12 +5,16 @@
 ## What's implemented today
 
 - `CulturalCameos` autoload evaluates triggers once per news cycle (3× per day).
-- Six Tier-1 (Whisper) cameos are in the pool: `soap_broadcast`, `mask_in_the_crowd`, `compliance_error_7`, `unsigned_manifesto`, `yellow_hymn`, `kindly_coffee`.
-- Each gates on world state (`public_tension`, `senate_alignment`) + player profile (`player_chaos_preference`, `player_idealism`, `player_heat`, `player_ruthlessness`) + `min_cycle`.
-- Probability rolls once gate is satisfied. Fires NetFeed headline; no mechanical impact by design — Whispers are flavor.
+- **Tier-1 (Whisper) pool — 6 cameos, NetFeed-only flavor**: `soap_broadcast`, `mask_in_the_crowd`, `compliance_error_7`, `unsigned_manifesto`, `yellow_hymn`, `kindly_coffee`.
+- **Tier-2 (Brush) pool — 2 arcs with concrete objectives**: `bread_thief_arc` (sabotage Security to let the Bread Thief escape — 3 cycles, 800 cr + tension −8), `admin_last_login` (leak on Tech oligarch — 4 cycles, 700 cr).
+- **Tier-3 (Entanglement) pool — 2 multi-cycle arcs with while-active modifiers**: `hermit_substrate_fields` (disrupt Food for the manifesto — 6 cycles, `+1 public_tension per day while running`, 1500 cr + tension +10 on success), `yellow_priest_arc` (leak on Media to shield the cult — 5 cycles, `+2 tension/day`, 1800 cr).
+- Each cameo gates on world state (`public_tension`, `senate_alignment`) + player profile (`player_chaos_preference`, `player_idealism`, `player_heat`, `player_ruthlessness`) + `min_cycle`.
+- **Arc lifecycle**: intro NetFeed on trigger → active_arcs tracks TTL + while-active modifiers on each day tick → a matching player action (`sabotage_sector`, `leak_oligarch`, `leak_sector`) completes for the reward → timeout fires a silent-fallout headline.
+- **At most one Tier-3+ arc concurrent** (MAX_HIGH_TIER_ACTIVE = 1). The world can sustain one hijacking, not three.
 - Each cameo fires at most once per run (`fired_ids` tracks; `reset()` clears on new run).
+- **HUD**: active arcs render in the JOB BOARD panel (press J) with a `CAMEO T2` / `CAMEO T3` magenta badge.
 
-The rest of this doc is the *designed* system, which the Tier-1 implementation is a small subset of.
+**Tier-4 (Takeover) arcs are still designed-only** — the Soap Man decision-point flow (accept/betray) is the next logical slice and requires dedicated arc-step UI.
 
 ---
 
