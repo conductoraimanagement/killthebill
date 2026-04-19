@@ -32,6 +32,7 @@ func _ready() -> void:
 	_hud.politician_bribed.connect(_on_politician_bribed)
 	_hud.travel_requested.connect(_on_travel_requested)
 	_hud.crowd_pickpocket_requested.connect(pickpocket_crowd)
+	_hud.enforcer_flee_failed.connect(_on_enforcer_flee_failed)
 
 	# Pending loaded config, if any
 	var preloaded: Dictionary = {}
@@ -146,6 +147,11 @@ func _on_landscape_ready(landscape: LandscapeGenerator) -> void:
 		landscape.patrol_spawned.connect(_on_patrol_spawned)
 	for p in landscape.enforcer_patrols:
 		_on_patrol_spawned(p)
+
+	# Mid-phase patrol respawn when heat crosses a threshold.
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm and not pm.heat_changed.is_connected(landscape.on_heat_changed):
+		pm.heat_changed.connect(landscape.on_heat_changed)
 
 	# Wire ambient crowd NPCs — proximity prompt + pickpocket resolution.
 	if not landscape.crowd_spawned.is_connected(_on_crowd_spawned):
@@ -300,7 +306,16 @@ func _on_patrol_spawned(patrol: EnforcerPatrol) -> void:
 
 func _on_patrol_encounter(patrol: EnforcerPatrol) -> void:
 	_hud.hide_prompt()
+	# Light alert: world notices where you are. No reinforcement spawn
+	# (that's flee-fail only). Other patrols in this phase re-bias.
+	if _landscape and is_instance_valid(_landscape) and _player:
+		_landscape.raise_alert(_player.global_position, false)
 	_hud.show_enforcer_encounter(patrol)
+
+
+func _on_enforcer_flee_failed(position: Vector3) -> void:
+	if _landscape and is_instance_valid(_landscape):
+		_landscape.raise_alert(position, true)
 
 
 func _on_crowd_spawned(crowd: CrowdNPC) -> void:

@@ -15,6 +15,7 @@ signal oligarch_picked(oligarch_id: String, action_id: String)
 signal politician_bribed(politician_id: String, direction: String)
 signal travel_requested(region_name: String)
 signal crowd_pickpocket_requested(crowd)
+signal enforcer_flee_failed(position: Vector3)
 
 const COL_BG       := Color(0.05, 0.05, 0.06, 0.88)
 const COL_BG_MODAL := Color(0.02, 0.02, 0.03, 0.92)
@@ -2484,12 +2485,18 @@ func _on_encounter_flee() -> void:
 	if pm == null:
 		return
 	var roll: float = randf()
+	var failed_position: Vector3 = Vector3.ZERO
+	if _active_encounter_patrol and is_instance_valid(_active_encounter_patrol):
+		failed_position = _active_encounter_patrol.global_position
+
 	if roll < _encounter_computed_flee_chance:
 		pm.add_heat(-FLEE_SUCCESS_HEAT_REDUCTION, "flee: clean break")
 		_publish_feed_note("A fugitive slipped an Enforcer patrol cordon near the checkpoint. Descriptions conflict.")
 	else:
 		pm.add_heat(FLEE_FAIL_HEAT_PENALTY, "flee: ID'd")
 		_publish_feed_note("Enforcer body-cam footage captures a flagged person-of-interest attempting evasion. ID confirmed.")
+		# Signal to Main → LandscapeGenerator.raise_alert with reinforcements.
+		enforcer_flee_failed.emit(failed_position)
 	_close_encounter_and_resolve_patrol()
 
 

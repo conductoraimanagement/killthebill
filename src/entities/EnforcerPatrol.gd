@@ -24,6 +24,14 @@ var _target: Vector3 = Vector3.ZERO
 var _encounter_fired: bool = false
 var _mesh_root: Node3D
 
+# Alert state — set by LandscapeGenerator.raise_alert(pos) after any
+# failed-flee encounter. Alerted patrols bias their waypoints toward
+# the last known player position AND light a red strobe on the strap.
+var _alerted: bool = false
+var _alert_target: Vector3 = Vector3.ZERO
+var _alert_strobe: MeshInstance3D
+var _strobe_timer: float = 0.0
+
 
 func _ready() -> void:
 	_build_visual()
@@ -43,6 +51,23 @@ func set_waypoints(a: Vector3, b: Vector3) -> void:
 
 
 func _process(delta: float) -> void:
+	# If alerted, waypoints re-target toward the last known player
+	# position each second. Not pathfinding — just a bias. Patrols
+	# still walk A↔B, but A and B drift toward the alert target.
+	if _alerted:
+		_strobe_timer += delta
+		if _alert_strobe:
+			var visible: bool = fmod(_strobe_timer, 0.8) < 0.4
+			_alert_strobe.visible = visible
+		# Occasionally re-anchor the patrol route toward the alert point.
+		var alert_dist: float = global_position.distance_to(_alert_target)
+		if alert_dist > 4.0:
+			# Slide A/B toward the alert; clamped so they still form an A↔B line.
+			var pull := (_alert_target - global_position).normalized() * 0.6
+			pull.y = 0.0
+			waypoint_a = waypoint_a.lerp(waypoint_a + pull, delta * 1.2)
+			waypoint_b = waypoint_b.lerp(waypoint_b + pull, delta * 1.2)
+
 	# Patrol movement
 	var to_target: Vector3 = _target - global_position
 	to_target.y = 0.0
@@ -50,7 +75,8 @@ func _process(delta: float) -> void:
 	if dist_to_wp < 0.4:
 		_target = waypoint_a if _target == waypoint_b else waypoint_b
 	else:
-		var step: Vector3 = to_target.normalized() * PATROL_SPEED * delta
+		var speed: float = PATROL_SPEED * (1.4 if _alerted else 1.0)
+		var step: Vector3 = to_target.normalized() * speed * delta
 		global_position += step
 		# Face movement direction
 		if step.length_squared() > 0.0001:
@@ -76,6 +102,23 @@ func _process(delta: float) -> void:
 # (flee might keep the patrol on alert instead of despawning).
 func resolve() -> void:
 	queue_free()
+
+
+# Called by LandscapeGenerator when the network-wide alert fires
+# (player failed a flee). This patrol biases its route toward the
+# reported position and lights a strobe.
+func raise_alert(target_position: Vector3) -> void:
+	_alerted = true
+	_alert_target = target_position
+	_strobe_timer = 0.0
+	if _alert_strobe:
+		_alert_strobe.visible = true
+
+
+func clear_alert() -> void:
+	_alerted = false
+	if _alert_strobe:
+		_alert_strobe.visible = false
 
 
 # -------------------------------------------------------------
@@ -133,3 +176,19 @@ func _build_visual() -> void:
 	scan.material_override = strap_mat
 	scan.position = Vector3(0, 1.7, -0.35)
 	_mesh_root.add_child(scan)
+
+	# Red strobe on the strap — visible only when _alerted, blinking via _process.
+	_alert_strobe = MeshInstance3D.new()
+	var strobe_mesh := SphereMesh.new()
+	strobe_mesh.radius = 0.14
+	strobe_mesh.height = 0.28
+	_alert_strobe.mesh = strobe_mesh
+	var strobe_mat := StandardMaterial3D.new()
+	strobe_mat.albedo_color = Color(1.00, 0.12, 0.18)
+	strobe_mat.emission_enabled = true
+	strobe_mat.emission = Color(1.00, 0.10, 0.18)
+	strobe_mat.emission_energy_multiplier = 1.3
+	_alert_strobe.material_override = strobe_mat
+	_alert_strobe.position = Vector3(0, 1.75, 0.15)
+	_alert_strobe.visible = false
+	_mesh_root.add_child(_alert_strobe)

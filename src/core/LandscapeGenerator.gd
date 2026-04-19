@@ -170,6 +170,12 @@ var landmark_spawns: Dictionary = {}
 # Active Enforcer patrols in the landscape. Re-populated each phase.
 var enforcer_patrols: Array = []
 
+# Last known player position — set on any fired encounter. Reinforcements
+# and future patrol respawns bias toward this point. Cleared on phase
+# change after two phases of quiet (set by _alert_phases_remaining).
+var _last_known_player_position: Vector3 = Vector3.ZERO
+var _alert_phases_remaining: int = 0
+
 # Ambient street crowd (pickpocket targets). Re-populated each phase so
 # day-only and night-only NPCs rotate in and out as time advances.
 var crowd_npcs: Array = []
@@ -258,6 +264,10 @@ func generate(region_data: Dictionary) -> void:
 
 
 func _on_phase_changed_refresh_patrols(_phase: int) -> void:
+	# Decay the alert — after 2 phases of quiet, the world forgets
+	# where you were last spotted.
+	if _alert_phases_remaining > 0:
+		_alert_phases_remaining -= 1
 	_despawn_enforcer_patrols()
 	_spawn_enforcer_patrols()
 	_despawn_crowd()
@@ -653,17 +663,29 @@ func _despawn_enforcer_patrols() -> void:
 func _build_single_patrol() -> EnforcerPatrol:
 	# Patrols walk between two street cells (grid cells on a street row
 	# or column) — streets are always clear by construction.
-	var a: Vector3 = _pick_street_cell()
-	var b: Vector3 = _pick_street_cell()
+	# If the landscape is alerted, bias A/B toward the last known
+	# player position so new spawns converge on the trouble.
+	var alerted: bool = _alert_phases_remaining > 0
+	var a: Vector3
+	var b: Vector3
+	if alerted:
+		a = _pick_street_cell_near(_last_known_player_position, 30.0)
+		b = _pick_street_cell_near(_last_known_player_position, 30.0)
+	else:
+		a = _pick_street_cell()
+		b = _pick_street_cell()
+
 	# Guarantee some distance for a meaningful patrol.
 	var tries: int = 0
 	while b.distance_to(a) < 20.0 and tries < 12:
-		b = _pick_street_cell()
+		b = _pick_street_cell_near(_last_known_player_position, 30.0) if alerted else _pick_street_cell()
 		tries += 1
 
 	var patrol := EnforcerPatrol.new()
 	patrol.set_waypoints(a, b)
 	add_child(patrol)
+	if alerted:
+		patrol.raise_alert(_last_known_player_position)
 	return patrol
 
 
@@ -676,6 +698,65 @@ func _pick_street_cell() -> Vector3:
 			return _cell_center(gx, gz)
 	# Fallback — map center.
 	return Vector3.ZERO
+
+
+# Street cell within `radius` of a target position. Used under alert
+# to cluster reinforcements near the player's last known spot.
+func _pick_street_cell_near(center: Vector3, radius: float) -> Vector3:
+	for _try in range(60):
+		var gx: int = _rng.randi_range(1, _grid_w - 2)
+		var gz: int = _rng.randi_range(1, _grid_h - 2)
+		if gx % STREET_EVERY_N == 0 or gz % STREET_EVERY_N == 0:
+			var pos: Vector3 = _cell_center(gx, gz)
+			if pos.distance_to(center) <= radius:
+				return pos
+	# Fallback — any street cell.
+	return _pick_street_cell()
+
+
+# Called by Main / HUD when an encounter fires or a flee fails — the
+# landscape raises its alert level. Existing patrols get biased
+# toward the player, reinforcements are spawned near the trouble,
+# alert decays across phase boundaries.
+func raise_alert(player_position: Vector3, spawn_reinforcements: bool = true) -> void:
+	_last_known_player_position = player_position
+	_alert_phases_remaining = 2
+
+	# Tell every existing patrol to re-anchor and light a strobe.
+	for p in enforcer_patrols:
+		if is_instance_valid(p) and p.has_method("raise_alert"):
+			p.raise_alert(player_position)
+
+	if spawn_reinforcements:
+		for _i in range(3):
+			if enforcer_patrols.size() >= 12:
+				break
+			var reinforcement := _build_single_patrol()
+			reinforcement.raise_alert(player_position)
+			enforcer_patrols.append(reinforcement)
+			patrol_spawned.emit(reinforcement)
+
+
+var _last_observed_heat: int = 0
+
+
+# Connected to PlayerManager.heat_changed by Main after landscape
+# setup. When the player's heat crosses 30 / 60 / 80 on the way up,
+# patrols immediately despawn + respawn at the new count — heat
+# no longer has to wait for a phase boundary to reshape the street.
+func on_heat_changed(new_total: int, _delta: int, _reason: String) -> void:
+	var crossed: bool = false
+	var prev: int = _last_observed_heat
+	if prev < 30 and new_total >= 30:
+		crossed = true
+	elif prev < 60 and new_total >= 60:
+		crossed = true
+	elif prev < 80 and new_total >= 80:
+		crossed = true
+	_last_observed_heat = new_total
+	if crossed:
+		_despawn_enforcer_patrols()
+		_spawn_enforcer_patrols()
 
 
 # -------------------------------------------------------------
