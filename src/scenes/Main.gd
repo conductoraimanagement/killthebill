@@ -16,22 +16,17 @@ class_name MainScene
 #   6. Route HUD modal picks (leak scandal) → WorldDirector ripples
 # =============================================================
 
-const CYCLE_SECONDS := 25.0
-const NEWS_EVERY_N_CYCLES := 3
-
 var _landscape: LandscapeGenerator
 var _player: CharacterBody3D
 var _camera: CameraController
 var _hud: HUD
 var _depot: InteractableTarget
 var _terminal: DatashardTerminal
-var _cycle_timer: Timer
 
 
 func _ready() -> void:
 	_ensure_input_actions()
 	_setup_hud()
-	_setup_cycle_timer()
 
 	_hud.oligarch_picked.connect(_on_oligarch_picked)
 	_hud.politician_bribed.connect(_on_politician_bribed)
@@ -79,27 +74,19 @@ func _handle_ground_click(screen_pos: Vector2) -> void:
 
 
 # -------------------------------------------------------------
-# World cycle timer
+# Time now flows from TimeSystem (autoload). Days advance on their
+# own cadence; WorldDirector subscribes to day_advanced and
+# phase_changed inside _finish_setup. No local Timer needed.
 # -------------------------------------------------------------
-func _setup_cycle_timer() -> void:
-	_cycle_timer = Timer.new()
-	_cycle_timer.wait_time = CYCLE_SECONDS
-	_cycle_timer.one_shot = false
-	_cycle_timer.autostart = false
-	_cycle_timer.timeout.connect(_on_cycle_tick)
-	add_child(_cycle_timer)
-
-
-func _on_cycle_tick() -> void:
-	WorldDirector.run_world_cycle()
-	if WorldDirector.cycle % NEWS_EVERY_N_CYCLES == 0:
-		WorldDirector.trigger_news_cycle()
 
 
 # -------------------------------------------------------------
 # Playthrough → landscape → spawn player
 # -------------------------------------------------------------
 func _on_playthrough_ready() -> void:
+	# Starting the clock is handled inside WorldDirector._finish_setup
+	# (via TimeSystem.start()). Nothing extra here beyond building the
+	# 3D landscape for the current region.
 	var region_data: Dictionary = _current_region_data()
 	if region_data.is_empty():
 		push_error("Main: no current region data; falling back to URBAN_SLUM stub")
@@ -138,8 +125,15 @@ func _on_landscape_ready(landscape: LandscapeGenerator) -> void:
 	_spawn_depot(depot_pos, landscape.region)
 	_spawn_terminal(terminal_pos)
 
-	_cycle_timer.start()
-	print("Main: landscape ready for '%s' (type=%s, biome=%s). Cycle timer started." % [
+	# Landscape now listens to TimeSystem for day/night blending.
+	if has_node("/root/TimeSystem"):
+		var ts = get_node("/root/TimeSystem")
+		if not ts.time_of_day_updated.is_connected(landscape.on_time_of_day_updated):
+			ts.time_of_day_updated.connect(landscape.on_time_of_day_updated)
+		# Apply current time immediately so the first frame isn't full-noon.
+		landscape.on_time_of_day_updated(ts.time_of_day)
+
+	print("Main: landscape ready for '%s' (type=%s, biome=%s). Day clock live." % [
 		str(landscape.region.get("name", "?")),
 		str(landscape.region.get("type", "?")),
 		str(landscape.region.get("visual_biome", "?")),

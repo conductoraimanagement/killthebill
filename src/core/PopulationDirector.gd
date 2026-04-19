@@ -83,6 +83,17 @@ func _on_npc_roster_generated(data: Array) -> void:
 		var trust_bias: float = 15.0 if npc.social_class == 1 else 30.0
 		npc.trust = clamp(randf_range(0.0, 60.0) + trust_bias - 15.0, 0.0, 60.0)
 
+		# Active phase: 70% both, 15% day-only, 15% night-only.
+		# Enforcers skew night-biased (patrols); the Destitute skew day.
+		var phase_roll: float = randf()
+		match npc.social_class:
+			1:  # Enforcer
+				npc.active_phase = "night" if phase_roll < 0.35 else ("day" if phase_roll < 0.50 else "both")
+			3:  # Destitute
+				npc.active_phase = "day" if phase_roll < 0.30 else ("night" if phase_roll < 0.40 else "both")
+			_:
+				npc.active_phase = "both" if phase_roll < 0.70 else ("day" if phase_roll < 0.85 else "night")
+
 		roster.append(npc)
 
 	if roster.size() < MAX_NPCS:

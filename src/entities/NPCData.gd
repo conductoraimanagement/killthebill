@@ -17,6 +17,12 @@ class_name NPCData
 @export var npc_id: String = "" # Unique persistent identifier
 @export_enum("Oligarch", "Enforcer", "Worker", "Destitute") var social_class: int = 2
 
+## When this NPC is active and can be met / post fixer jobs.
+## "both" = round-the-clock. "day" = only visible / responsive in
+## MORNING or AFTERNOON phases. "night" = only responsive in NIGHT.
+## See docs/05-systems/time-and-day-night.md.
+@export var active_phase: String = "both"
+
 # =============================================================
 # INTRINSIC TRAITS (Nature) — SET ONCE, NEVER CHANGE
 # =============================================================

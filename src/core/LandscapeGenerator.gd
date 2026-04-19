@@ -171,6 +171,16 @@ var _grid_h: int = 0
 var _cell: float = 7.5
 var _size: Vector2 = Vector2.ZERO
 
+# Refs kept so day/night interpolation can mutate them at runtime.
+var _sun: DirectionalLight3D
+var _env: Environment
+
+# Night target colors — blended against config values by day_brightness.
+const _NIGHT_SUN_COLOR    := Color(0.30, 0.38, 0.62)
+const _NIGHT_AMBIENT      := Color(0.12, 0.14, 0.22)
+const _NIGHT_FOG          := Color(0.04, 0.05, 0.09)
+const _NIGHT_BG           := Color(0.01, 0.01, 0.03)
+
 
 func generate(region_data: Dictionary) -> void:
 	region = region_data
@@ -263,25 +273,63 @@ func _build_nav_region() -> void:
 
 
 func _build_environment() -> void:
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55, 45, 0)
-	sun.light_energy = float(config["sun_energy"])
-	sun.light_color = config["sun_color"]
-	sun.shadow_enabled = true
-	add_child(sun)
+	_sun = DirectionalLight3D.new()
+	_sun.rotation_degrees = Vector3(-55, 45, 0)
+	_sun.light_energy = float(config["sun_energy"])
+	_sun.light_color = config["sun_color"]
+	_sun.shadow_enabled = true
+	add_child(_sun)
 
 	var world_env := WorldEnvironment.new()
-	var e := Environment.new()
-	e.background_mode = Environment.BG_COLOR
-	e.background_color = config["fog_color"] * 0.5
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = config["ambient_color"]
-	e.ambient_light_energy = float(config["ambient_energy"])
-	e.fog_enabled = true
-	e.fog_light_color = config["fog_color"]
-	e.fog_density = float(config["fog_density"])
-	world_env.environment = e
+	_env = Environment.new()
+	_env.background_mode = Environment.BG_COLOR
+	_env.background_color = config["fog_color"] * 0.5
+	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	_env.ambient_light_color = config["ambient_color"]
+	_env.ambient_light_energy = float(config["ambient_energy"])
+	_env.fog_enabled = true
+	_env.fog_light_color = config["fog_color"]
+	_env.fog_density = float(config["fog_density"])
+	world_env.environment = _env
 	add_child(world_env)
+
+
+# Called by Main each time TimeSystem.time_of_day_updated fires.
+# Blend sun + ambient + fog between the biome's day config and a
+# shared night target by TimeSystem.day_brightness (cosine curve).
+func on_time_of_day_updated(tod: float) -> void:
+	if _sun == null or _env == null:
+		return
+	var b: float = _compute_brightness(tod)
+	var n: float = 1.0 - b  # night weight
+
+	_sun.light_color = (config["sun_color"] as Color).lerp(_NIGHT_SUN_COLOR, n)
+	_sun.light_energy = lerp(0.15, float(config["sun_energy"]), b)
+	# Sweep the sun from low east (-10°) at dawn through high (-75°) at noon
+	# back to low west. At night, drop below horizon so shadow-caster has no effect.
+	var pitch: float
+	if b > 0.05:
+		# Sun arcs through the day. tod 0..0.5 represents 06:00..18:00.
+		var arc_t: float = clamp(tod * 2.0, 0.0, 1.0) if tod <= 0.5 else 1.0 - clamp((tod - 0.5) * 2.0, 0.0, 1.0)
+		pitch = lerp(-10.0, -75.0, arc_t)
+	else:
+		pitch = 20.0  # below horizon-ish; shadows read as moonlight
+	_sun.rotation_degrees.x = pitch
+
+	_env.ambient_light_color = (config["ambient_color"] as Color).lerp(_NIGHT_AMBIENT, n)
+	_env.ambient_light_energy = lerp(0.18, float(config["ambient_energy"]), b)
+	_env.fog_light_color = (config["fog_color"] as Color).lerp(_NIGHT_FOG, n)
+	_env.background_color = ((config["fog_color"] as Color) * 0.5).lerp(_NIGHT_BG, n)
+	# Fog thickens slightly at night — makes it feel heavier.
+	var day_fog: float = float(config["fog_density"])
+	_env.fog_density = lerp(day_fog * 1.4, day_fog, b)
+
+
+# TimeSystem.day_brightness duplicated here so LandscapeGenerator
+# works even if TimeSystem is absent (e.g. isolated tests).
+func _compute_brightness(tod: float) -> float:
+	var phase_rad: float = (tod - 0.25) * TAU
+	return (cos(phase_rad) + 1.0) * 0.5
 
 
 func _build_ground() -> void:

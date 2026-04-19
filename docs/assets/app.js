@@ -49,11 +49,12 @@ const DOCS = [
     { title: 'Systems', dir: '05-systems', icon: '▲',
         intro: 'The tech underneath.',
         pages: [
-            { file: 'save-and-share.md', title: 'Save & Share' },
-            { file: 'architecture.md',   title: 'Architecture', stub: true },
-            { file: 'llm.md',            title: 'LLM Stack',    stub: true },
-            { file: 'ui.md',             title: 'UI',           stub: true },
-            { file: 'visuals.md',        title: 'Visuals',      stub: true },
+            { file: 'save-and-share.md',       title: 'Save & Share' },
+            { file: 'time-and-day-night.md',   title: 'Time & Day/Night' },
+            { file: 'architecture.md',         title: 'Architecture', stub: true },
+            { file: 'llm.md',                  title: 'LLM Stack',    stub: true },
+            { file: 'ui.md',                   title: 'UI',           stub: true },
+            { file: 'visuals.md',              title: 'Visuals',      stub: true },
         ]
     },
     { title: 'Roadmap', dir: '06-roadmap', icon: '▼',

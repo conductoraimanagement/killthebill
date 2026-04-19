@@ -216,6 +216,7 @@ func rehydrate_npc(n_dict: Dictionary) -> NPCData:
 	n.immediate_need = str(n_dict.get("immediate_need", "Stability"))
 	n.trust = float(n_dict.get("trust", 0.0))
 	n.relationship_type = int(n_dict.get("relationship_type", 0))
+	n.active_phase = str(n_dict.get("active_phase", "both"))
 	return n
 
 
@@ -345,6 +346,7 @@ func _npc_to_dict(n: NPCData) -> Dictionary:
 		"immediate_need": n.immediate_need,
 		"trust": n.trust,
 		"relationship_type": n.relationship_type,
+		"active_phase": n.active_phase,
 	}
 
 

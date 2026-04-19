@@ -233,8 +233,28 @@ func _on_politicians_generated(data: Array) -> void:
 	_finish_setup()
 
 func _finish_setup() -> void:
+	# Hook TimeSystem signals (once per process lifetime; safe to re-check)
+	if has_node("/root/TimeSystem"):
+		var ts = get_node("/root/TimeSystem")
+		if not ts.day_advanced.is_connected(_on_day_advanced):
+			ts.day_advanced.connect(_on_day_advanced)
+		if not ts.phase_changed.is_connected(_on_phase_changed):
+			ts.phase_changed.connect(_on_phase_changed)
+		ts.reset()
+		ts.start()
+
 	playthrough_setup_complete.emit()
 	print("WorldDirector: Playthrough setup complete.")
+
+
+func _on_day_advanced(_day: int) -> void:
+	# Full world simulation tick happens once per day.
+	run_world_cycle()
+
+
+func _on_phase_changed(_phase: int) -> void:
+	# NetFeed + job board refresh on each phase boundary (3x per day).
+	trigger_news_cycle()
 
 
 # =============================================================
@@ -813,9 +833,23 @@ func _try_post_fixer_job() -> void:
 	if not has_node("/root/PopulationDirector"):
 		return
 	var pop_dir = get_node("/root/PopulationDirector")
+
+	# Only NPCs active during the current phase can post a job — some
+	# fixers only work nights, some only days. See NPCData.active_phase.
+	var is_night_now: bool = false
+	if has_node("/root/TimeSystem"):
+		is_night_now = get_node("/root/TimeSystem").is_night()
+
 	var candidates: Array = []
 	for n in pop_dir.roster:
-		if n.trust >= 30.0:
+		if n.trust < 30.0:
+			continue
+		var phase: String = str(n.active_phase) if n.active_phase else "both"
+		if phase == "both":
+			candidates.append(n)
+		elif phase == "day" and not is_night_now:
+			candidates.append(n)
+		elif phase == "night" and is_night_now:
 			candidates.append(n)
 	if candidates.is_empty():
 		return

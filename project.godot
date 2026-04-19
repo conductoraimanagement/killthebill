@@ -23,6 +23,7 @@ RegionGenerator="*res://src/core/RegionGenerator.gd"
 PopulationDirector="*res://src/core/PopulationDirector.gd"
 SenateDirector="*res://src/core/SenateDirector.gd"
 WorldConfigManager="*res://src/core/WorldConfigManager.gd"
+TimeSystem="*res://src/core/TimeSystem.gd"
 WorldDirector="*res://src/core/WorldDirector.gd"
 PlayerManager="*res://src/core/PlayerManager.gd"
 

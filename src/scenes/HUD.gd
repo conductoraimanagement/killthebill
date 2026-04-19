@@ -125,6 +125,14 @@ func _ready() -> void:
 	WorldDirector.job_completed.connect(_on_job_changed)
 	WorldDirector.job_expired.connect(_on_job_changed)
 
+	# TimeSystem hooks — refresh state panel on time/phase/speed changes.
+	var ts = get_node_or_null("/root/TimeSystem")
+	if ts:
+		ts.time_of_day_updated.connect(_on_time_updated)
+		ts.phase_changed.connect(_on_phase_changed)
+		ts.day_advanced.connect(_on_day_advanced)
+		ts.speed_changed.connect(_on_speed_changed)
+
 	_refresh_state()
 
 
@@ -230,13 +238,26 @@ func _refresh_state() -> void:
 	lines.append(_econ_row("public_tension",    e.get("public_tension", 0),    "/ 100"))
 	lines.append(_econ_row("senate_alignment",  e.get("senate_alignment", 0),  "/ 100"))
 	lines.append("")
-	lines.append("[color=#%s]cycle[/color]           [color=#%s]%d[/color]  [color=#%s]%s[/color]" % [
-		_hex(COL_DIM),
-		_hex(COL_COOL),
-		WorldDirector.cycle,
-		_hex(COL_DIM),
-		"// ticking every 25s",
-	])
+	var ts = get_node_or_null("/root/TimeSystem")
+	if ts:
+		var phase_color: Color = COL_COOL if ts.is_night() else COL_WARN
+		var speed_str: String = "  [color=#%s]▶▶ %d×[/color]" % [_hex(COL_ACCENT), int(ts.time_scale)] if ts.is_fast_forward() else ""
+		lines.append("[color=#%s]day[/color]             [color=#%s]%d[/color]   [color=#%s]%s[/color]  [color=#%s]%s[/color]%s" % [
+			_hex(COL_DIM),
+			_hex(COL_FG),
+			ts.day,
+			_hex(COL_COOL),
+			ts.clock_string(),
+			_hex(phase_color),
+			ts.phase_name().to_lower(),
+			speed_str,
+		])
+	else:
+		lines.append("[color=#%s]day[/color]             [color=#%s]%d[/color]" % [
+			_hex(COL_DIM),
+			_hex(COL_COOL),
+			WorldDirector.cycle,
+		])
 
 	var pm = get_node_or_null("/root/PlayerManager")
 	if pm:
@@ -257,6 +278,28 @@ func _refresh_state() -> void:
 
 
 func _on_credits_or_heat_changed(_new: int, _delta: int, _reason: String) -> void:
+	_refresh_state()
+
+
+# Throttle: time_of_day fires every frame; only repaint when the minute
+# digit would visibly change (≈every ~1/1440 of a day).
+var _last_tod_bucket: int = -1
+func _on_time_updated(tod: float) -> void:
+	var bucket: int = int(tod * 48.0)  # 48 updates per day = every ~30s game time
+	if bucket != _last_tod_bucket:
+		_last_tod_bucket = bucket
+		_refresh_state()
+
+
+func _on_phase_changed(_p: int) -> void:
+	_refresh_state()
+
+
+func _on_day_advanced(_d: int) -> void:
+	_refresh_state()
+
+
+func _on_speed_changed(_s: float) -> void:
 	_refresh_state()
 
 
@@ -866,6 +909,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		KEY_J:
 			_toggle_jobs()
+			get_viewport().set_input_as_handled()
+		KEY_SPACE:
+			var ts = get_node_or_null("/root/TimeSystem")
+			if ts:
+				ts.toggle_fast_forward()
 			get_viewport().set_input_as_handled()
 		KEY_F5:
 			show_save_modal()

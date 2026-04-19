@@ -37,7 +37,7 @@ The people — billionaires, politicians, citizens, and the occasional myth.
 
 ### 4. [Player](04-player/)
 The loop the human drives.
-- [Core Loop](04-player/loop.md) — Observe → Plan → Act → Adapt
+- [Core Loop](04-player/loop.md) — Observe → Plan → Act → Adapt, plus a second-by-second walkthrough of the player's first hour
 - [Progression, Credits & Heat](04-player/progression.md) — class seeds, income mechanisms, spending, heat system *(new, partial)*
 - [Combat](04-player/combat.md) — weapons, noise, stealth
 - [Heat & Evasion](04-player/heat.md) — police, SWAT, military, escape
@@ -46,6 +46,7 @@ The loop the human drives.
 ### 5. [Systems](05-systems/)
 The tech underneath.
 - [Save and Share](05-systems/save-and-share.md) — world configs: save the generated world, share it, reproduce it *(new, implemented)*
+- [Time & Day/Night](05-systems/time-and-day-night.md) — 5-min days, phase-driven NetFeed, day/night blending, fast-forward *(new, implemented)*
 - [Architecture](05-systems/architecture.md) — singletons, data flow, dependency graph
 - [LLM Stack](05-systems/llm.md) — six-provider fallback, request types
 - [UI](05-systems/ui.md) — diegetic philosophy, terminals, NetFeed ticker
