@@ -8,12 +8,78 @@ Two resources, one law: **nothing is free.**
 
 ---
 
-## The two resources
+## The four resources
+
+The starting premise: **the system is killing you because you're jobless, and there is no hope.** The player isn't a free-agent revolutionary — they're a desperate person whose labor was taken by AI, whose savings are gone, whose system is squeezing them daily. Four resources capture that:
 
 | Resource | Range | Where it lives | High state | Low state |
 |---|---|---|---|---|
-| `credits` | 0..∞ | [PlayerManager](../../src/core/PlayerManager.gd) | Can bribe senators, buy intel, afford forged IDs | Stuck. Can't act. |
-| `heat` | 0..100 | [PlayerManager](../../src/core/PlayerManager.gd) | Enforcer sweeps, checkpoint flags, NPC intel drops degrade | Invisible. Can work unnoticed. |
+| `credits` | −∞..∞ | [PlayerManager](../../src/core/PlayerManager.gd) | Can bribe senators, buy intel, afford housing | Below zero → rent arrears → eviction countdown |
+| `heat` | 0..100 | [PlayerManager](../../src/core/PlayerManager.gd) | Enforcer sweeps, surcharges, despair drift | Invisible. Can work unnoticed. |
+| `hope` | 0..100 | [PlayerManager](../../src/core/PlayerManager.gd) | Psychological reserve. High = acting. 0 = DESPAIR defeat. | Decays passively. Actions restore it. |
+| `homeless` | bool | [PlayerManager](../../src/core/PlayerManager.gd) | Is the player on the streets? Extra hope drift, no rent drain. | Reversible — 500 cr at the shop buys you back indoors. |
+
+---
+
+## The daily survival tick
+
+`WorldDirector.run_world_cycle` (once per day) calls `PlayerManager.apply_daily_tick`:
+
+```
+daily_cost = 30 + max(0, (food_price − 100) / 4)     # scales with economy
+            = 8  if homeless                           # no rent; still eating
+credits -= daily_cost
+
+if credits < 0 for 3 consecutive cycles → _evict()   # homeless = true
+  • hope −10, NetFeed note
+  • NOT a defeat — you keep playing, just exposed
+
+hope_delta = −1                                       # baseline drift
+           − 1 if credits < 0
+           − 1 if heat > 60
+           − 1 if homeless
+           − 1 if month >= 10                         # endgame weighs
+hope += hope_delta
+
+if hope <= 0 → PlayerManager.fire_defeat("DESPAIR_WITHDRAWAL",
+                                          "DESPAIR",
+                                          "You stopped leaving the apartment...")
+```
+
+In the worst case (broke + hot + homeless + month 13) hope drifts **−5/day**. A player doing nothing runs out of hope around month 2–3.
+
+---
+
+## Hope restoration — what makes you keep going
+
+Hope doesn't just decay — actions against the system restore it, while compromised actions erode it:
+
+| Action | Hope Δ |
+|---|---|
+| Sabotage a facility | **+3** — you hit back |
+| Hack the grid | **+4** — biggest hit |
+| Leak scandal publicly | **+2** |
+| Fixer job completion (NPC who trusts you) | **+5** |
+| Resistance-cell contract completion | **+4** |
+| Cameo arc resolved | **+3** baseline (can be overridden per-arc) |
+| Sell scandal to Media (corrupt) | **−2** — you compromised |
+| Pickpocket a neighbor (success) | **−1** — you stole from your own |
+| Bribe a senator | **−1** — the system rubs off on you |
+
+Rhythm: a player actively doing resistance work gains +10/day on a good day; a player drifting loses −2/day. The math works out so an ACTIVE playthrough grows hope, an idle one loses it.
+
+---
+
+## Starting class seeds — desperate from day one
+
+See [`PlayerManager.initialize_run`](../../src/core/PlayerManager.gd).
+
+| Seed | credits | intel | social | hope | Framing |
+|---|---|---|---|---|---|
+| **WHITE_COLLAR** | 2000 | 100 | −50 | 55 | Laid off last month. 2000 credits of quiet savings. The Sinks don't trust you yet. Compliance AI hunts you sooner. |
+| **BLUE_COLLAR** | **−200** | 10 | 80 | 45 | Behind on rent before day one. The landlord sent a registered notice two weeks ago. NPCs open up faster. |
+
+Blue Collar starts **below zero** — your first day of the game, eviction is already 3 cycles away. The game opens with *"how do I dig out?"* as an immediate problem. That's by design.
 
 Every income source **raises heat**. Every spending source is either legal (no heat) or illegal (credits + heat). The only thing you can freely do is walk around — and even that, once you're hot enough, draws attention.
 

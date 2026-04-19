@@ -1053,6 +1053,8 @@ func _apply_effects(effects: Dictionary, reason: String) -> void:
 			pm.add_credits(int(effects.credits), reason)
 		if effects.has("heat_delta"):
 			pm.add_heat(int(effects.heat_delta), reason)
+		if effects.has("hope_delta"):
+			pm.add_hope(float(effects.hope_delta), reason)
 		if effects.has("chaos_bump"):
 			pm.bump_playstyle(float(effects.chaos_bump), 0.0, 0.0, 0.0)
 		if effects.has("ruthless_bump"):
@@ -1097,6 +1099,12 @@ func _complete_arc(arc: Dictionary) -> void:
 	var def: Dictionary = arc.definition
 	var reward: Dictionary = def.get("reward", {})
 	_apply_effects(reward, "cameo: %s" % str(def.get("name", "")))
+	# Baseline +3 hope for seeing an arc through, unless the reward
+	# explicitly set its own hope_delta.
+	if not reward.has("hope_delta"):
+		var pm := get_node_or_null("/root/PlayerManager")
+		if pm:
+			pm.add_hope(3.0, "arc resolved: %s" % str(def.get("name", "")))
 	_netfeed(str(def.get("completion_headline", "")))
 	cameo_arc_completed.emit(arc)
 

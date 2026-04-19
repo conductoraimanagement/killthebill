@@ -374,11 +374,15 @@ func run_world_cycle() -> void:
 
 	# Passive heat decay — multiplier drops in Climactic + Year's End bands.
 	if has_node("/root/PlayerManager"):
+		var pm = get_node("/root/PlayerManager")
 		var decay: int = 1
 		if has_node("/root/TimeSystem"):
 			decay = max(0, int(round(1.0 * get_node("/root/TimeSystem").heat_decay_multiplier())))
 		if decay > 0:
-			get_node("/root/PlayerManager").cool_heat(decay)
+			pm.cool_heat(decay)
+		# Daily survival tick — rent/food drain, hope decay, eviction,
+		# despair-defeat check. See docs/04-player/progression.md.
+		pm.apply_daily_tick(global_economy)
 
 	# Year-arc ambient tension drift — the world tightens around you.
 	if has_node("/root/TimeSystem"):
@@ -580,6 +584,7 @@ func _ripple_sabotage(target_sector: String):
 		pm.add_credits(loot, "sabotage loot: %s" % target_sector)
 		pm.add_heat(heat_amt, "sabotage: %s" % target_sector)
 		pm.bump_playstyle(0.08, 0.02, 0.0, 0.0)
+		pm.add_hope(3.0, "sabotage landed")   # you hit back
 
 	_check_jobs_match("sabotage_sector", target_sector)
 	if has_node("/root/CulturalCameos"):
@@ -669,6 +674,7 @@ func _ripple_grid_hack():
 		pm.add_credits(payout, "grid hack")
 		pm.add_heat(8, "grid hack")
 		pm.bump_playstyle(0.06, 0.04, 0.0, 0.15)  # chaos + stealth
+		pm.add_hope(4.0, "hit the grid")     # big payoff, feels like a blow
 
 	var event := {
 		"type": "NEWS_TICKER",
@@ -706,7 +712,9 @@ func _ripple_leak_scandal(target_id: String):
 			netfeed_event_generated.emit(event)
 
 			if has_node("/root/PlayerManager"):
-				get_node("/root/PlayerManager").bump_playstyle(0.05, 0.0, 0.1, 0.02)
+				var pm_leak = get_node("/root/PlayerManager")
+				pm_leak.bump_playstyle(0.05, 0.0, 0.1, 0.02)
+				pm_leak.add_hope(2.0, "leak hit home")
 
 			_check_jobs_match("leak_oligarch", target_id)
 			if has_node("/root/CulturalCameos"):
@@ -752,6 +760,7 @@ func _ripple_sell_scandal(target_id: String):
 		pm.add_credits(payout, "scandal sold to Media")
 		pm.add_heat(2, "dealing in stolen info")
 		pm.bump_playstyle(0.0, 0.08, 0.0, 0.04)
+		pm.add_hope(-2.0, "you compromised")    # corrupt act eats hope
 
 	print("Ripple: Sold dirt on %s for %d credits. Senate shifts pro-Enclave." % [
 		target.oligarch_name, payout,
@@ -783,6 +792,7 @@ func _ripple_bribe_politician(politician_id: String, direction: String) -> void:
 
 	pm.add_heat(2, "bribery")
 	pm.bump_playstyle(0.0, 0.05, 0.0, 0.03)
+	pm.add_hope(-1.0, "compromised a senator")
 
 	print("Ripple: Bribed %s for %s on the active bill (%d credits)." % [
 		p.politician_name, direction, cost,
@@ -990,6 +1000,7 @@ func apply_pickpocket_result(npc_id: String, success: bool) -> void:
 		pm.add_heat(1, "pickpocket")
 		pm.bump_playstyle(0.02, 0.03, 0.0, 0.06)
 		target.opinion_of_player = max(-1.0, target.opinion_of_player - 0.05)
+		pm.add_hope(-1.0, "stole from a neighbor")
 		var event := {
 			"type": "SILENT_RIPPLE",
 			"headline": "",
@@ -1233,7 +1244,13 @@ func _complete_job(job: Dictionary) -> void:
 					break
 
 	if has_node("/root/PlayerManager"):
-		get_node("/root/PlayerManager").add_credits(bounty, "job: %s" % str(job.get("target_label", "")))
+		var pm_job = get_node("/root/PlayerManager")
+		pm_job.add_credits(bounty, "job: %s" % str(job.get("target_label", "")))
+		# Fixer jobs from humans restore more hope than faceless cells.
+		if str(job.get("source_type", "")) == "npc_fixer":
+			pm_job.add_hope(5.0, "fixer paid out")
+		else:
+			pm_job.add_hope(4.0, "cell paid out")
 
 	var event := {
 		"type": "NEWS_TICKER",

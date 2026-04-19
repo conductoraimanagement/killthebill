@@ -12,11 +12,16 @@ extends Node
 
 signal credits_changed(new_total: int, delta: int, reason: String)
 signal heat_changed(new_total: int, delta: int, reason: String)
+signal hope_changed(new_total: int, delta: int, reason: String)
+signal housing_status_changed(homeless: bool)
 signal defeat_triggered(kind: String, title: String, flavor: String)
 
 enum ClassSeed { WHITE_COLLAR, BLUE_COLLAR }
 
 const HEAT_MAX := 100
+const HOPE_MAX := 100
+const RENT_ARREARS_THRESHOLD: int = 3   # cycles underwater → eviction
+const HOUSING_RECOVERY_COST: int = 500   # shop: get off the streets
 
 var current_class: ClassSeed = ClassSeed.BLUE_COLLAR
 
@@ -25,6 +30,13 @@ var credits: int = 0
 var intel_level: int = 0
 var social_capital: int = 0
 var heat: int = 0
+
+# Survival state. The game's premise: the system is killing you.
+# You're jobless. Rent drains credits daily. Hope decays passively;
+# staying alive requires ACTION, not stasis.
+var hope: float = 50.0
+var homeless: bool = false
+var _rent_arrears_cycles: int = 0
 
 # Playstyle trackers (read by cultural cameos to gate archetype rolls).
 # See docs/03-characters/cultural-cameos.md — "player profile tracking".
@@ -48,6 +60,9 @@ func _ready():
 func initialize_run(seed: ClassSeed = ClassSeed.BLUE_COLLAR) -> void:
 	current_class = seed
 	heat = 0
+	hope = 50.0
+	homeless = false
+	_rent_arrears_cycles = 0
 	player_ruthlessness = 0.0
 	player_idealism = 0.0
 	player_stealth_preference = 0.0
@@ -62,24 +77,34 @@ func initialize_run(seed: ClassSeed = ClassSeed.BLUE_COLLAR) -> void:
 
 	credits_changed.emit(credits, credits, "run start: %s" % _class_label())
 	heat_changed.emit(heat, 0, "run start")
+	hope_changed.emit(int(hope), 0, "run start")
+	housing_status_changed.emit(homeless)
 
-	print("Run initialized as: %s  (credits=%d, intel=%d, social=%d)" % [
-		_class_label(), credits, intel_level, social_capital,
+	print("Run initialized as: %s  (credits=%d, intel=%d, social=%d, hope=%.0f)" % [
+		_class_label(), credits, intel_level, social_capital, hope,
 	])
 
 
 func _setup_white_collar() -> void:
-	credits = 5000
+	# Laid off last month. 2000 credits of quiet savings. The system
+	# is starting to notice — a delinquency notice is in the mail on
+	# something (not rent yet). Hope is fragile because you had more
+	# to lose.
+	credits = 2000
 	intel_level = 100
 	social_capital = -50
-	# TODO: Initialize Compliance AI Hunter
+	hope = 55.0
 
 
 func _setup_blue_collar() -> void:
-	credits = 100
+	# Behind on rent before day one. The landlord sent a registered
+	# notice two weeks ago. -200 credits is the starting hole — the
+	# first thing the game asks is "how will you dig out?" Hope lower
+	# because you've been here before.
+	credits = -200
 	intel_level = 10
 	social_capital = 80
-	# TODO: Initialize Resource Squeeze Timer
+	hope = 45.0
 
 
 func _class_label() -> String:
@@ -169,6 +194,115 @@ func _publish_heat_note(text: String) -> void:
 
 func cool_heat(amount: int = 1) -> void:
 	add_heat(-amount, "passive decay")
+
+
+# =============================================================
+# SURVIVAL TICK
+# =============================================================
+
+# Called by WorldDirector.run_world_cycle() each game day. Drains
+# rent / cost-of-living from credits, ticks hope based on situation,
+# handles eviction (homeless state, not a run-ender), fires the
+# DESPAIR defeat when hope bottoms out.
+func apply_daily_tick(economy: Dictionary) -> void:
+	# --- Cost of living ---
+	# Rent scales with food_price — when the world's expensive,
+	# survival eats more of what you have.
+	var food_price: int = int(economy.get("food_price", 100))
+	var daily_cost: int = 30 + max(0, int((food_price - 100) / 4))
+	if homeless:
+		daily_cost = 8  # no rent, but you still need to eat & bribe for a cot
+	if daily_cost > 0:
+		credits -= daily_cost
+		credits_changed.emit(credits, -daily_cost, "daily cost of living")
+
+	# --- Eviction state ---
+	# Broke for RENT_ARREARS_THRESHOLD consecutive days → lose housing.
+	# Does NOT end the run — being homeless is pressure, not defeat.
+	if credits < 0 and not homeless:
+		_rent_arrears_cycles += 1
+		if _rent_arrears_cycles >= RENT_ARREARS_THRESHOLD:
+			_evict()
+	elif credits >= 0:
+		_rent_arrears_cycles = 0
+
+	# --- Hope decay ---
+	var hope_delta: float = -1.0   # baseline
+	if credits < 0:
+		hope_delta -= 1.0          # broke compounds the dread
+	if heat > 60:
+		hope_delta -= 1.0          # hunted
+	if homeless:
+		hope_delta -= 1.0          # exposed
+	var ts := get_node_or_null("/root/TimeSystem")
+	if ts and int(ts.month) >= 10:
+		hope_delta -= 1.0          # the year's end is heavy
+
+	_apply_hope(hope_delta, "daily drift")
+
+	# --- Despair defeat ---
+	if hope <= 0.0 and not _defeat_locked:
+		_defeat_locked = true
+		defeat_triggered.emit(
+			"DESPAIR_WITHDRAWAL",
+			"DESPAIR",
+			"You stopped leaving the apartment three days ago. The NetFeed moved on. The run ended quietly, the way most of them do."
+		)
+
+
+func _evict() -> void:
+	homeless = true
+	_rent_arrears_cycles = 0
+	housing_status_changed.emit(true)
+	_apply_hope(-10.0, "evicted")
+	print("Evicted. Homeless flag set.")
+	_publish_feed("Eviction squad came at dawn. Your name is now on the list that gets shorter each month.")
+
+
+# Called by the shop (or future recovery actions) to reclaim housing.
+# Returns false if unaffordable.
+func secure_housing() -> bool:
+	if not homeless:
+		return true
+	if credits < HOUSING_RECOVERY_COST:
+		return false
+	credits -= HOUSING_RECOVERY_COST
+	credits_changed.emit(credits, -HOUSING_RECOVERY_COST, "housing deposit")
+	homeless = false
+	_rent_arrears_cycles = 0
+	housing_status_changed.emit(false)
+	_apply_hope(8.0, "roof over head again")
+	_publish_feed("A landlord took your deposit. The walls creak. You have an address again.")
+	return true
+
+
+# =============================================================
+# HOPE
+# =============================================================
+
+func add_hope(amount: float, reason: String = "") -> void:
+	_apply_hope(amount, reason)
+
+
+func _apply_hope(amount: float, reason: String) -> void:
+	var before: float = hope
+	hope = clampf(hope + amount, 0.0, float(HOPE_MAX))
+	var delta: int = int(hope) - int(before)
+	if delta != 0:
+		hope_changed.emit(int(hope), delta, reason)
+
+
+func _publish_feed(text: String) -> void:
+	var wd := get_node_or_null("/root/WorldDirector")
+	if wd == null:
+		return
+	var event := {
+		"type": "NEWS_TICKER",
+		"headline": text,
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	wd.netfeed_history.append(event)
+	wd.netfeed_event_generated.emit(event)
 
 
 # =============================================================

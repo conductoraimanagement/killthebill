@@ -188,11 +188,13 @@ func _ready() -> void:
 		senate.bill_proposed.connect(_on_bill_proposed)
 		senate.bill_resolved.connect(_on_bill_resolved)
 
-	# PlayerManager hooks (credits + heat + defeat)
+	# PlayerManager hooks (credits + heat + hope + housing + defeat)
 	var pm = get_node_or_null("/root/PlayerManager")
 	if pm:
 		pm.credits_changed.connect(_on_credits_or_heat_changed)
 		pm.heat_changed.connect(_on_credits_or_heat_changed)
+		pm.hope_changed.connect(_on_credits_or_heat_changed)
+		pm.housing_status_changed.connect(_on_housing_changed)
 		pm.defeat_triggered.connect(_on_defeat)
 
 	# LLM dialogue responses route back via llm_response_received.
@@ -291,7 +293,7 @@ func _build_state_panel() -> void:
 	_state_panel.offset_left = 20
 	_state_panel.offset_top = 20
 	_state_panel.offset_right = 320
-	_state_panel.offset_bottom = 300
+	_state_panel.offset_bottom = 360
 
 	var title := _make_label("// WORLD STATE", COL_ACCENT, 11, true)
 	title.offset_left = PANEL_PAD
@@ -377,6 +379,26 @@ func _refresh_state() -> void:
 			str(pm.heat).rpad(5),
 			_hex(COL_DIM),
 		])
+		# Hope bar — 10-tick, color-coded. At 0, DESPAIR fires.
+		var hope_int: int = int(pm.hope)
+		var hope_bar: String = ""
+		var hope_ticks: int = clampi(int(round(float(hope_int) / 10.0)), 0, 10)
+		for i in range(10):
+			hope_bar += "█" if i < hope_ticks else "░"
+		lines.append("[color=#%s]hope[/color]            [color=#%s]%s[/color]  [color=#%s]%d[/color]" % [
+			_hex(COL_DIM),
+			_hex(_color_for_hope(hope_int)),
+			hope_bar,
+			_hex(COL_DIM),
+			hope_int,
+		])
+		# Housing line — only shows when homeless (otherwise implicit).
+		if pm.homeless:
+			lines.append("[color=#%s]housing[/color]         [color=#%s]HOMELESS[/color] [color=#%s](+drift, no shelter)[/color]" % [
+				_hex(COL_DIM),
+				_hex(COL_HOT),
+				_hex(COL_DIM),
+			])
 
 	_state_text.text = "\n".join(lines)
 
@@ -422,6 +444,16 @@ func _color_for_heat(value: int) -> Color:
 	if value > 60: return COL_HOT
 	if value > 30: return COL_WARN
 	return COL_FG
+
+
+func _color_for_hope(value: int) -> Color:
+	if value <= 20:  return COL_HOT
+	if value <= 50:  return COL_WARN
+	return COL_FG
+
+
+func _on_housing_changed(_homeless: bool) -> void:
+	_refresh_state()
 
 
 func _color_for_month(month: int) -> Color:
@@ -653,9 +685,9 @@ func _build_politicians_panel() -> void:
 	_pol_panel.anchor_left = 0.0
 	_pol_panel.anchor_top = 0.0
 	_pol_panel.offset_left = 20
-	_pol_panel.offset_top = 320
+	_pol_panel.offset_top = 380
 	_pol_panel.offset_right = 440
-	_pol_panel.offset_bottom = 660
+	_pol_panel.offset_bottom = 720
 	_pol_panel.visible = false
 
 	var title := _make_label("// SENATE ROSTER  (press P to hide)", COL_ACCENT, 11, true)
@@ -1788,6 +1820,13 @@ func _build_shop_modal() -> void:
 		SHOP_BURNER_COST,
 		_on_buy_burner)
 
+	# Secure Housing (only meaningful if homeless — see _on_buy_housing)
+	_make_shop_row(panel, 240,
+		"Secure Housing (if homeless)",
+		"Buy back a walls-and-a-door deal. Landlord takes a deposit up front, +8 hope, ends the homeless state.",
+		500,
+		_on_buy_housing)
+
 	_shop_status = _make_label("", COL_DIM, 11, true)
 	_shop_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_shop_status.anchor_right = 1.0
@@ -1888,6 +1927,22 @@ func _on_buy_burner() -> void:
 	_on_bill_proposed(_active_bill)
 	_shop_status.text = "Burner hot. Senate panel now shows the honest rationale."
 	_shop_status.add_theme_color_override("font_color", COL_COOL)
+
+
+func _on_buy_housing() -> void:
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm == null:
+		return
+	if not pm.homeless:
+		_shop_status.text = "You've got a roof already. Nothing to buy."
+		_shop_status.add_theme_color_override("font_color", COL_DIM)
+		return
+	if pm.secure_housing():
+		_shop_status.text = "Deposit paid. Welcome back inside."
+		_shop_status.add_theme_color_override("font_color", COL_COOL)
+	else:
+		_shop_status.text = "Not enough credits for a deposit."
+		_shop_status.add_theme_color_override("font_color", COL_HOT)
 
 
 # -------------------------------------------------------------
