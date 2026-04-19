@@ -17,6 +17,11 @@ class_name NPCData
 @export var npc_id: String = "" # Unique persistent identifier
 @export_enum("Oligarch", "Enforcer", "Worker", "Destitute") var social_class: int = 2
 
+## Mortality. Set by PopulationDirector._evaluate_deaths each cycle.
+@export var alive: bool = true
+@export var death_cause: String = ""         # "accident" | "murder"
+@export var died_on_cycle: int = -1
+
 ## When this NPC is active and can be met / post fixer jobs.
 ## "both" = round-the-clock. "day" = only visible / responsive in
 ## MORNING or AFTERNOON phases. "night" = only responsive in NIGHT.

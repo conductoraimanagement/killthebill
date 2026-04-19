@@ -775,9 +775,11 @@ func _spawn_crowd() -> void:
 	if ts:
 		is_night_now = ts.is_night()
 
-	# Filter the roster: skip Enforcers (they're patrols), apply active_phase.
+	# Filter the roster: skip dead, Enforcers (patrols), apply active_phase.
 	var candidates: Array = []
 	for n in pop_dir.roster:
+		if not n.alive:
+			continue
 		if int(n.social_class) == 1:
 			continue
 		var phase: String = str(n.active_phase) if n.active_phase else "both"

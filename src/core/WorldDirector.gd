@@ -384,6 +384,10 @@ func run_world_cycle() -> void:
 		# despair-defeat check. See docs/04-player/progression.md.
 		pm.apply_daily_tick(global_economy)
 
+	# NPC mortality — accident + murder rolls for every alive NPC.
+	if has_node("/root/PopulationDirector"):
+		get_node("/root/PopulationDirector").evaluate_deaths(global_economy, cycle)
+
 	# Year-arc ambient tension drift — the world tightens around you.
 	if has_node("/root/TimeSystem"):
 		var drift: int = int(get_node("/root/TimeSystem").tension_drift_per_cycle())
@@ -432,6 +436,8 @@ func _apply_social_pressure() -> void:
 	var hostile_count: int = 0
 	var ally_count: int = 0
 	for n in pop_dir.roster:
+		if not n.alive:
+			continue
 		var phase: String = str(n.active_phase) if n.active_phase else "both"
 		var active_now: bool = phase == "both" \
 			or (phase == "day" and not is_night_now) \
@@ -1134,6 +1140,8 @@ func _try_post_fixer_job() -> void:
 
 	var candidates: Array = []
 	for n in pop_dir.roster:
+		if not n.alive:
+			continue
 		if n.trust < 30.0:
 			continue
 		var phase: String = str(n.active_phase) if n.active_phase else "both"

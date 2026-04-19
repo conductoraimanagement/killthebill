@@ -224,6 +224,9 @@ func rehydrate_npc(n_dict: Dictionary) -> NPCData:
 	n.trust = float(n_dict.get("trust", 0.0))
 	n.relationship_type = int(n_dict.get("relationship_type", 0))
 	n.active_phase = str(n_dict.get("active_phase", "both"))
+	n.alive = bool(n_dict.get("alive", true))
+	n.death_cause = str(n_dict.get("death_cause", ""))
+	n.died_on_cycle = int(n_dict.get("died_on_cycle", -1))
 	return n
 
 
@@ -356,6 +359,9 @@ func _npc_to_dict(n: NPCData) -> Dictionary:
 		"trust": n.trust,
 		"relationship_type": n.relationship_type,
 		"active_phase": n.active_phase,
+		"alive": n.alive,
+		"death_cause": n.death_cause,
+		"died_on_cycle": n.died_on_cycle,
 	}
 
 

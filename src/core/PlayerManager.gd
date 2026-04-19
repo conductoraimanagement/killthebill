@@ -38,6 +38,23 @@ var hope: float = 50.0
 var homeless: bool = false
 var _rent_arrears_cycles: int = 0
 
+# Romantic partners — polyamorous. Can court many, at risk and cost
+# per partner's personality. See docs/03-characters/relationships.md.
+var romantic_partner_ids: Array[String] = []
+
+
+func is_romantic_partner(npc_id: String) -> bool:
+	return npc_id in romantic_partner_ids
+
+
+func add_romantic_partner(npc_id: String) -> void:
+	if npc_id != "" and npc_id not in romantic_partner_ids:
+		romantic_partner_ids.append(npc_id)
+
+
+func remove_romantic_partner(npc_id: String) -> void:
+	romantic_partner_ids.erase(npc_id)
+
 # Playstyle trackers (read by cultural cameos to gate archetype rolls).
 # See docs/03-characters/cultural-cameos.md — "player profile tracking".
 var player_ruthlessness: float = 0.0
@@ -63,6 +80,7 @@ func initialize_run(seed: ClassSeed = ClassSeed.BLUE_COLLAR) -> void:
 	hope = 50.0
 	homeless = false
 	_rent_arrears_cycles = 0
+	romantic_partner_ids.clear()
 	player_ruthlessness = 0.0
 	player_idealism = 0.0
 	player_stealth_preference = 0.0

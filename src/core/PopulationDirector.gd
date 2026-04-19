@@ -12,6 +12,7 @@ class_name PopulationDirector
 # =============================================================
 
 signal population_generated()
+signal npc_died(npc, cause: String)
 
 const MAX_NPCS: int = 40 # Total persistent population cap
 
@@ -111,9 +112,133 @@ func evolve_all_npcs(eco: Dictionary) -> void:
 	var tension = eco.get("public_tension", 50)
 	var food_price = eco.get("food_price", 100)
 	var security = eco.get("security_presence", 50)
-	
+
 	for npc in roster:
+		if not npc.alive:
+			continue
 		npc.process_world_pressure(tension, food_price, security)
+
+
+# Called by WorldDirector each day cycle. Random accident + murder
+# rolls for every alive NPC, weighted by world state + character
+# state. Romantic partners are slightly safer early, noticeably
+# MORE at risk in the endgame — the collapse takes what you love.
+func evaluate_deaths(economy: Dictionary, cycle: int) -> void:
+	var tension: int = int(economy.get("public_tension", 50))
+	var food_price: int = int(economy.get("food_price", 100))
+	var security: int = int(economy.get("security_presence", 50))
+
+	var pm := get_node_or_null("/root/PlayerManager")
+	var player_heat: int = int(pm.heat) if pm else 0
+	var wd := get_node_or_null("/root/WorldDirector")
+
+	for npc in roster:
+		if not npc.alive:
+			continue
+
+		# Base risks.
+		var accident_chance: float = 0.002
+		var murder_chance: float  = 0.002
+
+		# Accident scaling
+		if food_price > 250:
+			accident_chance += 0.002     # food poisoning, starvation
+		if npc.stress_level > 70.0:
+			accident_chance += 0.002     # health collapse under pressure
+		if int(npc.social_class) == 3 and food_price > 200:
+			accident_chance += 0.002     # Destitute most vulnerable
+
+		# Murder scaling
+		if npc.radicalization > 70.0 and security > 60:
+			murder_chance += 0.004        # silenced as agitator
+		if npc.knowledge_of_player > 0.6 and player_heat > 70:
+			murder_chance += 0.003        # they saw too much
+		murder_chance += float(tension) / 100.0 * 0.002  # ambient violence
+
+		# Romantic partners are slightly safer — you look out for them,
+		# check in, know where they sleep. The world isn't actively
+		# targeting them.
+		var is_lover: bool = pm and pm.is_romantic_partner(npc.npc_id)
+		if is_lover:
+			accident_chance *= 0.75
+			murder_chance *= 0.75
+
+		# Roll
+		var cause: String = ""
+		if randf() < accident_chance:
+			cause = "accident"
+		elif randf() < murder_chance:
+			cause = "murder"
+
+		if cause != "":
+			_kill_npc(npc, cause, cycle, wd, pm)
+
+
+func _kill_npc(npc, cause: String, cycle: int, wd, pm) -> void:
+	npc.alive = false
+	npc.death_cause = cause
+	npc.died_on_cycle = cycle
+
+	# Hope hit scales with how much this person mattered. Romantic
+	# partner's death hurts inversely proportional to partner count —
+	# a monogamous player loses a lot more than a polyamorous one.
+	# "Obviously if player has more, it means the relationships are
+	# less critical to the player's hope."
+	var hope_hit: float = -2.0
+	var is_lover: bool = pm and pm.is_romantic_partner(npc.npc_id)
+	var is_ally: bool = npc.trust >= 30.0
+	if is_lover:
+		var n_partners: int = pm.romantic_partner_ids.size() if pm else 1
+		if n_partners <= 1:
+			hope_hit = -40.0
+		else:
+			# Divide evenly, floor at -10 — even one of many still matters.
+			hope_hit = max(-40.0 / float(n_partners), -10.0)
+			if n_partners >= 4:
+				hope_hit = max(hope_hit, -10.0)
+	elif is_ally:
+		hope_hit = -10.0
+	if pm:
+		pm.add_hope(hope_hit, "death of %s" % npc.npc_name)
+		if is_lover:
+			pm.remove_romantic_partner(npc.npc_id)
+
+	# NetFeed headline.
+	if wd:
+		var headline: String = _headline_for_death(npc, cause, is_lover, is_ally)
+		var event := {
+			"type": "NEWS_TICKER",
+			"headline": headline,
+			"timestamp": Time.get_unix_time_from_system(),
+		}
+		wd.netfeed_history.append(event)
+		wd.netfeed_event_generated.emit(event)
+
+	npc_died.emit(npc, cause)
+	print("NPC died: %s (%s)" % [npc.npc_name, cause])
+
+
+func _headline_for_death(npc, cause: String, is_lover: bool, is_ally: bool) -> String:
+	if is_lover:
+		return "The name you whispered last week is in this morning's death notices. The system did not pause for %s." % npc.npc_name
+	if is_ally:
+		return "%s died overnight. They were one of yours. The rally lost its voice." % npc.npc_name
+	if cause == "accident":
+		var accident_kinds: Array[String] = [
+			"A fire on the sixth floor took %s overnight. Two others displaced.",
+			"%s collapsed at a checkpoint queue. By the time anyone noticed, they were already gone.",
+			"Suspected food poisoning. %s was found in their one-room on Tuesday.",
+			"%s didn't come home from the factory. No statement from the industrial office.",
+		]
+		return accident_kinds[randi() % accident_kinds.size()] % npc.npc_name
+	# murder
+	var murder_kinds: Array[String] = [
+		"%s was found dead in a stairwell. Compliance AI flagged the incident as 'resolved'.",
+		"A body in a Sinks alley, later identified as %s. No suspects named.",
+		"%s did not show up to the bread line this morning. By evening the rumor was confirmed.",
+		"A neighbor reported 'shouting, then quiet.' The next morning, %s was in the notices.",
+	]
+	return murder_kinds[randi() % murder_kinds.size()] % npc.npc_name
 
 # =============================================================
 # QUERIES — Let other systems ask about the population
