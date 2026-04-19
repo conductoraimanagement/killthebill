@@ -814,6 +814,51 @@ func _fire_victory(kind: String, title: String, flavor: String) -> void:
 	victory_achieved.emit(kind, title, flavor)
 
 
+# Pickpocket result applier. Called by Main after it has rolled the
+# stealth check, so the caller and the world stay in sync (caller needs
+# the result to decide whether the CrowdNPC consumes or flees).
+# See docs/04-player/progression.md income mechanism #5.
+func apply_pickpocket_result(npc_id: String, success: bool) -> void:
+	if not has_node("/root/PopulationDirector") or not has_node("/root/PlayerManager"):
+		return
+	var pop_dir = get_node("/root/PopulationDirector")
+	var pm = get_node("/root/PlayerManager")
+	var target = null
+	for n in pop_dir.roster:
+		if n.npc_id == npc_id:
+			target = n
+			break
+	if target == null:
+		return
+
+	if success:
+		var take: int = randi_range(20, 80)
+		pm.add_credits(take, "pickpocket: %s" % target.npc_name)
+		pm.add_heat(1, "pickpocket")
+		pm.bump_playstyle(0.02, 0.03, 0.0, 0.06)
+		target.opinion_of_player = max(-1.0, target.opinion_of_player - 0.05)
+		var event := {
+			"type": "SILENT_RIPPLE",
+			"headline": "",
+			"systemic_impact": "pickpocketing reported near %s; one more shadow in the feed" % target.npc_name,
+			"timestamp": Time.get_unix_time_from_system(),
+		}
+		netfeed_history.append(event)
+		netfeed_event_generated.emit(event)
+	else:
+		pm.add_heat(3, "pickpocket failed")
+		pm.bump_playstyle(0.01, 0.02, 0.0, 0.0)
+		target.knowledge_of_player = min(1.0, target.knowledge_of_player + 0.30)
+		target.opinion_of_player = max(-1.0, target.opinion_of_player - 0.15)
+		var event := {
+			"type": "NEWS_TICKER",
+			"headline": "A witness called the patrol on an attempted lift near %s. Perpetrator fled empty-handed." % target.npc_name,
+			"timestamp": Time.get_unix_time_from_system(),
+		}
+		netfeed_history.append(event)
+		netfeed_event_generated.emit(event)
+
+
 # Bribe cost with heat multiplier applied. Centralized so HUD and the
 # _ripple_bribe_politician ripple agree on the number.
 func effective_bribe_cost(p: PoliticianData) -> int:

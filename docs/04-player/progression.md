@@ -99,15 +99,27 @@ Starting trust: NPCs roll `randf_range(0, 60)` on generation (Enforcers are cold
 
 **Tradeoff**: the small, human-scale economy. No senate_alignment shift, no paranoia amplification, no oligarch patronage debt. Just a citizen paying you for a favor. But the bounties are smaller, and you can only run one at a time per NPC.
 
-### 5. Pickpocket / mug *(designed, not implemented)*
-Ambient crowd-NPCs and Enforcer patrols in the streets. Interact → stealth roll.
+### 5. Pickpocket ✓ *(implemented — mugging Enforcers still future)*
+Ambient crowd NPCs spawn in the landscape each phase, drawn from the persistent [roster](../03-characters/npcs.md) (Workers + Destitute, filtered by active_phase). Walk within ~2.6m → prompt *"[E] Pickpocket {name}"* → press E.
 
-| Target | Success payout | Fail consequence |
-|---|---|---|
-| Crowd NPC | 20–80 | +1 heat, NPC awareness leaks |
-| Enforcer | 300–600 + gear | +5 heat, possible combat |
+Stealth roll:
+```
+chance = clamp(0.50
+              + player_stealth_preference × 0.40
+              - target.conformity × 0.10,
+              0.15, 0.90)
+```
 
-**Tradeoff**: reliable-ish chunks of income but heat compounds. Can't sustain on this alone.
+| Outcome | Effect |
+|---|---|
+| Success | +20–80 cr, +1 heat, target's `opinion_of_player −0.05`, silent NetFeed ripple |
+| Failure | +3 heat, target `knowledge_of_player +0.30`, `opinion −0.15`, NetFeed: *"Witness called the patrol on an attempted lift…"*. Target bolts (despawns) |
+
+Ambient crowd refreshes each phase (Morning/Afternoon/Night), so the available pool rotates. 6–12 NPCs visible at a time, scaled by region `population_density`.
+
+**Mugging Enforcer patrols** (instead of being stopped by them) is still future — currently you *can* bribe or flee them but not reverse the encounter.
+
+**Tradeoff**: reliable trickle of income but heat compounds. Can't sustain on this alone — one failed roll at heat 80+ can cascade into arrest. Also erodes trust with that specific NPC (the opinion shift), so pickpocketing someone who could later be a fixer is shortsighted.
 
 ### 6. Hack the grid ✓ *(implemented)*
 Open the Datashard Terminal menu → `HACK THE GRID`. No target picker — the hack flows through the Tech Oligarch by default. Payload:

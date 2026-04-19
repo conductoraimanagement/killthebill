@@ -138,9 +138,14 @@ func _on_landscape_ready(landscape: LandscapeGenerator) -> void:
 	# the HUD encounter modal.
 	if not landscape.patrol_spawned.is_connected(_on_patrol_spawned):
 		landscape.patrol_spawned.connect(_on_patrol_spawned)
-	# Hook any already-spawned patrols from the initial generate() call.
 	for p in landscape.enforcer_patrols:
 		_on_patrol_spawned(p)
+
+	# Wire ambient crowd NPCs — proximity prompt + pickpocket resolution.
+	if not landscape.crowd_spawned.is_connected(_on_crowd_spawned):
+		landscape.crowd_spawned.connect(_on_crowd_spawned)
+	for c in landscape.crowd_npcs:
+		_on_crowd_spawned(c)
 
 	print("Main: landscape ready for '%s' (type=%s, biome=%s). Day clock live." % [
 		str(landscape.region.get("name", "?")),
@@ -282,6 +287,39 @@ func _on_patrol_spawned(patrol: EnforcerPatrol) -> void:
 func _on_patrol_encounter(patrol: EnforcerPatrol) -> void:
 	_hud.hide_prompt()
 	_hud.show_enforcer_encounter(patrol)
+
+
+func _on_crowd_spawned(crowd: CrowdNPC) -> void:
+	if _player:
+		crowd.set_player(_player)
+	if not crowd.became_interactable.is_connected(_on_crowd_interactable):
+		crowd.became_interactable.connect(_on_crowd_interactable)
+	if not crowd.became_non_interactable.is_connected(_on_target_left):
+		crowd.became_non_interactable.connect(_on_target_left)
+	if not crowd.pickpocket_requested.is_connected(_on_pickpocket_requested):
+		crowd.pickpocket_requested.connect(_on_pickpocket_requested)
+
+
+func _on_crowd_interactable(crowd: CrowdNPC) -> void:
+	_hud.show_prompt(crowd.prompt_text())
+
+
+func _on_pickpocket_requested(crowd: CrowdNPC) -> void:
+	_hud.hide_prompt()
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm == null or crowd.npc_data == null:
+		return
+	# Stealth roll. Base 50%, +40% from stealth_preference, -10% from target's conformity
+	# (conformist citizens pay attention; rule-breakers notice you less).
+	var stealth: float = float(pm.player_stealth_preference)
+	var conformity: float = float(crowd.npc_data.conformity)
+	var chance: float = clamp(0.50 + stealth * 0.40 - conformity * 0.10, 0.15, 0.90)
+	var success: bool = randf() < chance
+	WorldDirector.apply_pickpocket_result(crowd.npc_data.npc_id, success)
+	if success:
+		crowd.consume()
+	else:
+		crowd.flee()
 
 
 # -------------------------------------------------------------

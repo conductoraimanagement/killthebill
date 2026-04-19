@@ -24,6 +24,7 @@ class_name LandscapeGenerator
 
 signal landscape_ready(generator)
 signal patrol_spawned(patrol)
+signal crowd_spawned(crowd)
 
 const METERS_PER_STORY := 3.0
 const STREET_EVERY_N := 4     # every 4th grid row/column stays clear for streets
@@ -167,6 +168,10 @@ var landmark_spawns: Dictionary = {}
 # Active Enforcer patrols in the landscape. Re-populated each phase.
 var enforcer_patrols: Array = []
 
+# Ambient street crowd (pickpocket targets). Re-populated each phase so
+# day-only and night-only NPCs rotate in and out as time advances.
+var crowd_npcs: Array = []
+
 var _nav_region: NavigationRegion3D
 var _rng: RandomNumberGenerator
 var _occupied: Array = []    # 2D array of bool, size [grid_w][grid_h]
@@ -216,6 +221,7 @@ func generate(region_data: Dictionary) -> void:
 	_build_ambient()
 	_bake_nav()
 	_spawn_enforcer_patrols()
+	_spawn_crowd()
 
 	# Refresh patrols each phase so day→night doubles the presence
 	# and heat spikes don't leave an empty street forever.
@@ -229,6 +235,8 @@ func generate(region_data: Dictionary) -> void:
 func _on_phase_changed_refresh_patrols(_phase: int) -> void:
 	_despawn_enforcer_patrols()
 	_spawn_enforcer_patrols()
+	_despawn_crowd()
+	_spawn_crowd()
 
 
 # -------------------------------------------------------------
@@ -643,6 +651,58 @@ func _pick_street_cell() -> Vector3:
 			return _cell_center(gx, gz)
 	# Fallback — map center.
 	return Vector3.ZERO
+
+
+# -------------------------------------------------------------
+# Ambient crowd — pickpocket targets from the persistent NPC roster
+# -------------------------------------------------------------
+func _spawn_crowd() -> void:
+	var pop_dir := get_node_or_null("/root/PopulationDirector")
+	if pop_dir == null:
+		return
+	var ts := get_node_or_null("/root/TimeSystem")
+	var is_night_now: bool = false
+	if ts:
+		is_night_now = ts.is_night()
+
+	# Filter the roster: skip Enforcers (they're patrols), apply active_phase.
+	var candidates: Array = []
+	for n in pop_dir.roster:
+		if int(n.social_class) == 1:
+			continue
+		var phase: String = str(n.active_phase) if n.active_phase else "both"
+		if phase == "both":
+			candidates.append(n)
+		elif phase == "day" and not is_night_now:
+			candidates.append(n)
+		elif phase == "night" and is_night_now:
+			candidates.append(n)
+	candidates.shuffle()
+
+	# 6..12 depending on the region's population_density.
+	var density: float = float(region.get("population_density", 0.5))
+	var count: int = int(6 + density * 6)
+	count = min(count, candidates.size())
+
+	for i in range(count):
+		var data = candidates[i]
+		var crowd := CrowdNPC.new()
+		crowd.set_npc_data(data)
+		var pos: Vector3 = _pick_street_cell()
+		# Jitter a little so clustered NPCs don't overlap
+		pos.x += _rng.randf_range(-1.5, 1.5)
+		pos.z += _rng.randf_range(-1.5, 1.5)
+		add_child(crowd)
+		crowd.position = pos
+		crowd_npcs.append(crowd)
+		crowd_spawned.emit(crowd)
+
+
+func _despawn_crowd() -> void:
+	for c in crowd_npcs:
+		if is_instance_valid(c):
+			c.queue_free()
+	crowd_npcs.clear()
 
 
 # -------------------------------------------------------------
