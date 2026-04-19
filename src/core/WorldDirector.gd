@@ -100,6 +100,10 @@ func initialize_playthrough(preloaded_config: Dictionary = {}) -> void:
 	if has_node("/root/PlayerManager"):
 		get_node("/root/PlayerManager").initialize_run()
 
+	# Fresh cameo trigger state — new playthrough, all cameos eligible again.
+	if has_node("/root/CulturalCameos"):
+		get_node("/root/CulturalCameos").reset()
+
 	# If the user loaded a saved world config, inject it directly and skip
 	# LLM generation entirely. Otherwise fall through to the async generator
 	# chain that hits LLMManager (with offline fallback).
@@ -708,6 +712,10 @@ func trigger_news_cycle():
 	# so jobs feel like they arrive "with the broadcast" rather than on a
 	# separate tick.
 	_maybe_post_jobs()
+
+	# Evaluate cultural cameos once per news cycle.
+	if has_node("/root/CulturalCameos"):
+		get_node("/root/CulturalCameos").evaluate_triggers()
 
 	if has_node("/root/LLMManager"):
 		var llm = get_node("/root/LLMManager")

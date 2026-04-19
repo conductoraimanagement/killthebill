@@ -1,6 +1,18 @@
 # Cultural Cameos
 
-> **Status:** Design spec + stub. See [src/core/CulturalCameos.gd](../../src/core/CulturalCameos.gd).
+> **Status:** Partial implementation — 6 Tier-1 Whisper cameos live. Tier 2–4 arcs are designed below, not yet built. See [src/core/CulturalCameos.gd](../../src/core/CulturalCameos.gd).
+
+## What's implemented today
+
+- `CulturalCameos` autoload evaluates triggers once per news cycle (3× per day).
+- Six Tier-1 (Whisper) cameos are in the pool: `soap_broadcast`, `mask_in_the_crowd`, `compliance_error_7`, `unsigned_manifesto`, `yellow_hymn`, `kindly_coffee`.
+- Each gates on world state (`public_tension`, `senate_alignment`) + player profile (`player_chaos_preference`, `player_idealism`, `player_heat`, `player_ruthlessness`) + `min_cycle`.
+- Probability rolls once gate is satisfied. Fires NetFeed headline; no mechanical impact by design — Whispers are flavor.
+- Each cameo fires at most once per run (`fired_ids` tracks; `reset()` clears on new run).
+
+The rest of this doc is the *designed* system, which the Tier-1 implementation is a small subset of.
+
+---
 
 Most playthroughs should feel like a grounded, systemic simulation. But sometimes — rarely — the player crosses paths with a figure out of pop-culture myth. A stranger in an alley hands them a soap recipe that turns out to be something else. A lone wolf in a cabin in the Agricultural region keeps sending manifestos to the NetFeed. A man who calls himself only "V" appears on every screen in the Enclave at once.
 

@@ -42,8 +42,8 @@ const DOCS = [
             { file: 'loop.md',        title: 'Core Loop' },
             { file: 'progression.md', title: 'Progression, Credits & Heat' },
             { file: 'heat.md',        title: 'Heat & Enforcement' },
+            { file: 'victory.md',     title: 'Victory & Defeat' },
             { file: 'combat.md',      title: 'Combat',      stub: true },
-            { file: 'victory.md',     title: 'Victory',     stub: true },
         ]
     },
     { title: 'Systems', dir: '05-systems', icon: '▲',

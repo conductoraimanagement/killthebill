@@ -40,8 +40,8 @@ The loop the human drives.
 - [Core Loop](04-player/loop.md) — Observe → Plan → Act → Adapt, plus a second-by-second walkthrough of the player's first hour
 - [Progression, Credits & Heat](04-player/progression.md) — class seeds, income mechanisms, spending, heat system *(new, partial)*
 - [Heat & Enforcement](04-player/heat.md) — Enforcer patrols, encounter modal, threshold effects, cooling mechanisms *(new, partial)*
+- [Victory & Defeat](04-player/victory.md) — four victory paths, two defeat paths, the end-of-run modal *(new, implemented)*
 - [Combat](04-player/combat.md) — weapons, noise, stealth
-- [Victory](04-player/victory.md) — three paths to collapse, all live at once
 
 ### 5. [Systems](05-systems/)
 The tech underneath.
