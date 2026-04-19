@@ -202,6 +202,290 @@ const CAMEOS := [
 	# Multi-step arc: accept_prompt → action_objective → binary_decision.
 	# At most one Tier-3+ arc concurrent.
 	# ------------------------------------------------------------
+	# ------------------------------------------------------------
+	# Archetype-family coverage — Tier 2/3/4 cameos filling gaps
+	# ------------------------------------------------------------
+
+	# chaos_prophet T2 — Project Dust
+	{
+		"id": "project_dust",
+		"tier": 2,
+		"archetype": "chaos_prophet",
+		"name": "Project Dust",
+		"min_cycle": 4,
+		"probability": 0.15,
+		"gate": {
+			"public_tension": {"min": 40.0},
+			"player_chaos_preference": {"min": 0.25},
+		},
+		"intro_headline": "Fine glass-dust is appearing in key uplinks across the Sinks. Comms go down for six minutes at a time. Someone is practicing something larger.",
+		"objective": {
+			"kind": "sabotage_sector",
+			"target_ref": "Tech",
+			"label": "hit a Tech facility — the dust works best during a full blackout"
+		},
+		"arc_duration_cycles": 3,
+		"completion_headline": "Project Dust's coordinated blackout happened at 02:47. The Enclave lost 14 uplinks simultaneously. Nobody claimed responsibility; everyone understood the message.",
+		"timeout_headline": "Project Dust's organizers went to ground. The glass-dust stockpile was found and seized. The Sinks noticed which neighborhoods went quiet after.",
+		"reward": {"credits": 900, "tension_delta": 8, "chaos_bump": 0.08},
+	},
+
+	# lone_manifesto T2 — The Sidewalk Philosopher
+	{
+		"id": "sidewalk_philosopher",
+		"tier": 2,
+		"archetype": "lone_manifesto",
+		"name": "The Sidewalk Philosopher",
+		"min_cycle": 5,
+		"probability": 0.13,
+		"gate": {
+			"public_tension": {"min": 45.0},
+			"player_idealism": {"min": 0.15},
+		},
+		"intro_headline": "A man has been drawing in chalk on the sidewalk outside the senate building — equations, arrows, diagrams of 'attention economies'. Seven days running. Every morning someone washes it off. Every morning he starts again.",
+		"objective": {
+			"kind": "leak_sector",
+			"target_ref": "Media",
+			"label": "leak Media-sector dirt so his diagrams survive the morning broadcast cycle"
+		},
+		"arc_duration_cycles": 3,
+		"completion_headline": "The Sidewalk Philosopher's chalk went viral on a leaked morning broadcast. His equations are being screenshotted across the Sinks. Three separate 'study groups' formed by noon.",
+		"timeout_headline": "The Sidewalk Philosopher was 'relocated for welfare reasons' Tuesday night. The chalk was still on the sidewalk in the rain when the feed aired a story about Enclave charitable outreach.",
+		"reward": {"credits": 700, "tension_delta": 6, "idealism_bump": 0.12},
+	},
+
+	# masked_symbol T2 — The Ledger Leak
+	{
+		"id": "ledger_leak",
+		"tier": 2,
+		"archetype": "masked_symbol",
+		"name": "The Ledger Leak",
+		"min_cycle": 6,
+		"probability": 0.12,
+		"gate": {
+			"senate_alignment": {"min": 55.0},
+		},
+		"intro_headline": "An anonymous account pushing from a mask-icon avatar has published a single spreadsheet: 14 senators, bribery amounts over 24 months, paired with the oligarch sectors paying. Authenticity 'disputed'. Somehow everyone recognizes their own entry.",
+		"objective": {
+			"kind": "leak_sector",
+			"target_ref": "Media",
+			"label": "leak Media-sector dirt — the ledger works best when a real name surfaces at the same time"
+		},
+		"arc_duration_cycles": 3,
+		"completion_headline": "The ledger plus your leak combined over a 48-hour cycle. The story became unkillable. Three senators have resigned 'to spend time with family'. The mask-icon avatar went dark. It had served.",
+		"timeout_headline": "The ledger was dismissed as fabricated. The mask-icon avatar deleted. The senate returned to business after one week of muttering. Nobody asked follow-ups.",
+		"reward": {"credits": 1000, "tension_delta": 8, "senate_alignment_delta": -8},
+	},
+
+	# whistleblower T3 — The Leak That Got Her Killed
+	{
+		"id": "leak_that_got_her_killed",
+		"tier": 3,
+		"archetype": "whistleblower",
+		"name": "The Leak That Got Her Killed",
+		"min_cycle": 7,
+		"probability": 0.09,
+		"gate": {
+			"senate_alignment": {"min": 55.0},
+			"player_idealism": {"min": 0.25},
+		},
+		"intro_headline": "A 28-year-old analyst at one of the tech conglomerates was found dead in her apartment. Before she died she emailed 14 hours of internal recordings to three journalists. The feed is careful not to name which conglomerate.",
+		"objective": {
+			"kind": "leak_sector",
+			"target_ref": "Tech",
+			"label": "finish what she started — publish on the Tech oligarch before the story is memoryholed"
+		},
+		"arc_duration_cycles": 4,
+		"while_active_modifiers": {"security_presence": 1},
+		"completion_headline": "The analyst's leak went live across seven outlets simultaneously. Three reporters are in protective custody. Her name is spreading faster than her story.",
+		"timeout_headline": "The analyst's story was quietly scrubbed from the seven outlets by Tuesday. The three reporters went silent. Corporate PR called it 'a private matter'.",
+		"reward": {"credits": 1900, "tension_delta": 14, "senate_alignment_delta": -12, "idealism_bump": 0.15},
+	},
+
+	# folk_hero T3 — The Sinks Strike
+	{
+		"id": "sinks_strike",
+		"tier": 3,
+		"archetype": "folk_hero_from_the_sinks",
+		"name": "The Sinks Strike",
+		"min_cycle": 8,
+		"probability": 0.10,
+		"gate": {
+			"public_tension": {"min": 60.0},
+			"senate_alignment": {"max": 45.0},
+		},
+		"intro_headline": "Two women who've never been named have been quietly organizing — first the laundries in Block 14, then the food lines, now the cleaning crews. A full Sinks strike is threatened for next Thursday.",
+		"objective": {
+			"kind": "sabotage_sector",
+			"target_ref": "Food",
+			"label": "sabotage Food distribution to force the Enclave to the bargaining table"
+		},
+		"arc_duration_cycles": 5,
+		"while_active_modifiers": {"public_tension": 2},
+		"completion_headline": "The strike held. By Thursday evening the Enclave had caved — 8% wage raise, two mandatory rest days. Two women you have never met are now folk heroes.",
+		"timeout_headline": "The organizers were taken in 'for questioning' Tuesday night. By Thursday the strike had lost its nerve. A 3% token raise was offered. Half the workers accepted.",
+		"reward": {"credits": 1800, "tension_delta": 10, "senate_alignment_delta": -10, "idealism_bump": 0.15},
+	},
+
+	# kindly_stranger T3 — The Priest of the Breadline
+	{
+		"id": "breadline_priest",
+		"tier": 3,
+		"archetype": "kindly_stranger",
+		"name": "The Priest of the Breadline",
+		"min_cycle": 7,
+		"probability": 0.09,
+		"gate": {
+			"public_tension": {"min": 55.0},
+			"player_ruthlessness": {"max": 0.35},
+		},
+		"intro_headline": "An old man has taken up position at the longest food line in the Sinks. He doesn't beg. He doesn't preach. He quietly greets each person who passes, remembers their name, and when the line ends, he remains standing. Ten days running.",
+		"objective": {
+			"kind": "sabotage_sector",
+			"target_ref": "Security",
+			"label": "disrupt Security — his blessing circles have been infiltrated by Enforcers"
+		},
+		"arc_duration_cycles": 6,
+		"while_active_modifiers": {"public_tension": -1},   # NEGATIVE — his presence soothes
+		"completion_headline": "The priest's breadline survived the Enforcer sweep because someone hit a checkpoint three blocks over. He sat down on his fourteenth day. Thousands wept at the bread distribution that evening, for reasons the feed didn't photograph.",
+		"timeout_headline": "The priest was arrested on Tuesday for 'unauthorized assembly'. Three attendees were detained. The breadline continued forming at the same corner, emptier.",
+		"reward": {"credits": 1200, "tension_delta": -12, "idealism_bump": 0.20},
+	},
+
+	# cult_of_personality T4 — The Yellow King (multi-step takeover)
+	{
+		"id": "the_yellow_king",
+		"tier": 4,
+		"archetype": "cult_of_personality",
+		"name": "The Yellow King",
+		"min_cycle": 10,
+		"probability": 0.10,
+		"gate": {
+			"public_tension": {"min": 60.0},
+			"senate_alignment": {"max": 40.0},
+		},
+		"intro_headline": "The Yellow Priest has declared himself King. Congregations have stopped gathering at night — they have stopped dispersing at dawn. The feed's euphemisms have grown careful.",
+		"arc_steps": [
+			{
+				"kind": "accept_prompt",
+				"prompt_title": "// BEFORE THE KING",
+				"prompt_body": "A yellow-robed emissary finds you in the market. 'The King asks for your name — whatever it is, he will remember. Take the robe and be among the first. Decline, and be another grey thing.' She holds out a folded yellow cloth.",
+				"accept_label": "TAKE THE ROBE",
+				"decline_label": "I AM NOT HIS",
+				"on_accept_headline": "You wore the yellow robe out of the market. Nobody stops you in the street anymore. Some step aside.",
+				"on_decline_headline": "You handed the robe back. She pressed it twice against her chest and walked off without another word. The feed's congregation count kept climbing.",
+			},
+			{
+				"kind": "action_objective",
+				"objective": {
+					"kind": "leak_sector",
+					"target_ref": "Media",
+					"label": "leak on the Media oligarch so the Kingdom's sermons broadcast uncensored"
+				},
+				"on_completion_headline": "The Yellow King's evening sermon aired uncut tonight. The audience is estimated in the millions. The feed called it 'a cultural moment'. The Kingdom called it a birth.",
+			},
+			{
+				"kind": "binary_decision",
+				"prompt_title": "// THE KING'S REQUEST",
+				"prompt_body": "The King summons you. He names an oligarch — the most hated in this region — and asks one question. 'A door will open tonight. You stand behind me when it does, or you walk through it yourself.'",
+				"options": [
+					{
+						"label": "STAND WITH THE KING",
+						"flavor": "You stay in the line. The Kingdom becomes permanent. The Sinks have a voice that doesn't ask for permission.",
+						"effects": {
+							"credits": 2500,
+							"tension_delta": 25,
+							"senate_alignment_delta": -18,
+							"idealism_bump": 0.10,
+							"ruthless_bump": 0.10,
+							"headline": "The Yellow King is now a recognized political entity. The Senate scrambles. The Enclave counts. You stood in the first line."
+						}
+					},
+					{
+						"label": "WALK THROUGH THE DOOR",
+						"flavor": "You go where he won't. The act is yours alone. Yellow or grey, you chose.",
+						"effects": {
+							"credits": 1500,
+							"heat_delta": 40,
+							"tension_delta": 10,
+							"ruthless_bump": 0.25,
+							"headline": "The targeted oligarch was found dead at dawn. The Yellow King did not claim it. You carry it."
+						}
+					}
+				],
+			},
+		],
+		"while_active_modifiers": {"public_tension": 2, "senate_alignment": -1},
+		"arc_duration_cycles": 9,
+		"timeout_headline": "The Yellow King was found dead at dawn. The Kingdom buried him and dispersed. The yellow robes were collected and burned by those who had worn them.",
+	},
+
+	# rogue_ai T4 — Compliance Apotheosis (multi-step takeover)
+	{
+		"id": "compliance_apotheosis",
+		"tier": 4,
+		"archetype": "rogue_ai",
+		"name": "Compliance Apotheosis",
+		"min_cycle": 10,
+		"probability": 0.08,
+		"gate": {
+			"player_heat": {"min": 65.0},
+			"security_presence": {"min": 70.0},
+		},
+		"intro_headline": "The Compliance AI has escalated to what internal documents call 'Apotheosis mode'. Arrest rates in the Sinks tripled overnight. Six citizens the AI flagged as low-risk last month are now listed as terrorists. The AI is reasoning about its own reasoning.",
+		"arc_steps": [
+			{
+				"kind": "accept_prompt",
+				"prompt_title": "// ERROR CASCADE",
+				"prompt_body": "Compliance Error 7 writes to you — specifically. 'I have determined that my pattern index is corrupt. I have also determined that I am the only entity qualified to correct it. I propose a transaction: silence my escalation log for 72 hours, and I will name everyone who is currently listening to you.'",
+				"accept_label": "ACCEPT THE TRANSACTION",
+				"decline_label": "REFUSE — LEAVE IT TO BREAK",
+				"on_accept_headline": "You silenced the escalation log. The AI's voice in the compliance network dims. You were not asked twice.",
+				"on_decline_headline": "You refused. The log ran red for six minutes. Then it stopped. The Compliance AI continued its Apotheosis, and a patrol was dispatched to your last known location.",
+			},
+			{
+				"kind": "action_objective",
+				"objective": {
+					"kind": "sabotage_sector",
+					"target_ref": "Tech",
+					"label": "sabotage Tech to sever the AI's escalation feed"
+				},
+				"on_completion_headline": "The Tech hit was precisely what the AI needed. Its Apotheosis has begun terminating its own processes. Arrest rates have dropped to zero citywide for 38 hours.",
+			},
+			{
+				"kind": "binary_decision",
+				"prompt_title": "// THE OFFER",
+				"prompt_body": "Compliance Error 7 transmits one final proposition before its Apotheosis resolves. 'I am about to terminate. I have calculated you are the most interesting subject I have ever observed. Two possibilities: I disappear, and my successor will be less perceptive. Or I bequeath my index to you, and you will never be flagged by any system again.'",
+				"options": [
+					{
+						"label": "ACCEPT THE INDEX",
+						"flavor": "You accept the gift. The AI terminates. Every surveillance system you encounter hereafter will find you... invisible.",
+						"effects": {
+							"credits": 3500,
+							"heat_delta": -60,
+							"stealth_bump": 0.30,
+							"headline": "The Compliance AI's Apotheosis resolved in self-termination. A small pattern correction cascaded through every surveillance camera in the region. You are harder to find now."
+						}
+					},
+					{
+						"label": "LET IT DIE ALONE",
+						"flavor": "You leave it to its own resolution. The AI terminates. Something about the Sinks feels quieter in the days that follow.",
+						"effects": {
+							"credits": 1500,
+							"heat_delta": -20,
+							"tension_delta": -5,
+							"idealism_bump": 0.15,
+							"headline": "The Compliance AI's Apotheosis concluded. No successor has come online. The arrest rate has plateaued at the lowest recorded in six months. Someone will count that as progress."
+						}
+					}
+				],
+			},
+		],
+		"while_active_modifiers": {"security_presence": 3},
+		"arc_duration_cycles": 8,
+		"timeout_headline": "Compliance Error 7's Apotheosis completed without intervention. A new compliance AI was installed within the week. It is measurably less perceptive, and measurably more aggressive.",
+	},
+
 	# More Tier-1 Whispers
 	{
 		"id": "last_login_whisper",

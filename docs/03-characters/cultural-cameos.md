@@ -5,14 +5,16 @@
 ## What's implemented today
 
 - `CulturalCameos` autoload evaluates triggers once per news cycle (3× per day).
-- **18 cameos live across all four tiers**, covering 8 of the 10 archetype families:
+- **26 cameos live across all four tiers**, with Tier-2+ coverage in 9 of 10 archetype families:
 
 | Tier | Count | Cameos |
 |---|---|---|
 | **1 (Whisper)** | 9 | `soap_broadcast`, `mask_in_the_crowd`, `compliance_error_7`, `unsigned_manifesto`, `yellow_hymn`, `kindly_coffee`, `last_login_whisper`, `ballad_brick_kid`, `deja_vu_headline` |
-| **2 (Brush)** | 4 | `bread_thief_arc`, `admin_last_login`, `match_man_arc`, `candy_heir_arc` |
-| **3 (Entanglement)** | 4 | `hermit_substrate_fields`, `yellow_priest_arc`, `fifth_november_arc`, `confectioner_arc` (+ `pattern_match_arc` for `rogue_ai`) |
-| **4 (Takeover)** | 2 | `soap_man`, `the_revenant` |
+| **2 (Brush)** | 7 | `bread_thief_arc`, `admin_last_login`, `match_man_arc`, `candy_heir_arc`, `project_dust`, `sidewalk_philosopher`, `ledger_leak` |
+| **3 (Entanglement)** | 7 | `hermit_substrate_fields`, `yellow_priest_arc`, `fifth_november_arc`, `confectioner_arc`, `pattern_match_arc`, `leak_that_got_her_killed`, `sinks_strike`, `breadline_priest` |
+| **4 (Takeover)** | 4 | `soap_man`, `the_revenant`, `the_yellow_king`, `compliance_apotheosis` |
+
+Family-by-family Tier-2+ coverage: chaos_prophet (T2+T4), masked_symbol (T2+T3), lone_manifesto (T2+T3), whistleblower (T2+T3), corporate_priest (T2+T3), cult_of_personality (T3+T4), loop_in_time (T4 only — T2/T3 still open), rogue_ai (T3+T4), folk_hero_from_the_sinks (T2+T3), kindly_stranger (T2+T3).
 
 - Each cameo gates on world state (`public_tension`, `senate_alignment`, `security_presence`) + player profile (`player_chaos_preference`, `player_idealism`, `player_heat`, `player_ruthlessness`, `player_stealth_preference`) + `min_cycle`.
 - **Arc lifecycle**: intro NetFeed on trigger → active_arcs tracks TTL + while-active modifiers on each day tick → a matching player action (`sabotage_sector`, `leak_oligarch`, `leak_sector`) completes for the reward → timeout fires a silent-fallout headline.
