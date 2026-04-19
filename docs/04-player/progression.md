@@ -68,19 +68,18 @@ payout ≈ 500 + target.controversy_level × 30    # reward for having juicy dir
 
 **Tradeoff**: the corrupt option. Money now, strengthened Enclave later. The game watches and remembers (future: player_idealism tracker tanks, cameo arcs gate off).
 
-### 3. Rival oligarch contract ✓ *(implemented)*
-Each news cycle, the game rolls ~65% odds of posting a contract from a living oligarch A targeting a rival oligarch B's sector (different sectors only). NetFeed headline: *"Bounty circulating in the black market — A wants B's infrastructure damaged."*
+### 3. Resistance cell contract ✓ *(implemented)*
+You don't work for oligarchs — you're fighting them. Underground resistance cells post bounties on oligarch infrastructure instead. Each news cycle, the game rolls ~65% odds of posting a cell contract targeting the sector of an oligarch the resistance particularly hates. Target is weighted by `awareness_of_player` + `paranoia` + whether they hold aggressive ambitions (`"Purge The Sinks"` +2.0, `"Crush the resistance"` +2.5). NetFeed headline: *"Underground broadcast on a pirate frequency — The Red Circle wants X's operations damaged."*
 
-Any sabotage of B's sector within the TTL window (3 cycles) pays the full bounty (800–2500 credits). On completion:
+Any sabotage of the target sector within the TTL window (3 cycles) pays the full bounty (800–2500 credits) out of **black-market funds** — no oligarch is transacting with the player. On completion:
 
 - `PlayerManager.credits +bounty`
-- `contractor.wealth -bounty` (they paid up)
-- `contractor.paranoia -5` (they got what they wanted)
-- Contract removed from `active_jobs`
+- No oligarch wealth deduction
+- NetFeed: *"{cell_name} broadcasts a thank-you on the pirate channel. The {sector} sector is audibly limping."*
 
-If no one claims the contract in 3 cycles, it expires with a NetFeed note. A new contract replaces it on the next news cycle.
+Starting pool of 10 cell names: The Red Circle, Paper Street Crew, The Ash Underground, The Sinks Collective, The Unlicensed Dispatch, The Thirteenth Hour, The Rust Coalition, The Night Shift, The Gutter Press, The Unindexed. One contract per cell at a time; only one contract per target sector at a time (no stacking).
 
-**Tradeoff**: you're becoming a tool of one oligarch against another. A's portfolio grows, their paranoia drops, the target weakens but the Enclave as a whole rebalances rather than shrinking.
+**Tradeoff**: the cells may have their own agendas you don't fully know. Completing their jobs builds nothing with them specifically — no trust analog. But you're taking money from unknown sources to weaken the Enclave, which is... mostly aligned with your goals. Mostly.
 
 ### 4. Fixer jobs from NPCs ✓ *(implemented)*
 NPCs with `trust >= 30` can post a fixer job via NetFeed: *"Fixer signal in the Sinks — Jon Holt wants the Food sector disrupted. They say it's personal."*

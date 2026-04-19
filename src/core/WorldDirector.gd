@@ -1033,37 +1033,79 @@ func _maybe_post_jobs() -> void:
 	if active_jobs.size() >= MAX_ACTIVE_JOBS:
 		return
 	if randf() < 0.65 and active_jobs.size() < MAX_ACTIVE_JOBS:
-		_try_post_oligarch_contract()
+		_try_post_resistance_contract()
 	if randf() < 0.45 and active_jobs.size() < MAX_ACTIVE_JOBS:
 		_try_post_fixer_job()
 
 
-func _try_post_oligarch_contract() -> void:
+const _RESISTANCE_CELL_NAMES: Array[String] = [
+	"The Red Circle",
+	"Paper Street Crew",
+	"The Ash Underground",
+	"The Sinks Collective",
+	"The Unlicensed Dispatch",
+	"The Thirteenth Hour",
+	"The Rust Coalition",
+	"The Night Shift",
+	"The Gutter Press",
+	"The Unindexed",
+]
+
+
+func _try_post_resistance_contract() -> void:
 	var living: Array = get_living_oligarchs()
-	if living.size() < 2:
+	if living.is_empty():
 		return
-	var contractor = living.pick_random()
-	var candidates: Array = []
+
+	# Resistance cells target the most hated / aggressive oligarch, weighted
+	# by awareness_of_player + active-ambition intensity. The cell pays the
+	# bounty out of black-market funds — no oligarch is transacting with
+	# the player (the player's fighting oligarchs, not working for one).
+	var weights: Array = []
+	var total: float = 0.0
 	for o in living:
-		if o.sector_of_influence != contractor.sector_of_influence:
-			candidates.append(o)
-	if candidates.is_empty():
+		var w: float = 1.0
+		w += float(o.awareness_of_player) * 0.02     # they know who you are
+		w += float(o.paranoia) * 0.01                # they've been making moves
+		if "Purge The Sinks" in o.ambitions:         # active threats get targeted
+			w += 2.0
+		if "Crush the resistance" in o.ambitions:
+			w += 2.5
+		weights.append(w)
+		total += w
+
+	if total <= 0.0:
 		return
-	var target_oligarch = candidates.pick_random()
-	# Avoid posting a duplicate contract (same contractor+target already active)
+
+	var roll: float = randf() * total
+	var target_oligarch = living[0]
+	for i in range(living.size()):
+		roll -= weights[i]
+		if roll <= 0.0:
+			target_oligarch = living[i]
+			break
+
+	var cell_name: String = _RESISTANCE_CELL_NAMES.pick_random()
+	var target_sector: String = target_oligarch.sector_of_influence
+
+	# Skip if this cell already has a live contract — and skip if another
+	# cell is already calling for a hit on this sector (don't stack).
 	for j in active_jobs:
-		if j.get("source_id", "") == contractor.oligarch_id and j.get("target_ref", "") == target_oligarch.sector_of_influence:
+		if j.get("source_name", "") == cell_name:
 			return
+		if j.get("source_type", "") == "resistance_cell" and j.get("target_ref", "") == target_sector:
+			return
+
 	_post_job({
-		"source_type": "oligarch_contract",
-		"source_id": contractor.oligarch_id,
-		"source_name": contractor.oligarch_name,
+		"source_type": "resistance_cell",
+		"source_id": "cell_" + cell_name.replace(" ", "_").to_lower(),
+		"source_name": cell_name,
 		"target_kind": "sabotage_sector",
-		"target_ref": target_oligarch.sector_of_influence,
-		"target_label": "disrupt %s sector" % target_oligarch.sector_of_influence,
+		"target_ref": target_sector,
+		"target_label": "disrupt %s sector" % target_sector,
 		"bounty": randi_range(800, 2500),
-		"framing": "%s wants %s's infrastructure damaged." % [
-			contractor.oligarch_name, target_oligarch.oligarch_name,
+		"framing": "%s wants %s's operations damaged. Payment on verification." % [
+			cell_name, target_oligarch.oligarch_name,
 		],
 	})
 
@@ -1179,14 +1221,9 @@ func _check_jobs_match(kind: String, target_ref: String) -> void:
 func _complete_job(job: Dictionary) -> void:
 	var bounty: int = int(job.get("bounty", 0))
 
-	# Contractor pays (oligarch) or wipes their tab (fixer)
-	if str(job.get("source_type", "")) == "oligarch_contract":
-		var o := get_oligarch_by_id(str(job.get("source_id", "")))
-		if o:
-			o.wealth = max(0, o.wealth - bounty)
-			# Contractor oligarch's paranoia drops — they got what they wanted
-			o.paranoia = max(0.0, o.paranoia - 5.0)
-	elif str(job.get("source_type", "")) == "npc_fixer":
+	# Resistance cells pay from black-market funds — no oligarch transacts
+	# with the player. Fixers bump their trust in the player.
+	if str(job.get("source_type", "")) == "npc_fixer":
 		if has_node("/root/PopulationDirector"):
 			var pop_dir = get_node("/root/PopulationDirector")
 			for n in pop_dir.roster:
@@ -1211,8 +1248,8 @@ func _complete_job(job: Dictionary) -> void:
 
 func _job_post_headline(job: Dictionary) -> String:
 	match str(job.get("source_type", "")):
-		"oligarch_contract":
-			return "Bounty circulating in the black market — %s" % str(job.get("framing", ""))
+		"resistance_cell":
+			return "Underground broadcast on a pirate frequency — %s" % str(job.get("framing", ""))
 		"npc_fixer":
 			return "Fixer signal in the Sinks — %s" % str(job.get("framing", ""))
 	return "Job posted."
@@ -1220,10 +1257,10 @@ func _job_post_headline(job: Dictionary) -> String:
 
 func _job_complete_headline(job: Dictionary) -> String:
 	match str(job.get("source_type", "")):
-		"oligarch_contract":
-			return "Bounty settled. The disruption of %s was suspiciously well-timed for %s." % [
+		"resistance_cell":
+			return "%s broadcasts a thank-you on the pirate channel. The %s sector is audibly limping." % [
+				str(job.get("source_name", "A resistance cell")),
 				str(job.get("target_ref", "")),
-				str(job.get("source_name", "unknown")),
 			]
 		"npc_fixer":
 			return "%s quietly paid an unnamed operative. A debt acknowledged." % str(job.get("source_name", "Someone"))

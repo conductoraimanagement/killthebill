@@ -919,9 +919,9 @@ func _job_row(job: Dictionary) -> String:
 	var src_type: String = str(job.get("source_type", ""))
 	var badge: String
 	var badge_color: Color
-	if src_type == "oligarch_contract":
-		badge = "CONTRACT"
-		badge_color = COL_HOT
+	if src_type == "resistance_cell":
+		badge = "CELL"
+		badge_color = COL_ACCENT       # rebel fire, not oligarch red
 	elif src_type == "npc_fixer":
 		badge = "FIXER"
 		badge_color = COL_COOL
