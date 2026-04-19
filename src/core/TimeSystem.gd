@@ -4,15 +4,16 @@ class_name TimeSystem
 # =============================================================
 # TimeSystem: the game's temporal backbone.
 #
-# 1 day = 5 real-time minutes (configurable). Each day has 3
-# phases (morning/afternoon/night), each 1/3 of the day, aligned
-# to the NetFeed cycle. The full world simulation ticks once per
-# day (oligarchs act, Senate resolves, job board expires),
-# NetFeed refreshes three times per day (one per phase).
+# 1 day = 10 real-time minutes. Each day has 3 phases
+# (morning/afternoon/night), each 1/3 of the day, aligned to the
+# NetFeed cycle. 30 days = 1 month. 13 months = 1 full playthrough.
+# Month 14 → year_ended signal → WorldDirector fires TIMEOUT defeat.
 #
-# Fast-forward scales delta; a HUD toggle bumps to 6× so idle
-# stretches don't drag. get_tree().paused naturally stops time
-# when a modal is open since this node inherits process mode.
+# Fast-forward scales delta: 1× → 6× (Space) → 24× (Shift+Space).
+# The 24× super-FF is essential for the long 13-month runs — ~1.1h
+# of real time per playthrough at super-fast.
+#
+# get_tree().paused naturally stops time when a modal is open.
 #
 # Clock display maps tod (0.0-1.0) to a 24h clock starting at
 # dawn: tod 0.0 → 06:00, tod 0.5 → 18:00, tod 1.0 → 06:00 next.
@@ -22,19 +23,31 @@ signal day_advanced(day: int)
 signal phase_changed(phase: int)       # 0=morning, 1=afternoon, 2=night
 signal time_of_day_updated(tod: float) # 0..1 inside current day
 signal speed_changed(speed: float)
+signal month_advanced(month: int)      # 1..13, fired on day_of_month rollover
+signal year_ended()                    # fires once when month would roll to 14
 
-const DAY_REAL_SECONDS: float = 300.0  # 5 minutes per day
+const DAY_REAL_SECONDS: float = 600.0  # 10 minutes per day
 const PHASES_PER_DAY: int = 3
 const FAST_SPEED: float = 6.0
+const SUPER_FAST_SPEED: float = 24.0   # Shift+Space — keeps 13-month runs reasonable
 const DEFAULT_SPEED: float = 1.0
+
+const DAYS_PER_MONTH: int = 30
+const MONTHS_PER_YEAR: int = 13
+const TOTAL_DAYS: int = DAYS_PER_MONTH * MONTHS_PER_YEAR  # 390
 
 enum Phase { MORNING, AFTERNOON, NIGHT }
 
+# `day` is the absolute day count (1..390 across a full run). `month`
+# and `day_of_month` partition it for display + narrative pacing.
 var day: int = 1
+var month: int = 1
+var day_of_month: int = 1
 var time_of_day: float = 0.0
 var current_phase: int = Phase.MORNING
 var time_scale: float = DEFAULT_SPEED
 var running: bool = false     # flipped true by WorldDirector after playthrough setup
+var year_ended_flag: bool = false
 
 
 func _ready() -> void:
@@ -50,10 +63,13 @@ func start() -> void:
 
 func reset() -> void:
 	day = 1
+	month = 1
+	day_of_month = 1
 	time_of_day = 0.0
 	current_phase = Phase.MORNING
 	time_scale = DEFAULT_SPEED
 	running = false
+	year_ended_flag = false
 
 
 func _process(delta: float) -> void:
@@ -62,10 +78,16 @@ func _process(delta: float) -> void:
 
 	time_of_day += (delta * time_scale) / DAY_REAL_SECONDS
 	var rolled_over: bool = false
+	var month_rolled_over: bool = false
 	while time_of_day >= 1.0:
 		time_of_day -= 1.0
 		day += 1
+		day_of_month += 1
 		rolled_over = true
+		if day_of_month > DAYS_PER_MONTH:
+			day_of_month = 1
+			month += 1
+			month_rolled_over = true
 
 	# Phase transition — compute from continuous tod
 	var new_phase: int = clamp(int(time_of_day * PHASES_PER_DAY), 0, PHASES_PER_DAY - 1)
@@ -73,7 +95,7 @@ func _process(delta: float) -> void:
 		current_phase = new_phase
 		phase_changed.emit(current_phase)
 
-	# Emit tick + day signals
+	# Emit tick + day + month signals
 	time_of_day_updated.emit(time_of_day)
 	if rolled_over:
 		# After rollover, the new day's first phase is morning by
@@ -82,6 +104,14 @@ func _process(delta: float) -> void:
 			current_phase = new_phase
 			phase_changed.emit(current_phase)
 		day_advanced.emit(day)
+	if month_rolled_over:
+		month_advanced.emit(month)
+
+	# Year-end check — fires once when month crosses to 14.
+	if month > MONTHS_PER_YEAR and not year_ended_flag:
+		year_ended_flag = true
+		running = false   # freeze time at the turn of the year
+		year_ended.emit()
 
 
 # =============================================================
@@ -105,6 +135,18 @@ func set_speed(speed: float) -> void:
 
 func is_fast_forward() -> bool:
 	return time_scale > DEFAULT_SPEED + 0.01
+
+
+func is_super_fast_forward() -> bool:
+	return time_scale >= SUPER_FAST_SPEED - 0.01
+
+
+# Shift+Space keybind in HUD — one press toggles 24×, next returns to 1×.
+# Distinct from regular 6× fast-forward. The 13-month playthrough would
+# be uncomfortably long at 1× or even 6× — super-FF is how you coast
+# through the quiet months waiting for the world to shift.
+func toggle_super_fast_forward() -> void:
+	set_speed(DEFAULT_SPEED if is_super_fast_forward() else SUPER_FAST_SPEED)
 
 
 # =============================================================

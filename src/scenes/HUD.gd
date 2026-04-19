@@ -211,6 +211,7 @@ func _ready() -> void:
 		ts.phase_changed.connect(_on_phase_changed)
 		ts.day_advanced.connect(_on_day_advanced)
 		ts.speed_changed.connect(_on_speed_changed)
+		ts.month_advanced.connect(_on_month_advanced)
 
 	_refresh_state()
 
@@ -281,7 +282,7 @@ func _build_state_panel() -> void:
 	_state_panel.offset_left = 20
 	_state_panel.offset_top = 20
 	_state_panel.offset_right = 320
-	_state_panel.offset_bottom = 260
+	_state_panel.offset_bottom = 300
 
 	var title := _make_label("// WORLD STATE", COL_ACCENT, 11, true)
 	title.offset_left = PANEL_PAD
@@ -320,17 +321,32 @@ func _refresh_state() -> void:
 	var ts = get_node_or_null("/root/TimeSystem")
 	if ts:
 		var phase_color: Color = COL_COOL if ts.is_night() else COL_WARN
-		var speed_str: String = "  [color=#%s]▶▶ %d×[/color]" % [_hex(COL_ACCENT), int(ts.time_scale)] if ts.is_fast_forward() else ""
-		lines.append("[color=#%s]day[/color]             [color=#%s]%d[/color]   [color=#%s]%s[/color]  [color=#%s]%s[/color]%s" % [
+		var speed_str: String = ""
+		if ts.is_fast_forward():
+			var speed_color: Color = COL_HOT if ts.is_super_fast_forward() else COL_ACCENT
+			speed_str = "  [color=#%s]▶▶ %d×[/color]" % [_hex(speed_color), int(ts.time_scale)]
+
+		# Month X / Day Y — the 13-month countdown is the room-tone.
+		var month_color: Color = _color_for_month(ts.month)
+		lines.append("[color=#%s]month[/color]           [color=#%s]%d[/color] [color=#%s]of %d[/color]   [color=#%s]day %d[/color]" % [
 			_hex(COL_DIM),
+			_hex(month_color),
+			ts.month,
+			_hex(COL_DIM),
+			ts.MONTHS_PER_YEAR,
 			_hex(COL_FG),
-			ts.day,
+			ts.day_of_month,
+		])
+		lines.append("[color=#%s]clock[/color]           [color=#%s]%s[/color]  [color=#%s]%s[/color]%s" % [
+			_hex(COL_DIM),
 			_hex(COL_COOL),
 			ts.clock_string(),
 			_hex(phase_color),
 			ts.phase_name().to_lower(),
 			speed_str,
 		])
+		# Year progress bar — 12-tick.
+		lines.append(_build_year_progress_bar(ts))
 	else:
 		lines.append("[color=#%s]day[/color]             [color=#%s]%d[/color]" % [
 			_hex(COL_DIM),
@@ -382,6 +398,10 @@ func _on_speed_changed(_s: float) -> void:
 	_refresh_state()
 
 
+func _on_month_advanced(_m: int) -> void:
+	_refresh_state()
+
+
 func _color_for_credits(value: int) -> Color:
 	if value >= 1000: return COL_COOL
 	if value >= 300:  return COL_FG
@@ -393,6 +413,33 @@ func _color_for_heat(value: int) -> Color:
 	if value > 60: return COL_HOT
 	if value > 30: return COL_WARN
 	return COL_FG
+
+
+func _color_for_month(month: int) -> Color:
+	# Early (cyan) → mid (fg) → late (warn) → final (hot red).
+	if month >= 13: return COL_HOT
+	if month >= 10: return COL_WARN
+	if month >= 4:  return COL_FG
+	return COL_COOL
+
+
+func _build_year_progress_bar(ts) -> String:
+	# 12-tick bar of the run. Color-code matches month.
+	var total: int = int(ts.TOTAL_DAYS)
+	var elapsed: int = int(ts.day - 1)  # day is 1-indexed
+	var filled: int = clampi(int(round(float(elapsed) / float(total) * 12.0)), 0, 12)
+	var months_left: int = int(ts.MONTHS_PER_YEAR) - int(ts.month) + 1
+	var bar: String = ""
+	for i in range(12):
+		bar += "█" if i < filled else "░"
+	var bar_color: Color = _color_for_month(int(ts.month))
+	return "[color=#%s]progress[/color]        [color=#%s]%s[/color]   [color=#%s]%d months left[/color]" % [
+		_hex(COL_DIM),
+		_hex(bar_color),
+		bar,
+		_hex(COL_DIM),
+		months_left,
+	]
 
 
 func _econ_row(key: String, value, unit: String) -> String:
@@ -597,9 +644,9 @@ func _build_politicians_panel() -> void:
 	_pol_panel.anchor_left = 0.0
 	_pol_panel.anchor_top = 0.0
 	_pol_panel.offset_left = 20
-	_pol_panel.offset_top = 280
+	_pol_panel.offset_top = 320
 	_pol_panel.offset_right = 440
-	_pol_panel.offset_bottom = 620
+	_pol_panel.offset_bottom = 660
 	_pol_panel.visible = false
 
 	var title := _make_label("// SENATE ROSTER  (press P to hide)", COL_ACCENT, 11, true)
@@ -1099,7 +1146,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_SPACE:
 			var ts = get_node_or_null("/root/TimeSystem")
 			if ts:
-				ts.toggle_fast_forward()
+				# Shift+Space → 24× super-fast; plain Space → 6× fast.
+				if event.shift_pressed:
+					ts.toggle_super_fast_forward()
+				else:
+					ts.toggle_fast_forward()
 			get_viewport().set_input_as_handled()
 		KEY_F5:
 			show_save_modal()

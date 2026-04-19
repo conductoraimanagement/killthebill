@@ -250,6 +250,8 @@ func _finish_setup() -> void:
 			ts.day_advanced.connect(_on_day_advanced)
 		if not ts.phase_changed.is_connected(_on_phase_changed):
 			ts.phase_changed.connect(_on_phase_changed)
+		if not ts.year_ended.is_connected(_on_year_ended):
+			ts.year_ended.connect(_on_year_ended)
 		ts.reset()
 		ts.start()
 
@@ -265,6 +267,20 @@ func _on_day_advanced(_day: int) -> void:
 func _on_phase_changed(_phase: int) -> void:
 	# NetFeed + job board refresh on each phase boundary (3x per day).
 	trigger_news_cycle()
+
+
+func _on_year_ended() -> void:
+	# 13 months passed without a victory condition firing. Run ends
+	# with a timeout defeat — the Enclave absorbed the player without
+	# needing to act against them.
+	if _victory_locked:
+		return
+	if has_node("/root/PlayerManager"):
+		get_node("/root/PlayerManager").fire_defeat(
+			"TIMEOUT_ABSORBED",
+			"YEAR'S END",
+			"Thirteen months passed. No oligarch fell by your hand. No revolution took the streets. No reform passed the chamber. No collapse bent the Enclave's balance sheet. The year ended. The year absorbed you."
+		)
 
 
 # =============================================================
