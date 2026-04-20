@@ -24,6 +24,13 @@ var _sabotage_targets: Array = []   # list of InteractableTarget spawned by the 
 var _terminal: DatashardTerminal
 
 
+# Public accessor for autoloads (PlayerManager.compute_heat_cost needs
+# the active landscape for witness-count sampling). Returns null while
+# regions are being regenerated between travels.
+func get_active_landscape() -> LandscapeGenerator:
+	return _landscape
+
+
 func _ready() -> void:
 	_ensure_input_actions()
 	_setup_hud()

@@ -305,12 +305,15 @@ func _ambient_witness_count() -> int:
 	# Fast proxy: the crowd NPC density in the currently-active landscape.
 	# LandscapeGenerator scales the spawn count with region population
 	# density, so this already reflects "how populated am I right now?"
+	# Main.gd holds the active landscape as _landscape; we pull via a
+	# helper method to avoid leaning on private-by-convention access.
 	var main := get_tree().current_scene
-	if main == null or not "landscape" in main or main.landscape == null:
+	if main == null or not main.has_method("get_active_landscape"):
 		return 0
-	var crowds: Array = main.landscape.crowd_npcs
-	if crowds == null:
+	var landscape = main.get_active_landscape()
+	if landscape == null or not "crowd_npcs" in landscape:
 		return 0
+	var crowds: Array = landscape.crowd_npcs
 	return crowds.size()
 
 
