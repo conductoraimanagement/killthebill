@@ -18,6 +18,8 @@ signal defeat_triggered(kind: String, title: String, flavor: String)
 signal rent_due_prompt(rent_amount: int, months_behind: int)
 signal payday_deposited(amount: int, source_breakdown: Dictionary)
 signal pending_wages_changed(total: int)
+signal wc_employment_started(role_title: String, company: String, monthly_salary: int)
+signal wc_employment_ended(role_title: String, company: String, reason: String)
 
 enum ClassSeed { WHITE_COLLAR, BLUE_COLLAR }
 
@@ -50,6 +52,17 @@ var _rent_due_pending: bool = false       # waiting on player to [PAY]/[SKIP]
 # "pending: X cr — next payday in N days".
 var pending_wages: int = 0
 var pending_wages_breakdown: Dictionary = {}   # gig_kind → cr subtotal
+
+# White-collar employment state. 5% of interview gauntlets land a role;
+# see GigBoard.submit_interview_answers. While employed, weekly payday
+# first rolls a 10% firing chance, then (if still employed) deposits
+# monthly_salary/4. Locks weekday mornings so cross-path play is
+# mechanically constrained, not just narratively.
+const WC_WEEKLY_FIRING_ROLL: float = 0.10
+var wc_employed: bool = false
+var wc_role_title: String = ""
+var wc_company: String = ""
+var wc_monthly_salary: int = 0
 
 # Finance-sector bookkeeping. debt_held_by_oligarch_id is set by
 # WorldDirector after oligarch generation if a Finance oligarch rolled.
@@ -107,6 +120,10 @@ func initialize_run(seed: ClassSeed = ClassSeed.BLUE_COLLAR) -> void:
 	_rent_due_pending = false
 	pending_wages = 0
 	pending_wages_breakdown.clear()
+	wc_employed = false
+	wc_role_title = ""
+	wc_company = ""
+	wc_monthly_salary = 0
 	_severance_end_fired = false
 	debt_held_by_oligarch_id = ""
 	rent_drain_multiplier = 1.0
@@ -367,11 +384,22 @@ func skip_rent() -> void:
 # WEEKLY PAYDAY (gigs)
 # =============================================================
 
-# Called by WorldDirector on TimeSystem.payday (every 7 days). Dumps
-# pending_wages into credits with a source breakdown for the HUD
-# toast. GigBoard is the only accruer today; extensible to salaried
-# WC jobs in Commit B.
+# Called by WorldDirector on TimeSystem.payday (every 7 days). Rolls
+# the WC firing chance first (if employed), accrues a quarter of
+# monthly_salary, then dumps pending_wages into credits with a source
+# breakdown for the HUD toast.
 func apply_weekly_payday() -> void:
+	# 1. Firing roll — 10% per week while employed. No reason given.
+	if wc_employed and randf() < WC_WEEKLY_FIRING_ROLL:
+		_fire_from_wc_role("performance reorganization")
+		# Already-accrued wages from this week still deposit below
+		# (the pay period ended, they were earned).
+	# 2. Weekly salary slice for employed players.
+	if wc_employed:
+		var weekly_slice: int = int(round(float(wc_monthly_salary) / 4.0))
+		if weekly_slice > 0:
+			accrue_wages(weekly_slice, "wc_salary:%s" % wc_company)
+	# 3. Standard deposit.
 	if pending_wages <= 0:
 		return
 	var amount: int = pending_wages
@@ -392,6 +420,41 @@ func accrue_wages(amount: int, source: String = "gig") -> void:
 	var prior: int = int(pending_wages_breakdown.get(source, 0))
 	pending_wages_breakdown[source] = prior + amount
 	pending_wages_changed.emit(pending_wages)
+
+
+# =============================================================
+# WC EMPLOYMENT
+# =============================================================
+
+# Called by GigBoard after a successful 5%-acceptance interview roll.
+# Player becomes salaried; weekly payday deposits monthly_salary / 4.
+# There is no concurrency here — a second successful interview just
+# replaces the role (narrative: you quit and took the new one).
+func accept_wc_role(role_title: String, company: String, monthly_salary: int) -> void:
+	wc_employed = true
+	wc_role_title = role_title
+	wc_company = company
+	wc_monthly_salary = monthly_salary
+	wc_employment_started.emit(role_title, company, monthly_salary)
+	_publish_feed("You were hired at %s as %s. Starting salary: %d cr/month." % [
+		company, role_title, monthly_salary,
+	])
+
+
+# Fired from current role. No reason is given to the player by the
+# employer — the `reason` string here is internal, for logs.
+func _fire_from_wc_role(reason: String) -> void:
+	if not wc_employed:
+		return
+	var prev_title: String = wc_role_title
+	var prev_company: String = wc_company
+	wc_employed = false
+	wc_role_title = ""
+	wc_company = ""
+	wc_monthly_salary = 0
+	wc_employment_ended.emit(prev_title, prev_company, reason)
+	_apply_hope(-5.0, "fired from %s" % prev_company)
+	_publish_feed("You were let go from %s. HR's email used the word 'unfortunately' seven times." % prev_company)
 
 
 func _evict() -> void:

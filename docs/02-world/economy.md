@@ -109,6 +109,7 @@ Every credit number in this game maps to a real dollar of a real 2025-ish US eco
 | Source | Range | Cadence | Risk |
 |---|---|---|---|
 | Gig shift (dishwasher, sweeper, delivery, waiter, day-labor, trash) | 30–84 cr + tips | Accrues; paid weekly | 40% silent denial, hope-cost humiliation |
+| White-collar salaried role | 2,000–4,000 cr/month | Weekly (monthly÷4) | 95% rejection after 3-Q gauntlet; 10% weekly firing roll while employed |
 | Resistance cell job | 500–2,500 cr | On completion | Sabotage/leak requirement, +heat |
 | NPC fixer leak | 150–350 cr | On completion | Fixer trust |
 | NPC fixer sabotage | 200–400 cr | On completion | +heat |

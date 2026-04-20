@@ -25,6 +25,20 @@ At any time while you have a home apartment, press **`G`** to open the GIG BOARD
 
 Wages **accrue** to `pending_wages` and deposit into `credits` every **7 days** via `TimeSystem.payday`. The state panel shows both. The compliance path is survivable — grinding 2 shifts/day nets ~1,200 cr/week — but it's the *opposite* of the resistance path: no heat, no idealism, no chaos, and your hope bleeds.
 
+### 🎓 White-collar listings — the humiliation theatre
+
+Below the blue-collar gigs, the panel lists **white-collar openings** — job titles like *Associate Brand Strategist*, *Junior Compliance Analyst*, *Assistant Director of Vibes*, posted by companies like *Vextol Capital Partners* or *Paperclip & Thorne, LLP*. Posted monthly salaries run **2,000–4,000 cr/month** — genuinely better money than gigs.
+
+Apply with **`Shift+1`–`Shift+4`**. A 3-question interview gauntlet opens (pauses the game), each question with 4 multiple-choice options like:
+
+> *"Estimate the number of pigeons currently residing within The Enclave. Show your reasoning."*
+
+Every option is wrong. After all 3 rounds, a **5% roll** decides whether you were hired. The 95% of the time you are rejected, a rejection letter is compiled from the *specific* answers you picked (*"your answer at (1) revealed a preference for boundary-setting that does not align with the adjacency model"*). Each failed gauntlet costs 2 game-hours, 3–5 hope, and a −0.03 idealism drift.
+
+If you're hired, your role posts to the HUD header and weekly payday deposits `monthly_salary / 4` into `pending_wages`. **Every weekly payday also rolls a 10% firing chance** — no reason given. Mean tenure is ~10 weeks. Getting hired and fired in the same season is normal.
+
+Listings refresh weekly. Each listing is one-shot — you can't re-apply to the same posting.
+
 ### 🏠 Rent due — the monthly decision
 
 On the 1st of each month, `TimeSystem.rent_due` fires a **forced HUD modal**: *"RENT DUE — X cr.  [PAY] / [SKIP]"*. Paying drains credits (can go negative — you chose the hole). Skipping increments `rent_arrears_months` and delays the decision by 30 days. **Two months unpaid → eviction.** Eviction is *not* a defeat; it's a homeless state with extra hope drift and +8 cr/day food cost. See [victory.md](victory.md).

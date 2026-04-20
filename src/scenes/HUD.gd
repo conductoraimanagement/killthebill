@@ -106,6 +106,22 @@ var _rent_skip_btn: Button
 var _rent_pending_rent: int = 0
 var _rent_pending_arrears: int = 0
 
+# WC interview gauntlet (Shift+Q from gig panel). 3 rounds of 4 options,
+# 95% rejection. Uses one modal reused per question.
+var _wc_interview_root: Control
+var _wc_interview_title: Label
+var _wc_interview_q_label: Label
+var _wc_interview_option_buttons: Array[Button] = []
+var _wc_current_gauntlet: Dictionary = {}
+var _wc_current_answers: Array[int] = []
+var _wc_current_q_idx: int = 0
+
+# WC acceptance/rejection letter modal — shown after the gauntlet resolves.
+var _wc_letter_root: Control
+var _wc_letter_title: Label
+var _wc_letter_body: RichTextLabel
+var _wc_letter_close_btn: Button
+
 # Shop modal (terminal menu → SHOP)
 var _shop_root: Control
 var _shop_status: Label
@@ -195,6 +211,8 @@ func _ready() -> void:
 	_build_jobs_panel()
 	_build_gig_panel()
 	_build_rent_modal()
+	_build_wc_interview_modal()
+	_build_wc_letter_modal()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
 	WorldDirector.netfeed_event_generated.connect(_on_netfeed_event)
@@ -218,12 +236,15 @@ func _ready() -> void:
 		pm.rent_due_prompt.connect(_on_rent_due_prompt)
 		pm.payday_deposited.connect(_on_payday_deposited)
 		pm.pending_wages_changed.connect(_on_pending_wages_changed)
+		pm.wc_employment_started.connect(_on_wc_employment_started)
+		pm.wc_employment_ended.connect(_on_wc_employment_ended)
 
 	# GigBoard hooks — rejections + shift completions surface on NetFeed.
 	var gig_board = get_node_or_null("/root/GigBoard")
 	if gig_board:
 		gig_board.gig_application_denied.connect(_on_gig_denied)
 		gig_board.gig_shift_completed.connect(_on_gig_shift_completed)
+		gig_board.wc_listings_refreshed.connect(_on_wc_listings_refreshed)
 
 	# LLM dialogue responses route back via llm_response_received.
 	var llm = get_node_or_null("/root/LLMManager")
@@ -1101,8 +1122,11 @@ func _refresh_gig_panel() -> void:
 		_gig_text.text = "[i]Gig board offline.[/i]"
 		return
 
+	gb.ensure_wc_listings_fresh()
+
 	var region_type: String = _current_region_type()
-	var listings: Array = gb.listings_for_region(region_type)
+	var gig_listings: Array = gb.listings_for_region(region_type)
+	var wc_listings: Array = gb.wc_listings
 
 	var pending: int = int(pm.pending_wages)
 	var next_payday_in: int = 7
@@ -1110,21 +1134,48 @@ func _refresh_gig_panel() -> void:
 		next_payday_in = 7 - (int(ts.day) % 7)
 		if next_payday_in == 0:
 			next_payday_in = 7
-	_gig_title.text = "// GIG BOARD  (G to hide)  —  pending %d cr  ·  next payday in %d days" % [pending, next_payday_in]
-
-	if listings.is_empty():
-		_gig_text.text = "[i][color=#%s]> no gigs available in this region. travel to find work.[/color][/i]" % _hex(COL_DIM)
-		return
+	var header: String = "// GIG BOARD  (G to hide)  —  pending %d cr  ·  next payday in %d days" % [pending, next_payday_in]
+	if pm.wc_employed:
+		header += "  ·  EMPLOYED: %s @ %s (%d cr/mo)" % [pm.wc_role_title, pm.wc_company, pm.wc_monthly_salary]
+	_gig_title.text = header
 
 	var lines := PackedStringArray()
-	var slot: int = 1
-	for g in listings:
-		if slot > 6:
-			break
-		lines.append(_gig_row(slot, g))
-		lines.append("")
-		slot += 1
+	lines.append("[b][color=#%s]— GIG WORK (region-filtered) —[/color][/b]" % _hex(COL_DIM))
+	if gig_listings.is_empty():
+		lines.append("[i][color=#%s]no gigs in this region. travel to find work.[/color][/i]" % _hex(COL_DIM))
+	else:
+		var slot: int = 1
+		for g in gig_listings:
+			if slot > 6:
+				break
+			lines.append(_gig_row(slot, g))
+			slot += 1
+	lines.append("")
+	lines.append("[b][color=#%s]— WHITE-COLLAR LISTINGS (shift-q 1-4 to apply) —[/color][/b]" % _hex(COL_DIM))
+	if wc_listings.is_empty():
+		lines.append("[i][color=#%s]listings refreshing...[/color][/i]" % _hex(COL_DIM))
+	else:
+		for i in range(wc_listings.size()):
+			lines.append(_wc_row(i, wc_listings[i]))
 	_gig_text.text = "\n".join(lines)
+
+
+func _wc_row(idx: int, listing: Dictionary) -> String:
+	var row: String = ""
+	row += "[color=#%s]▸ Q%d[/color]  [color=#%s]%d cr/mo salary[/color]\n" % [
+		_hex(COL_WARN),
+		idx + 1,
+		_hex(COL_COOL),
+		int(listing.get("monthly_salary", 0)),
+	]
+	row += "[b][color=#%s]%s[/color][/b]  [color=#%s]— %s[/color]\n" % [
+		_hex(COL_FG),
+		str(listing.get("title", "")),
+		_hex(COL_DIM),
+		str(listing.get("company", "")),
+	]
+	row += "  [color=#%s]%s[/color]" % [_hex(COL_DIM), str(listing.get("description", ""))]
+	return row
 
 
 func _gig_row(slot: int, g: Dictionary) -> String:
@@ -1323,6 +1374,27 @@ func _on_pending_wages_changed(_total: int) -> void:
 		_refresh_gig_panel()
 
 
+func _on_wc_employment_started(role_title: String, company: String, monthly_salary: int) -> void:
+	_publish_netfeed_note("Hired: %s at %s. Starting salary %d cr/mo. Weekly deposits begin this week." % [
+		role_title, company, monthly_salary,
+	])
+	if _gig_visible:
+		_refresh_gig_panel()
+
+
+func _on_wc_employment_ended(role_title: String, company: String, _reason: String) -> void:
+	_publish_netfeed_note("Let go from %s at %s. HR's email used 'unfortunately' seven times." % [
+		role_title, company,
+	])
+	if _gig_visible:
+		_refresh_gig_panel()
+
+
+func _on_wc_listings_refreshed() -> void:
+	if _gig_visible:
+		_refresh_gig_panel()
+
+
 func _publish_netfeed_note(text: String) -> void:
 	# Piggyback on the NetFeed panel — the existing ticker surfaces it.
 	if not has_node("/root/WorldDirector"):
@@ -1335,6 +1407,222 @@ func _publish_netfeed_note(text: String) -> void:
 	}
 	wd.netfeed_history.append(event)
 	wd.netfeed_event_generated.emit(event)
+
+
+# -------------------------------------------------------------
+# WC Interview Gauntlet — 3 questions, 4 options each, 95% denial.
+# -------------------------------------------------------------
+func _build_wc_interview_modal() -> void:
+	_wc_interview_root = Control.new()
+	_wc_interview_root.anchor_right = 1.0
+	_wc_interview_root.anchor_bottom = 1.0
+	_wc_interview_root.visible = false
+	_wc_interview_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_wc_interview_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_wc_interview_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.75)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_wc_interview_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -420
+	panel.offset_top = -240
+	panel.offset_right = 420
+	panel.offset_bottom = 240
+	_wc_interview_root.add_child(panel)
+
+	_wc_interview_title = _make_label("// INTERVIEW — ROUND 1/3", COL_WARN, 16, true)
+	_wc_interview_title.offset_left = PANEL_PAD + 4
+	_wc_interview_title.offset_top = PANEL_PAD
+	_wc_interview_title.offset_right = 840 - PANEL_PAD
+	_wc_interview_title.offset_bottom = PANEL_PAD + 26
+	panel.add_child(_wc_interview_title)
+
+	_wc_interview_q_label = _make_label("", COL_FG, 13, false)
+	_wc_interview_q_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_wc_interview_q_label.offset_left = PANEL_PAD + 4
+	_wc_interview_q_label.offset_top = PANEL_PAD + 36
+	_wc_interview_q_label.offset_right = 840 - PANEL_PAD
+	_wc_interview_q_label.offset_bottom = PANEL_PAD + 120
+	panel.add_child(_wc_interview_q_label)
+
+	_wc_interview_option_buttons = []
+	for i in range(4):
+		var btn := Button.new()
+		btn.text = ""
+		btn.anchor_left = 0.0
+		btn.anchor_right = 1.0
+		btn.anchor_top = 0.0
+		btn.anchor_bottom = 0.0
+		btn.offset_left = PANEL_PAD + 4
+		btn.offset_right = -PANEL_PAD - 4
+		btn.offset_top = 130 + i * 58
+		btn.offset_bottom = 130 + i * 58 + 50
+		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		btn.add_theme_color_override("font_color", COL_FG)
+		btn.pressed.connect(_on_wc_option_pick.bind(i))
+		panel.add_child(btn)
+		_wc_interview_option_buttons.append(btn)
+
+
+func _open_wc_interview(slot_idx: int) -> void:
+	var gb = get_node_or_null("/root/GigBoard")
+	var pm = get_node_or_null("/root/PlayerManager")
+	if gb == null or pm == null:
+		return
+	if pm.homeless:
+		_gig_status.text = "No computer access. Find a public terminal."
+		return
+	if slot_idx < 0 or slot_idx >= gb.wc_listings.size():
+		return
+	var listing: Dictionary = gb.wc_listings[slot_idx]
+	_wc_current_gauntlet = gb.build_interview_gauntlet(str(listing.get("id", "")))
+	if _wc_current_gauntlet.is_empty():
+		return
+	_wc_current_answers = []
+	_wc_current_q_idx = 0
+	_wc_show_current_question()
+	_wc_interview_root.visible = true
+	get_tree().paused = true
+
+
+func _wc_show_current_question() -> void:
+	var qs: Array = _wc_current_gauntlet.get("questions", [])
+	if _wc_current_q_idx >= qs.size():
+		_wc_submit_answers()
+		return
+	var q: Dictionary = qs[_wc_current_q_idx]
+	_wc_interview_title.text = "// INTERVIEW — %s @ %s  ·  ROUND %d/3" % [
+		str(_wc_current_gauntlet.get("title", "")),
+		str(_wc_current_gauntlet.get("company", "")),
+		_wc_current_q_idx + 1,
+	]
+	_wc_interview_q_label.text = str(q.get("prompt", ""))
+	var opts: Array = q.get("options", [])
+	for i in range(_wc_interview_option_buttons.size()):
+		var btn: Button = _wc_interview_option_buttons[i]
+		if i < opts.size():
+			btn.text = "%d) %s" % [i + 1, str(opts[i].get("label", ""))]
+			btn.visible = true
+		else:
+			btn.visible = false
+
+
+func _on_wc_option_pick(option_index: int) -> void:
+	_wc_current_answers.append(option_index)
+	_wc_current_q_idx += 1
+	_wc_show_current_question()
+
+
+func _wc_submit_answers() -> void:
+	var gb = get_node_or_null("/root/GigBoard")
+	if gb == null:
+		_wc_interview_root.visible = false
+		get_tree().paused = false
+		return
+	var listing_id: String = str(_wc_current_gauntlet.get("listing_id", ""))
+	var outcome: Dictionary = gb.submit_interview_answers(listing_id, _wc_current_gauntlet, _wc_current_answers)
+	_wc_interview_root.visible = false
+	_wc_current_gauntlet = {}
+	_wc_current_answers = []
+	_wc_current_q_idx = 0
+	_show_wc_letter(outcome)
+
+
+# -------------------------------------------------------------
+# WC Rejection / Acceptance letter modal
+# -------------------------------------------------------------
+func _build_wc_letter_modal() -> void:
+	_wc_letter_root = Control.new()
+	_wc_letter_root.anchor_right = 1.0
+	_wc_letter_root.anchor_bottom = 1.0
+	_wc_letter_root.visible = false
+	_wc_letter_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_wc_letter_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_wc_letter_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.75)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_wc_letter_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -400
+	panel.offset_top = -180
+	panel.offset_right = 400
+	panel.offset_bottom = 180
+	_wc_letter_root.add_child(panel)
+
+	_wc_letter_title = _make_label("", COL_WARN, 15, true)
+	_wc_letter_title.offset_left = PANEL_PAD + 4
+	_wc_letter_title.offset_top = PANEL_PAD
+	_wc_letter_title.offset_right = 800 - PANEL_PAD
+	_wc_letter_title.offset_bottom = PANEL_PAD + 24
+	panel.add_child(_wc_letter_title)
+
+	_wc_letter_body = RichTextLabel.new()
+	_wc_letter_body.bbcode_enabled = true
+	_wc_letter_body.fit_content = false
+	_wc_letter_body.scroll_active = true
+	_wc_letter_body.anchor_left = 0.0
+	_wc_letter_body.anchor_right = 1.0
+	_wc_letter_body.anchor_top = 0.0
+	_wc_letter_body.offset_left = PANEL_PAD + 4
+	_wc_letter_body.offset_top = PANEL_PAD + 34
+	_wc_letter_body.offset_right = -PANEL_PAD - 4
+	_wc_letter_body.offset_bottom = -60
+	_wc_letter_body.anchor_bottom = 1.0
+	_wc_letter_body.add_theme_color_override("default_color", COL_FG)
+	_wc_letter_body.add_theme_font_size_override("normal_font_size", 13)
+	panel.add_child(_wc_letter_body)
+
+	_wc_letter_close_btn = Button.new()
+	_wc_letter_close_btn.text = "CLOSE"
+	_wc_letter_close_btn.anchor_left = 0.5
+	_wc_letter_close_btn.anchor_right = 0.5
+	_wc_letter_close_btn.anchor_top = 1.0
+	_wc_letter_close_btn.anchor_bottom = 1.0
+	_wc_letter_close_btn.offset_left = -60
+	_wc_letter_close_btn.offset_right = 60
+	_wc_letter_close_btn.offset_top = -44
+	_wc_letter_close_btn.offset_bottom = -PANEL_PAD
+	_wc_letter_close_btn.pressed.connect(_on_wc_letter_close)
+	panel.add_child(_wc_letter_close_btn)
+
+
+func _show_wc_letter(outcome: Dictionary) -> void:
+	if outcome.is_empty():
+		return
+	var accepted: bool = bool(outcome.get("accepted", false))
+	_wc_letter_title.text = "// OFFER LETTER" if accepted else "// REJECTION LETTER"
+	_wc_letter_title.add_theme_color_override("font_color", COL_COOL if accepted else COL_HOT)
+	_wc_letter_body.text = "[color=#%s]%s[/color]" % [
+		_hex(COL_FG),
+		str(outcome.get("letter", "")),
+	]
+	_wc_letter_root.visible = true
+	get_tree().paused = true
+
+
+func _on_wc_letter_close() -> void:
+	_wc_letter_root.visible = false
+	get_tree().paused = false
+	if _gig_visible:
+		_refresh_gig_panel()
 
 
 # -------------------------------------------------------------
@@ -1557,10 +1845,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_gig_panel()
 			get_viewport().set_input_as_handled()
 		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6:
-			# Quick-apply gig by slot number while the gig panel is open.
+			# Quick-apply while the gig panel is open. Plain 1-6 → blue-collar
+			# gig. Shift+1-4 → white-collar listing (opens interview gauntlet).
 			if _gig_visible:
 				var slot: int = event.keycode - KEY_1   # 0..5
-				_apply_gig_slot(slot)
+				if event.shift_pressed and slot < 4:
+					_open_wc_interview(slot)
+				else:
+					_apply_gig_slot(slot)
 				get_viewport().set_input_as_handled()
 		KEY_SPACE:
 			var ts = get_node_or_null("/root/TimeSystem")
