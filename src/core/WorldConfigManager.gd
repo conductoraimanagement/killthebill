@@ -1,5 +1,4 @@
 extends Node
-class_name WorldConfigManager
 
 # =============================================================
 # WorldConfigManager: save, load, and share world configs.

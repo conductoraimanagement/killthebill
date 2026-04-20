@@ -1,5 +1,4 @@
 extends Node
-class_name PopulationDirector
 
 # =============================================================
 # PopulationDirector: The Persistent NPC Roster Manager

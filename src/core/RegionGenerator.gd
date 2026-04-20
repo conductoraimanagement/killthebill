@@ -1,5 +1,4 @@
 extends Node
-class_name RegionGenerator
 
 # =============================================================
 # RegionGenerator: Procedural World Map Builder

@@ -1,5 +1,4 @@
 extends Node
-class_name SenateDirector
 
 # =============================================================
 # SenateDirector: Orchestrates bill generation and Senate voting

@@ -1,5 +1,4 @@
 extends HTTPRequest
-class_name LLMManager
 
 # =============================================================
 # LLMManager: Routes world generation through either a cloud

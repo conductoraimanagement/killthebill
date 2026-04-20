@@ -1,5 +1,4 @@
 extends Node
-class_name Chronicle
 
 # =============================================================
 # Chronicle: the run's narrative artifact.

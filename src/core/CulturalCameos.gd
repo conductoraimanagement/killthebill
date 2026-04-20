@@ -1,5 +1,4 @@
 extends Node
-class_name CulturalCameos
 
 # =============================================================
 # CulturalCameos: the trigger engine for pop-culture intrusions.
