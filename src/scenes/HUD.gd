@@ -1741,7 +1741,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 # -------------------------------------------------------------
-# Goal-choice modal — pick one victory path at run start
+# Run-start modal — explains win + defeat conditions. The player
+# doesn't pick; the year unfolds and whichever condition fires first
+# ends the run.
 # -------------------------------------------------------------
 func _build_goal_choice_modal() -> void:
 	_goal_choice_root = Control.new()
@@ -1764,10 +1766,10 @@ func _build_goal_choice_modal() -> void:
 	panel.anchor_top = 0.5
 	panel.anchor_right = 0.5
 	panel.anchor_bottom = 0.5
-	panel.offset_left = -380
-	panel.offset_top = -280
-	panel.offset_right = 380
-	panel.offset_bottom = 280
+	panel.offset_left = -400
+	panel.offset_top = -310
+	panel.offset_right = 400
+	panel.offset_bottom = 310
 	_goal_choice_root.add_child(panel)
 
 	var banner := _make_label("// 13 MONTHS", COL_ACCENT, 18, true)
@@ -1779,7 +1781,7 @@ func _build_goal_choice_modal() -> void:
 	banner.offset_bottom = PANEL_PAD + 32
 	panel.add_child(banner)
 
-	var sub := _make_label("One goal. Pick it, or let the year decide.", COL_DIM, 12, false)
+	var sub := _make_label("Four ways to win. Two ways to lose. The year decides which.", COL_DIM, 12, false)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.anchor_right = 1.0
 	sub.offset_left = PANEL_PAD
@@ -1788,56 +1790,95 @@ func _build_goal_choice_modal() -> void:
 	sub.offset_bottom = PANEL_PAD + 56
 	panel.add_child(sub)
 
-	var options: Array = ModalCopy.GOAL_OPTIONS
+	var y: int = PANEL_PAD + 76
 
-	var y: int = PANEL_PAD + 72
-	var btn_h: int = 64
-	var gap: int = 8
+	# Win-conditions section header
+	var wins_hdr := _make_label("WIN CONDITIONS", COL_COOL, 11, true)
+	wins_hdr.anchor_right = 1.0
+	wins_hdr.offset_left = PANEL_PAD
+	wins_hdr.offset_top = y
+	wins_hdr.offset_right = -PANEL_PAD
+	wins_hdr.offset_bottom = y + 16
+	panel.add_child(wins_hdr)
+	y += 20
 
-	for opt in options:
-		var box := VBoxContainer.new()
-		box.anchor_right = 1.0
-		box.offset_left = PANEL_PAD
-		box.offset_top = y
-		box.offset_right = -PANEL_PAD
-		box.offset_bottom = y + btn_h
-		box.add_theme_constant_override("separation", 0)
-		panel.add_child(box)
+	for opt in ModalCopy.WIN_CONDITIONS:
+		y = _append_condition_row(panel, y, opt)
 
-		var btn := Button.new()
-		btn.text = str(opt.label)
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.add_theme_color_override("font_color", ModalCopy.resolve_color(str(opt.color_key)))
-		btn.add_theme_color_override("font_hover_color", COL_FG)
-		btn.add_theme_font_size_override("font_size", 15)
-		btn.pressed.connect(_on_goal_picked.bind(str(opt.path)))
-		box.add_child(btn)
+	y += 8
 
-		var flavor := Label.new()
-		flavor.text = "   " + str(opt.flavor)
-		flavor.add_theme_color_override("font_color", COL_DIM)
-		flavor.add_theme_font_size_override("font_size", 11)
-		flavor.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		box.add_child(flavor)
+	# Defeat-conditions section header
+	var defs_hdr := _make_label("DEFEAT CONDITIONS", COL_HOT, 11, true)
+	defs_hdr.anchor_right = 1.0
+	defs_hdr.offset_left = PANEL_PAD
+	defs_hdr.offset_top = y
+	defs_hdr.offset_right = -PANEL_PAD
+	defs_hdr.offset_bottom = y + 16
+	panel.add_child(defs_hdr)
+	y += 20
 
-		y += btn_h + gap
+	for opt in ModalCopy.DEFEAT_CONDITIONS:
+		y = _append_condition_row(panel, y, opt)
+
+	# BEGIN button at the bottom
+	var begin_btn := Button.new()
+	begin_btn.text = "BEGIN"
+	begin_btn.anchor_left = 0.5
+	begin_btn.anchor_right = 0.5
+	begin_btn.anchor_top = 1.0
+	begin_btn.anchor_bottom = 1.0
+	begin_btn.offset_left = -80
+	begin_btn.offset_right = 80
+	begin_btn.offset_top = -46
+	begin_btn.offset_bottom = -PANEL_PAD
+	begin_btn.add_theme_color_override("font_color", COL_ACCENT)
+	begin_btn.add_theme_font_size_override("font_size", 15)
+	begin_btn.pressed.connect(_on_run_acknowledged)
+	panel.add_child(begin_btn)
+
+
+# One read-only condition row (label in accent color + flavor line).
+# Returns the new y offset so the caller can stack multiple rows.
+func _append_condition_row(panel: Control, y: int, opt: Dictionary) -> int:
+	var label := _make_label(str(opt.label), ModalCopy.resolve_color(str(opt.color_key)), 13, true)
+	label.anchor_right = 1.0
+	label.offset_left = PANEL_PAD + 4
+	label.offset_top = y
+	label.offset_right = -PANEL_PAD
+	label.offset_bottom = y + 18
+	panel.add_child(label)
+
+	var flavor := Label.new()
+	flavor.text = "   " + str(opt.flavor)
+	flavor.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	flavor.add_theme_color_override("font_color", COL_DIM)
+	flavor.add_theme_font_size_override("font_size", 11)
+	flavor.anchor_right = 1.0
+	flavor.offset_left = PANEL_PAD + 4
+	flavor.offset_top = y + 18
+	flavor.offset_right = -PANEL_PAD
+	flavor.offset_bottom = y + 36
+	panel.add_child(flavor)
+	return y + 42
 
 
 func show_goal_choice_modal() -> void:
 	_goal_choice_root.visible = true
 	# Don't pause the tree — let the world finish generating in the
-	# background while the player decides. The modal will just absorb
-	# input.
+	# background while the player reads the win/defeat conditions.
 
 
 func hide_goal_choice_modal() -> void:
 	_goal_choice_root.visible = false
 
 
-func _on_goal_picked(path: String) -> void:
+# Player clicked BEGIN. Victory path defaults to "ANY" (any condition
+# fires) because the player no longer picks a committed path — actions
+# determine the ending. Close the modal so the year starts.
+func _on_run_acknowledged() -> void:
 	var pm = get_node_or_null("/root/PlayerManager")
 	if pm:
-		pm.chosen_victory_path = path
+		pm.chosen_victory_path = "ANY"
 	hide_goal_choice_modal()
 
 

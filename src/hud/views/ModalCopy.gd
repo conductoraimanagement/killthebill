@@ -13,37 +13,43 @@ class_name ModalCopy
 # =============================================================
 
 
-# Goal-choice modal — shown at run start. Five victory paths.
-# See docs/04-player/victory.md for the mechanics each triggers.
-const GOAL_OPTIONS: Array[Dictionary] = [
+# Run-start modal — explains the win conditions. The player no longer
+# picks one; which condition fires is determined by their actions
+# across the year. See docs/04-player/victory.md.
+const WIN_CONDITIONS: Array[Dictionary] = [
 	{
-		"path": "DIRECT_ACTION",
 		"label": "DIRECT ACTION",
 		"flavor": "Kill the oligarchs. The rarest, loudest path.",
 		"color_key": "HOT",
 	},
 	{
-		"path": "POLITICAL_REVOLUTION",
 		"label": "POLITICAL REVOLUTION",
 		"flavor": "Push public_tension to 100. The masses storm.",
 		"color_key": "ACCENT",
 	},
 	{
-		"path": "POLITICAL_REFORM",
 		"label": "POLITICAL REFORM",
 		"flavor": "Drive senate_alignment to 0. Bribe, leak, organize.",
 		"color_key": "COOL",
 	},
 	{
-		"path": "SYSTEMIC_COLLAPSE",
 		"label": "SYSTEMIC COLLAPSE",
 		"flavor": "Grind combined oligarch wealth below survival. The grind path.",
 		"color_key": "WARN",
 	},
+]
+
+# Main defeat surfaces. Shown in the run-start modal so players know
+# what's at stake alongside the wins.
+const DEFEAT_CONDITIONS: Array[Dictionary] = [
 	{
-		"path": "ANY",
-		"label": "LET THE YEAR DECIDE",
-		"flavor": "Any condition wins. Less committed, less narrative.",
+		"label": "ARRESTED",
+		"flavor": "Heat reaches 100. Enforcers find you at dawn.",
+		"color_key": "HOT",
+	},
+	{
+		"label": "DESPAIR",
+		"flavor": "Hope drifts to 0. You stop leaving the apartment.",
 		"color_key": "DIM",
 	},
 ]
