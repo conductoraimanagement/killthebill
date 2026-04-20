@@ -385,10 +385,105 @@ func _regenerate_wc_listings() -> void:
 	wc_listings_refreshed.emit()
 
 
-# Build a 3-question interview gauntlet from the offline pool. Each
-# question has 4 options — every one leads to a rejection fragment
-# that's assembled into the final rejection paragraph. Shuffling keeps
-# the same role from feeling identical across replays.
+# Async: try LLM first, fall back to offline pool. Callback signature:
+#   func(gauntlet: Dictionary) -> void
+# where gauntlet = {listing_id, title, company, questions: [...]}.
+# HUD uses this (not build_interview_gauntlet directly) so per-run
+# unique interview copy is generated when LLMManager has an API key.
+func request_interview_gauntlet(listing_id: String, callback: Callable) -> void:
+	var listing: Dictionary = _find_wc_listing(listing_id)
+	if listing.is_empty() or not callback.is_valid():
+		if callback.is_valid():
+			callback.call({})
+		return
+
+	var llm := get_node_or_null("/root/LLMManager")
+	if llm == null:
+		callback.call(_assemble_gauntlet_from_pool(listing))
+		return
+	# LLMManager.request_wc_gauntlet routes to offline fallback when no
+	# API key is configured — in that case the callback gets {} and we
+	# fall back to the pool here.
+	llm.request_wc_gauntlet(listing, Callable(self, "_on_llm_gauntlet_response").bind(listing_id, callback))
+
+
+func _on_llm_gauntlet_response(llm_response: Dictionary, listing_id: String, forward_to: Callable) -> void:
+	var listing: Dictionary = _find_wc_listing(listing_id)
+	if listing.is_empty():
+		if forward_to.is_valid():
+			forward_to.call({})
+		return
+
+	var gauntlet: Dictionary = _normalize_llm_gauntlet(llm_response, listing)
+	if gauntlet.is_empty():
+		# LLM returned empty, malformed, or offline fallback — use pool.
+		gauntlet = _assemble_gauntlet_from_pool(listing)
+
+	wc_gauntlet_ready.emit(listing_id, gauntlet)
+	if forward_to.is_valid():
+		forward_to.call(gauntlet)
+
+
+# Pull out usable {questions} from the LLM payload and wrap with the
+# listing metadata the HUD expects. Returns {} if the response didn't
+# carry 3 questions × 4 options with labels + rejection_fragment.
+func _normalize_llm_gauntlet(raw: Dictionary, listing: Dictionary) -> Dictionary:
+	if raw.is_empty() or not raw.has("questions"):
+		return {}
+	var questions: Array = raw.questions
+	if questions.size() < 3:
+		return {}
+	var cleaned: Array[Dictionary] = []
+	for q_raw in questions.slice(0, 3):
+		if typeof(q_raw) != TYPE_DICTIONARY:
+			return {}
+		var q: Dictionary = q_raw
+		var opts_raw: Array = q.get("options", [])
+		if opts_raw.size() < 4:
+			return {}
+		var opts: Array[Dictionary] = []
+		for o_raw in opts_raw.slice(0, 4):
+			if typeof(o_raw) != TYPE_DICTIONARY:
+				return {}
+			var o: Dictionary = o_raw
+			var label: String = str(o.get("label", ""))
+			var frag: String = str(o.get("rejection_fragment", ""))
+			if label == "" or frag == "":
+				return {}
+			opts.append({"label": label, "rejection_fragment": frag})
+		cleaned.append({"prompt": str(q.get("prompt", "")), "options": opts})
+
+	return {
+		"listing_id": str(listing.get("id", "")),
+		"title": str(listing.get("title", "")),
+		"company": str(listing.get("company", "")),
+		"questions": cleaned,
+	}
+
+
+func _assemble_gauntlet_from_pool(listing: Dictionary) -> Dictionary:
+	# Synonym for build_interview_gauntlet that takes a listing dict
+	# directly — called from the LLM response path when we need to fall
+	# back mid-flow.
+	var pool: Array = _WC_INTERVIEW_QUESTIONS.duplicate()
+	pool.shuffle()
+	var picked: Array[Dictionary] = []
+	for i in range(min(3, pool.size())):
+		var q: Dictionary = pool[i].duplicate(true)
+		var opts: Array = q.options.duplicate()
+		opts.shuffle()
+		q["options"] = opts
+		picked.append(q)
+	return {
+		"listing_id": str(listing.get("id", "")),
+		"title": str(listing.get("title", "")),
+		"company": str(listing.get("company", "")),
+		"questions": picked,
+	}
+
+
+# Synchronous offline-only build. Kept for any caller that wants the
+# pool directly (tests, migrations). HUD uses request_interview_gauntlet.
 func build_interview_gauntlet(listing_id: String) -> Dictionary:
 	var listing: Dictionary = _find_wc_listing(listing_id)
 	if listing.is_empty():

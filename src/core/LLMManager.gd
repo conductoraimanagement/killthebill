@@ -48,6 +48,7 @@ You MAY echo real-world events, social-science experiments (e.g. behavioral sink
 # from the caller's side). The pending callback is held here for the duration
 # of one in-flight request.
 var _bill_callback: Callable = Callable()
+var _wc_gauntlet_callback: Callable = Callable()
 
 
 func _ready() -> void:
@@ -259,6 +260,49 @@ func request_bill(request: Dictionary, callback: Callable) -> void:
 
 
 # =============================================================
+# WHITE-COLLAR INTERVIEW GAUNTLET
+# =============================================================
+#
+# Generate a 3-question absurdist interview for a listing. Each
+# question has 4 options; every option ships with a rejection fragment
+# the game stitches into a final rejection letter when the player is
+# (likely) rejected.
+#
+# The listing dict carries title, company, description, monthly_salary.
+# Callback receives the parsed gauntlet dict, or an empty dict on
+# failure (GigBoard falls back to its offline pool in that case).
+func request_wc_gauntlet(listing: Dictionary, callback: Callable) -> void:
+	if use_offline_fallback:
+		call_deferred("_emit_wc_gauntlet_fallback", callback)
+		return
+	current_request_type = "wc_gauntlet"
+	_wc_gauntlet_callback = callback
+	var system_prompt := "You are the Interview Panel Chair for a late-capitalist corporate role in KILL THE BILL.\n"
+	system_prompt += "The job exists to humiliate applicants through plausibly-professional absurdity.\n"
+	system_prompt += "Generate ONE interview gauntlet: 3 distinct questions, each with exactly 4 multiple-choice options.\n"
+	system_prompt += "Every question must feel like a real corporate interview question taken just one degree too far.\n"
+	system_prompt += "Examples of the register: estimation brain-teasers with hidden value-judgments, behavioral questions phrased to punish honest answers, brand-personality questions, weakness questions where any answer fails a stated rule.\n"
+	system_prompt += "Each of the 4 options must sound like a plausible real answer a candidate would give.\n"
+	system_prompt += "EVERY option must also carry a 'rejection_fragment' — a short clause (one sentence, no period) that a hiring panel would later cite as grounds for rejecting THIS specific answer. Fragments should sound like real HR-speak: bureaucratic, passive-voice, faintly condescending.\n"
+	system_prompt += "Fragments will be stitched together into a final rejection letter, so keep them grammatical as mid-sentence clauses.\n"
+	system_prompt += "Job listing:\n"
+	system_prompt += "- Title: " + str(listing.get("title", "")) + "\n"
+	system_prompt += "- Company: " + str(listing.get("company", "")) + "\n"
+	system_prompt += "- Description: " + str(listing.get("description", "")) + "\n"
+	system_prompt += "- Posted salary: %d cr/month\n" % int(listing.get("monthly_salary", 0))
+	system_prompt += "Reference the title, company, or description in at least one question to make it feel tailored to this listing.\n"
+	system_prompt += "Respond STRICTLY as JSON: {\"questions\": [{\"prompt\": string, \"options\": [{\"label\": string, \"rejection_fragment\": string}] (exactly 4)}] (exactly 3)}."
+	_send(system_prompt, "Draft the gauntlet as JSON only. No preamble, no markdown.", 1200, 0.95)
+
+
+func _emit_wc_gauntlet_fallback(callback: Callable) -> void:
+	# Offline path — GigBoard.build_interview_gauntlet handles the pool
+	# assembly. Callback gets {} so GigBoard knows to fall back.
+	if callback.is_valid():
+		callback.call({})
+
+
+# =============================================================
 # HTTP pipeline
 # =============================================================
 
@@ -342,6 +386,9 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		if current_request_type == "bill_generation" and _bill_callback.is_valid():
 			_bill_callback.call({})
 			_bill_callback = Callable()
+		if current_request_type == "wc_gauntlet" and _wc_gauntlet_callback.is_valid():
+			_wc_gauntlet_callback.call({})
+			_wc_gauntlet_callback = Callable()
 		return
 
 	var outer := JSON.new()
@@ -368,6 +415,9 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 		if current_request_type == "bill_generation" and _bill_callback.is_valid():
 			_bill_callback.call({})
 			_bill_callback = Callable()
+		if current_request_type == "wc_gauntlet" and _wc_gauntlet_callback.is_valid():
+			_wc_gauntlet_callback.call({})
+			_wc_gauntlet_callback = Callable()
 		return
 
 	var parsed = inner.get_data()
@@ -403,6 +453,10 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 			if _bill_callback.is_valid():
 				_bill_callback.call(parsed)
 				_bill_callback = Callable()
+		"wc_gauntlet":
+			if _wc_gauntlet_callback.is_valid():
+				_wc_gauntlet_callback.call(parsed if typeof(parsed) == TYPE_DICTIONARY else {})
+				_wc_gauntlet_callback = Callable()
 
 
 # =============================================================

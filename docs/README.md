@@ -38,6 +38,7 @@ The people — billionaires, politicians, citizens, and the occasional myth.
 ### 4. [Player](04-player/)
 The loop the human drives.
 - [Core Loop](04-player/loop.md) — Observe → Plan → Act → Adapt, plus a second-by-second walkthrough of the player's first hour
+- [Gigs, Rent & Employment](04-player/gigs.md) — the compliance path: gig board, monthly rent, white-collar interview gauntlet, weekly payday *(new, implemented)*
 - [Progression, Credits & Heat](04-player/progression.md) — class seeds, income mechanisms, spending, heat system *(new, partial)*
 - [Heat & Enforcement](04-player/heat.md) — Enforcer patrols, encounter modal, threshold effects, cooling mechanisms *(new, partial)*
 - [Victory & Defeat](04-player/victory.md) — four victory paths, two defeat paths, the end-of-run modal *(new, implemented)*

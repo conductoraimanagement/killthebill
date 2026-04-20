@@ -10,9 +10,10 @@ The clock is the game's pulse. A playthrough is a **13-month year** with an abso
 
 | Concept | Length | What happens at the boundary |
 |---|---|---|
-| **Day** | 10 real minutes (600s) | `WorldDirector.run_world_cycle()` — oligarchs act, Senate resolves, jobs expire, NPCs evolve, heat decays, rent drains, NPC deaths + social graph tick |
+| **Day** | 10 real minutes (600s) | `WorldDirector.run_world_cycle()` — oligarchs act, Senate resolves, jobs expire, NPCs evolve, heat decays, daily food cost drains, NPC deaths + social graph tick |
 | **Phase** | ~3:20 real minutes (200s) | `WorldDirector.trigger_news_cycle()` — NetFeed refresh + job board post rolls + cameo trigger evaluation |
-| **Month** | 30 days (300 real minutes / 5 real hours at 1×) | `TimeSystem.month_advanced` — Chronicle snapshots last month's recap |
+| **Week** | 7 days (70 real minutes at 1×) | `TimeSystem.payday` — `PlayerManager.apply_weekly_payday()` runs the WC firing roll, accrues the weekly salary slice if employed, deposits `pending_wages` into `credits` |
+| **Month** | 30 days (300 real minutes / 5 real hours at 1×) | `TimeSystem.month_advanced` — Chronicle snapshots last month's recap. **Also fires `TimeSystem.rent_due`** → `PlayerManager.handle_rent_due()` → HUD rent modal `[PAY]/[SKIP]` |
 | **Year** | 13 months (390 days / ~65 real hours at 1×) | `TimeSystem.year_ended` — if no victory path fired, `TIMEOUT_ABSORBED` defeat |
 | **Frame** | every render frame | `TimeSystem.time_of_day_updated` — lighting, HUD clock, sun position |
 

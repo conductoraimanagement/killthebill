@@ -1484,14 +1484,36 @@ func _open_wc_interview(slot_idx: int) -> void:
 	if slot_idx < 0 or slot_idx >= gb.wc_listings.size():
 		return
 	var listing: Dictionary = gb.wc_listings[slot_idx]
-	_wc_current_gauntlet = gb.build_interview_gauntlet(str(listing.get("id", "")))
-	if _wc_current_gauntlet.is_empty():
+
+	# Show modal in a loading state immediately — pauses the game, hides
+	# option buttons, and displays a brief "generating" note while the
+	# LLM call (or offline deferred fallback) resolves.
+	_wc_show_loading_state(str(listing.get("title", "")), str(listing.get("company", "")))
+	_wc_interview_root.visible = true
+	get_tree().paused = true
+
+	gb.request_interview_gauntlet(str(listing.get("id", "")), Callable(self, "_on_gauntlet_ready"))
+
+
+func _wc_show_loading_state(title: String, company: String) -> void:
+	_wc_interview_title.text = "// INTERVIEW — %s @ %s" % [title, company]
+	_wc_interview_q_label.text = "The panel is reviewing your profile. Please wait."
+	for btn in _wc_interview_option_buttons:
+		btn.visible = false
+
+
+func _on_gauntlet_ready(gauntlet: Dictionary) -> void:
+	if gauntlet.is_empty():
+		# Truly nothing came back — close the modal and bail gracefully.
+		_wc_interview_root.visible = false
+		get_tree().paused = false
+		_gig_status.text = "Interview could not be scheduled. Try again later."
+		_gig_status.add_theme_color_override("font_color", COL_HOT)
 		return
+	_wc_current_gauntlet = gauntlet
 	_wc_current_answers = []
 	_wc_current_q_idx = 0
 	_wc_show_current_question()
-	_wc_interview_root.visible = true
-	get_tree().paused = true
 
 
 func _wc_show_current_question() -> void:

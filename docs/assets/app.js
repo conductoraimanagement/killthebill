@@ -40,6 +40,7 @@ const DOCS = [
         intro: 'The loop the human drives.',
         pages: [
             { file: 'loop.md',        title: 'Core Loop' },
+            { file: 'gigs.md',        title: 'Gigs, Rent & Employment' },
             { file: 'progression.md', title: 'Progression, Credits & Heat' },
             { file: 'heat.md',        title: 'Heat & Enforcement' },
             { file: 'victory.md',     title: 'Victory & Defeat' },
@@ -80,6 +81,14 @@ const TICKER_HEADLINES = [
     "Anonymous manifesto distributed in Substrate Fields. 47 pages.",
     "Heat tier raised to 3 in Obsidian Cay after unlicensed boat.",
     "NetFeed anomaly: identical headline reported across 8 outlets.",
+    "Rental-market index up 3.1% MoM. Landlord association 'cautiously optimistic'.",
+    "Gig-app reports '18% of delivery fees now consist of administrative offsets'.",
+    "Finance clearing house offline 91 minutes overnight. Debt records 'unreadable'.",
+    "Senate panel: 'Unemployment is down; labor-force participation is down further'.",
+    "Paperclip & Thorne, LLP opens 300 contract positions. 'A robust pipeline.'",
+    "Brand Strategist role reposted for the eleventh time this quarter.",
+    "Indexed Debt: senator bank balances leaked at 03:12. Finance sector scrambles.",
+    "Eviction squad deployed to 14 Sinks addresses before dawn. List is getting longer.",
 ];
 
 // ---------- Lightweight Markdown renderer ----------
