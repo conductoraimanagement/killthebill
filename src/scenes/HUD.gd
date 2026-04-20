@@ -395,19 +395,20 @@ func _refresh_state() -> void:
 
 	var pm = get_node_or_null("/root/PlayerManager")
 	if pm:
-		lines.append("[color=#%s]credits[/color]         [color=#%s]$%s[/color]" % [
+		lines.append("[color=#%s]credits[/color]         [color=#%s]%s[/color] [color=#%s]cr[/color]" % [
 			_hex(COL_DIM),
 			_hex(_color_for_credits(pm.credits)),
 			str(pm.credits).rpad(6),
+			_hex(COL_DIM),
 		])
 		if int(pm.pending_wages) > 0:
-			lines.append("[color=#%s]pending wages[/color]   [color=#%s]+$%s[/color] [color=#%s](next payday)[/color]" % [
+			lines.append("[color=#%s]pending wages[/color]   [color=#%s]+%s[/color] [color=#%s]cr (next payday)[/color]" % [
 				_hex(COL_DIM),
 				_hex(COL_COOL),
 				str(int(pm.pending_wages)).rpad(5),
 				_hex(COL_DIM),
 			])
-		lines.append("[color=#%s]rent[/color]            [color=#%s]$%d/mo[/color]" % [
+		lines.append("[color=#%s]rent[/color]            [color=#%s]%d cr/mo[/color]" % [
 			_hex(COL_DIM),
 			_hex(COL_DIM),
 			int(pm.monthly_rent),
@@ -1010,7 +1011,7 @@ func _job_row(job: Dictionary) -> String:
 	var ttl_color := COL_HOT if cycles_left <= 1 else COL_DIM
 
 	var row: String = ""
-	row += "[color=#%s]▸ %s[/color]  [color=#%s]+$%d[/color]  [color=#%s]%d cycles left[/color]\n" % [
+	row += "[color=#%s]▸ %s[/color]  [color=#%s]+%d cr[/color]  [color=#%s]%d cycles left[/color]\n" % [
 		_hex(badge_color),
 		badge,
 		_hex(COL_COOL),
@@ -1109,7 +1110,7 @@ func _refresh_gig_panel() -> void:
 		next_payday_in = 7 - (int(ts.day) % 7)
 		if next_payday_in == 0:
 			next_payday_in = 7
-	_gig_title.text = "// GIG BOARD  (G to hide)  —  pending $%d  ·  next payday in %d days" % [pending, next_payday_in]
+	_gig_title.text = "// GIG BOARD  (G to hide)  —  pending %d cr  ·  next payday in %d days" % [pending, next_payday_in]
 
 	if listings.is_empty():
 		_gig_text.text = "[i][color=#%s]> no gigs available in this region. travel to find work.[/color][/i]" % _hex(COL_DIM)
@@ -1131,10 +1132,10 @@ func _gig_row(slot: int, g: Dictionary) -> String:
 	var tip_range: Array = g.get("tip_variance", [0, 0])
 	var tip_note: String = ""
 	if int(tip_range[1]) > 0:
-		tip_note = " (+ tip 0–$%d)" % int(tip_range[1])
+		tip_note = " (+ tip 0–%d cr)" % int(tip_range[1])
 	var hours: int = int(g.get("hours", 3))
 	var row: String = ""
-	row += "[color=#%s]▸ [%d][/color]  [color=#%s]$%d–$%d%s[/color]  [color=#%s]%dh shift[/color]\n" % [
+	row += "[color=#%s]▸ [%d][/color]  [color=#%s]%d–%d cr%s[/color]  [color=#%s]%dh shift[/color]\n" % [
 		_hex(COL_WARN),
 		slot,
 		_hex(COL_COOL),
@@ -1168,7 +1169,7 @@ func _apply_gig_slot(slot_index: int) -> void:
 	else:
 		var pay: int = int(result.get("pay", 0))
 		var humiliation: String = str(result.get("humiliation", ""))
-		_gig_status.text = "Shift done. $%d accrues to payday. %s" % [pay, humiliation]
+		_gig_status.text = "Shift done. %d cr accrues to payday. %s" % [pay, humiliation]
 		_gig_status.add_theme_color_override("font_color", COL_COOL)
 	_refresh_gig_panel()
 
@@ -1263,15 +1264,15 @@ func _on_rent_due_prompt(rent_amount: int, months_behind: int) -> void:
 	var total: int = rent_amount * (months_behind + 1)
 	var body_text := ""
 	if months_behind == 0:
-		body_text = "The landlord wants his check. This month's rent: $%d.\n\nPay now, or skip and eat the ding on your record." % rent_amount
+		body_text = "The landlord wants his check. This month's rent: %d cr.\n\nPay now, or skip and eat the ding on your record." % rent_amount
 	elif months_behind == 1:
-		body_text = "Second notice. You're one month behind. Two months unpaid and the eviction squad comes.\n\nTotal owed now: $%d (%d months × $%d)." % [total, months_behind + 1, rent_amount]
+		body_text = "Second notice. You're one month behind. Two months unpaid and the eviction squad comes.\n\nTotal owed now: %d cr (%d months × %d cr)." % [total, months_behind + 1, rent_amount]
 	if months_behind > 0:
 		_rent_title.text = "// RENT DUE  (month %d behind)" % months_behind
 	else:
 		_rent_title.text = "// RENT DUE"
 	_rent_body.text = body_text
-	_rent_pay_btn.text = "PAY  $%d" % total
+	_rent_pay_btn.text = "PAY  %d cr" % total
 	_rent_root.visible = true
 	get_tree().paused = true
 
@@ -1302,7 +1303,7 @@ func _on_gig_denied(_kind: String, reason: String) -> void:
 
 
 func _on_gig_shift_completed(_kind: String, pay: int, humiliation: String) -> void:
-	_publish_netfeed_note("Shift done. $%d accrues to payday. %s" % [pay, humiliation])
+	_publish_netfeed_note("Shift done. %d cr accrues to payday. %s" % [pay, humiliation])
 	if _gig_visible:
 		_refresh_gig_panel()
 
@@ -1310,11 +1311,11 @@ func _on_gig_shift_completed(_kind: String, pay: int, humiliation: String) -> vo
 func _on_payday_deposited(amount: int, breakdown: Dictionary) -> void:
 	var parts := PackedStringArray()
 	for k in breakdown.keys():
-		parts.append("%s $%d" % [str(k), int(breakdown[k])])
+		parts.append("%s %d cr" % [str(k), int(breakdown[k])])
 	var suffix: String = ""
 	if parts.size() > 0:
 		suffix = "  (" + ", ".join(parts) + ")"
-	_publish_netfeed_note("PAYDAY: $%d deposited.%s" % [amount, suffix])
+	_publish_netfeed_note("PAYDAY: %d cr deposited.%s" % [amount, suffix])
 
 
 func _on_pending_wages_changed(_total: int) -> void:
@@ -2187,7 +2188,7 @@ func _build_shop_modal() -> void:
 		_on_buy_burner)
 
 	# Secure Housing (only meaningful if homeless — see _on_buy_housing).
-	# Deposit = one month's rolled rent from PlayerManager ($700–$2000).
+	# Deposit = one month's rolled rent from PlayerManager (700–2000 cr).
 	var housing_cost: int = 700
 	if has_node("/root/PlayerManager"):
 		housing_cost = int(get_node("/root/PlayerManager").housing_deposit_cost())

@@ -92,7 +92,7 @@ Things that *feel* like endings but aren't:
 - **Your credits hit zero** — PlayerManager doesn't fire defeat on broke. Being poor is the default.
 - **A run of bad cycles** — the sim keeps ticking; something will shift.
 - **A cameo arc resolves badly** — affects the run but doesn't end it.
-- **Eviction** — skipping rent two months in a row flips the `homeless` state (no more apartment, no home computer → can't easily browse gigs, +$8/day food cost, −1 hope/day drift). *Not* a defeat. You survive on the street, and only `hope == 0` (DESPAIR) fires the run-ender.
+- **Eviction** — skipping rent two months in a row flips the `homeless` state (no more apartment, no home computer → can't easily browse gigs, +8 cr/day food cost, −1 hope/day drift). *Not* a defeat. You survive on the street, and only `hope == 0` (DESPAIR) fires the run-ender.
 
 The only run-enders are the four above.
 

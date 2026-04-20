@@ -13,7 +13,7 @@ A full day is **10 real minutes**, split into three phases of ~3:20 each. A full
 - Scene fades in. You're standing in a procedurally-generated region (let's say **Ash Row**, an `URBAN_SLUM` — yours will differ each playthrough unless you [loaded a config](../05-systems/save-and-share.md)).
 - **GOAL-CHOICE MODAL** pops up immediately: *"// 13 MONTHS — One goal. Pick it, or let the year decide."* Five options — `DIRECT ACTION`, `POLITICAL REVOLUTION`, `POLITICAL REFORM`, `SYSTEMIC COLLAPSE`, or `LET THE YEAR DECIDE`. Stored in `PlayerManager.chosen_victory_path`. Pick one. World keeps generating in the background.
 - Fog is brown and thick. Rust-orange stacks of shipping containers and brutalist concrete blocks rise around you. The sun sits low in the east.
-- **HUD top-left (WORLD STATE):** `food_price 100`, `tech_price 500`, `security 50`, `tension 20`, `senate_alignment 50`, **`month 1 of 13`, `day 1`, `06:00`, `morning`**, progress bar `░░░░░░░░░░░░ 13 months left`, `credits $29,000` (Blue Collar starting wallet — WC starts $50,000), `rent $1,200/mo` (rolled once per run in $700–$2,000), `heat 0`, `hope ▓▓▓▓░░░░░░ 45`.
+- **HUD top-left (WORLD STATE):** `food_price 100`, `tech_price 500`, `security 50`, `tension 20`, `senate_alignment 50`, **`month 1 of 13`, `day 1`, `06:00`, `morning`**, progress bar `░░░░░░░░░░░░ 13 months left`, `credits 29,000 cr` (Blue Collar starting wallet — WC starts 50,000 cr), `rent 1,200 cr/mo` (rolled once per run in 700–2,000 cr), `heat 0`, `hope ▓▓▓▓░░░░░░ 45`.
 - **HUD top-right (NETFEED):** *"> broadcast channel open. awaiting signal..."*
 - **HUD middle-right (SENATE DOCKET):** *"Senate idle. Chamber awaits first cycle."*
 - Player capsule (rust-orange) visible at map center. Isometric camera locked on them. Behind the scenes, 4–6 oligarchs, 11 politicians, 40 NPCs, 0–1 active cameos, 2 enforcer patrols have been generated.
@@ -21,13 +21,13 @@ A full day is **10 real minutes**, split into three phases of ~3:20 each. A full
 
 ### 💼 Gig board — the compliance income path
 
-At any time while you have a home apartment, press **`G`** to open the GIG BOARD (an in-game job site you access via the apartment's computer). Listings are region-gated — a dishwasher gig is anywhere, a waiter gig is Urban Elite only, day-labor is Industrial only. Apply with number keys `1`–`6`; a 40% share of applications are **silently denied** with no explanation and 30 wasted minutes. The rest run a 3–4h shift, pay $30–$84 (plus tips where applicable), cost 1–3 hope from a humiliation dialogue line, and drift your idealism down (−0.02 per shift — you're participating in the thing eating you).
+At any time while you have a home apartment, press **`G`** to open the GIG BOARD (an in-game job site you access via the apartment's computer). Listings are region-gated — a dishwasher gig is anywhere, a waiter gig is Urban Elite only, day-labor is Industrial only. Apply with number keys `1`–`6`; a 40% share of applications are **silently denied** with no explanation and 30 wasted minutes. The rest run a 3–4h shift, pay 30–84 cr (plus tips where applicable), cost 1–3 hope from a humiliation dialogue line, and drift your idealism down (−0.02 per shift — you're participating in the thing eating you).
 
-Wages **accrue** to `pending_wages` and deposit into `credits` every **7 days** via `TimeSystem.payday`. The state panel shows both. The compliance path is survivable — grinding 2 shifts/day nets ~$1,200/week — but it's the *opposite* of the resistance path: no heat, no idealism, no chaos, and your hope bleeds.
+Wages **accrue** to `pending_wages` and deposit into `credits` every **7 days** via `TimeSystem.payday`. The state panel shows both. The compliance path is survivable — grinding 2 shifts/day nets ~1,200 cr/week — but it's the *opposite* of the resistance path: no heat, no idealism, no chaos, and your hope bleeds.
 
 ### 🏠 Rent due — the monthly decision
 
-On the 1st of each month, `TimeSystem.rent_due` fires a **forced HUD modal**: *"RENT DUE — $X.  [PAY] / [SKIP]"*. Paying drains credits (can go negative — you chose the hole). Skipping increments `rent_arrears_months` and delays the decision by 30 days. **Two months unpaid → eviction.** Eviction is *not* a defeat; it's a homeless state with extra hope drift and +$8/day food cost. See [victory.md](victory.md).
+On the 1st of each month, `TimeSystem.rent_due` fires a **forced HUD modal**: *"RENT DUE — X cr.  [PAY] / [SKIP]"*. Paying drains credits (can go negative — you chose the hole). Skipping increments `rent_arrears_months` and delays the decision by 30 days. **Two months unpaid → eviction.** Eviction is *not* a defeat; it's a homeless state with extra hope drift and +8 cr/day food cost. See [victory.md](victory.md).
 
 ### 🚶 Orient — 0:00 → 0:30 [06:00 → ~07:30]
 

@@ -7,7 +7,7 @@ extends Node
 # when housed; a public terminal when homeless — deferred).
 # They pick a shift; ~40% of applications are silently denied,
 # no reason given. Successful shifts cost game-time + hope
-# (humiliation dialogue), pay USD wages that accrue into
+# (humiliation dialogue), pay wages (cr) that accrue into
 # PlayerManager.pending_wages, and deposit every 7 days on
 # TimeSystem.payday.
 #
@@ -27,7 +27,7 @@ const DENIAL_PROBABILITY: float = 0.40
 #   title            — display name on the listing
 #   regions          — array of region_type strings; empty = anywhere
 #   hours            — game-hours the shift eats (skipped via TimeSystem)
-#   pay              — [min, max] USD range
+#   pay              — [min, max] credit range
 #   tip_variance     — optional [min, max] extra roll (waiter, delivery)
 #   hope_cost        — [min, max] hope drained per shift
 #   idealism_drift   — negative bump (you're feeding the thing)
@@ -77,7 +77,7 @@ const GIG_CATALOG: Array[Dictionary] = [
 		"humiliation_pool": [
 			"The foreman says 'don't worry, this stuff's only lightly toxic'. He is not wearing a mask.",
 			"You lift something that cracks open and seeps into your left boot. Nobody comps a new pair.",
-			"The timer on the loading dock ticks out while you're still hauling; the docked hour costs you $14.",
+			"The timer on the loading dock ticks out while you're still hauling; the docked hour costs you 14 cr.",
 			"A middle-manager watches you work through the window, phone out, clearly texting about you.",
 		],
 	},
@@ -92,8 +92,8 @@ const GIG_CATALOG: Array[Dictionary] = [
 		"idealism_drift": -0.02,
 		"humiliation_pool": [
 			"The customer rated you three stars for 'doorstep placement'. The package arrived in six minutes.",
-			"The app deducted $4 for 'late delivery'. The route the app gave you had a closed bridge.",
-			"A doorman made you show ID twice and then tipped one dollar on a $90 order.",
+			"The app deducted 4 cr for 'late delivery'. The route the app gave you had a closed bridge.",
+			"A doorman made you show ID twice and then tipped one credit on a 90 cr order.",
 			"The customer cracked the door, took the bag, and closed it without looking at you.",
 		],
 	},

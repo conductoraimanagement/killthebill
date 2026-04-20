@@ -88,41 +88,41 @@ The cascade logic lives in the [Butterfly Effect matrix](butterfly-effect.md) an
 
 ---
 
-## Player economy — USD-grounded (1 credit = 1 USD)
+## Player economy — real-world-calibrated (1 credit ≈ 1 USD)
 
-Every credit number in this game maps to a real dollar of a real 2025-ish US economy. *Not abstract game points.* This is deliberate: the player looking at `$1,873` understands what that buys instantly.
+Every credit number in this game maps to a real dollar of a real 2025-ish US economy. *Not abstract game points.* This is deliberate: the player looking at `1,873 cr` should read it as the same weight as $1,873 feels in real life.
 
 ### Starting wallet
 
 | Class | Start | Interpretation |
 |---|---|---|
-| White Collar | $50,000 | Severance + liquidated 401(k). A year of frayed cushion if you're careful. |
-| Blue Collar | $29,000 | Union payout + cashed-out savings. Covers the year if nothing goes wrong. Something always goes wrong. |
+| White Collar | 50,000 cr | Severance + liquidated 401(k). A year of frayed cushion if you're careful. |
+| Blue Collar | 29,000 cr | Union payout + cashed-out savings. Covers the year if nothing goes wrong. Something always goes wrong. |
 
 ### Fixed monthly burn
 
-- **Rent**: rolled once at run-start in `[$700, $2,000]`. Broad range — a lucky Sinks studio vs. an unlucky one. Paid monthly via HUD prompt (`rent_due_prompt` on month rollover). Two months unpaid → eviction. See [victory.md](../04-player/victory.md) and [loop.md](../04-player/loop.md).
-- **Daily food & utilities**: $25 + `(food_price − 100) / 3`. Homeless adds +$8/day (the exposure tax).
+- **Rent**: rolled once at run-start in `[700, 2000] cr`. Broad range — a lucky Sinks studio vs. an unlucky one. Paid monthly via HUD prompt (`rent_due_prompt` on month rollover). Two months unpaid → eviction. See [victory.md](../04-player/victory.md) and [loop.md](../04-player/loop.md).
+- **Daily food & utilities**: 25 cr + `(food_price − 100) / 3`. Homeless adds +8 cr/day (the exposure tax).
 
 ### Income sources
 
 | Source | Range | Cadence | Risk |
 |---|---|---|---|
-| Gig shift (dishwasher, sweeper, delivery, waiter, day-labor, trash) | $30–$84 + tips | Accrues; paid weekly | 40% silent denial, hope-cost humiliation |
-| Resistance cell job | $500–$2,500 | On completion | Sabotage/leak requirement, +heat |
-| NPC fixer leak | $150–$350 | On completion | Fixer trust |
-| NPC fixer sabotage | $200–$400 | On completion | +heat |
-| Sabotage loot | $200 (Food) → $1,400 (Finance) | Immediate | +heat per sector |
-| Pickpocket | $20–$80 | Immediate | +1 heat on success / +3 on failure |
+| Gig shift (dishwasher, sweeper, delivery, waiter, day-labor, trash) | 30–84 cr + tips | Accrues; paid weekly | 40% silent denial, hope-cost humiliation |
+| Resistance cell job | 500–2,500 cr | On completion | Sabotage/leak requirement, +heat |
+| NPC fixer leak | 150–350 cr | On completion | Fixer trust |
+| NPC fixer sabotage | 200–400 cr | On completion | +heat |
+| Sabotage loot | 200 cr (Food) → 1,400 cr (Finance) | Immediate | +heat per sector |
+| Pickpocket | 20–80 cr | Immediate | +1 heat on success / +3 on failure |
 
 ### Spend sinks
 
 | Item | Cost |
 |---|---|
-| Forged IDs (−25 heat) | $500 |
-| Burner datashard | $1,500 |
-| Secure housing (if homeless) | one month's rent ($700–$2,000) |
-| Enforcer bribe | $200 + $200 per 20 heat (capped) |
-| Politician bribe | ~$2,000 base, scandal/corruption discount |
+| Forged IDs (−25 heat) | 500 cr |
+| Burner datashard | 1,500 cr |
+| Secure housing (if homeless) | one month's rent (700–2,000 cr) |
+| Enforcer bribe | 200 cr + 200 cr per 20 heat (capped) |
+| Politician bribe | ~2,000 cr base, scandal/corruption discount |
 
 Cameo arcs **do not pay credits**. The cameo reward is a world-state shift (tension / senate / idealism) plus any narrative-specific payoff — e.g. the Indexed Debt jubilee wipes the player's rent arrears and clears Finance-oligarch debt attribution.

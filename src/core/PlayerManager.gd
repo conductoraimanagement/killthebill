@@ -24,7 +24,7 @@ enum ClassSeed { WHITE_COLLAR, BLUE_COLLAR }
 const HEAT_MAX := 100
 const HOPE_MAX := 100
 const RENT_ARREARS_MONTHS_TO_EVICTION: int = 2   # 2 months unpaid → eviction
-const RENT_MIN: int = 700                         # USD — rolled per run
+const RENT_MIN: int = 700                         # credits — rolled per run
 const RENT_MAX: int = 2000
 
 var current_class: ClassSeed = ClassSeed.BLUE_COLLAR
@@ -47,7 +47,7 @@ var _rent_due_pending: bool = false       # waiting on player to [PAY]/[SKIP]
 
 # Gig wages accrue here between paydays. Deposited to credits every
 # DAYS_PER_WEEK via TimeSystem.payday. Broken out so the HUD can show
-# "pending: $X — next payday in N days".
+# "pending: X cr — next payday in N days".
 var pending_wages: int = 0
 var pending_wages_breakdown: Dictionary = {}   # gig_kind → cr subtotal
 
@@ -119,7 +119,7 @@ func initialize_run(seed: ClassSeed = ClassSeed.BLUE_COLLAR) -> void:
 	_defeat_locked = false
 
 	# Roll the apartment's monthly rent once per run. The range is
-	# broad — a lucky Sinks studio costs $700, an unlucky one $2,000.
+	# broad — a lucky Sinks studio costs 700 cr, an unlucky one 2,000 cr.
 	# The number never changes over a playthrough.
 	monthly_rent = randi_range(RENT_MIN, RENT_MAX)
 
@@ -135,13 +135,13 @@ func initialize_run(seed: ClassSeed = ClassSeed.BLUE_COLLAR) -> void:
 	housing_status_changed.emit(homeless)
 	pending_wages_changed.emit(pending_wages)
 
-	print("Run initialized as: %s  (credits=$%d, rent=$%d/mo, hope=%.0f)" % [
+	print("Run initialized as: %s  (credits=%d cr, rent=%d cr/mo, hope=%.0f)" % [
 		_class_label(), credits, monthly_rent, hope,
 	])
 
 
 func _setup_white_collar() -> void:
-	# Laid off last month. $50,000 in savings — a year's cushion if you
+	# Laid off last month. 50,000 cr in savings — a year's cushion if you
 	# don't bleed it on the rent-plus-food baseline. Hope is fragile
 	# because you had more to lose, and the unemployment line is long.
 	credits = 50000
@@ -151,7 +151,7 @@ func _setup_white_collar() -> void:
 
 
 func _setup_blue_collar() -> void:
-	# Union layoff. $29,000 is the severance + what the 401(k) cashed out
+	# Union layoff. 29,000 cr is the severance + what the 401(k) cashed out
 	# to. Covers rent and groceries for most of the year if nothing goes
 	# wrong — and something always goes wrong. Social capital is your
 	# edge: neighbors remember you.
@@ -420,12 +420,12 @@ func secure_housing() -> bool:
 	if credits < deposit:
 		return false
 	credits -= deposit
-	credits_changed.emit(credits, -deposit, "housing deposit ($%d)" % deposit)
+	credits_changed.emit(credits, -deposit, "housing deposit (%d cr)" % deposit)
 	homeless = false
 	rent_arrears_months = 0
 	housing_status_changed.emit(false)
 	_apply_hope(8.0, "roof over head again")
-	_publish_feed("A landlord took your deposit ($%d). The walls creak. You have an address again." % deposit)
+	_publish_feed("A landlord took your deposit (%d cr). The walls creak. You have an address again." % deposit)
 	return true
 
 
