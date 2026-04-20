@@ -1,6 +1,6 @@
 # Heat & Enforcement
 
-> **Status:** Partial implementation. See [src/core/PlayerManager.gd](../../src/core/PlayerManager.gd) and [src/entities/EnforcerPatrol.gd](../../src/entities/EnforcerPatrol.gd).
+> **Status:** Partial implementation. See [src/core/PlayerManager.gd](../../src/core/PlayerManager.gd) and [src/entities/world/EnforcerPatrol.gd](../../src/entities/world/EnforcerPatrol.gd).
 
 The world is watching. Heat is how loudly.
 
@@ -94,7 +94,7 @@ Heat becomes a decision about *when, where, and how*, not a fixed tax on *what*.
 
 | Threshold | Effect | Where |
 |---|---|---|
-| `heat ≥ 30` | NetFeed note: *"Enforcer patrols thicken near the Sinks."* Patrols *may* fire proximity encounters from this level up. | [PlayerManager.add_heat](../../src/core/PlayerManager.gd) / [EnforcerPatrol.HEAT_DETECTION_THRESHOLD](../../src/entities/EnforcerPatrol.gd) |
+| `heat ≥ 30` | NetFeed note: *"Enforcer patrols thicken near the Sinks."* Patrols *may* fire proximity encounters from this level up. | [PlayerManager.add_heat](../../src/core/PlayerManager.gd) / [EnforcerPatrol.HEAT_DETECTION_THRESHOLD](../../src/entities/world/EnforcerPatrol.gd) |
 | `heat ≥ 60` | Sabotage loot **halved** (you have no time to pick it clean). NetFeed: *"Compliance AI flags a person of interest."* | [WorldDirector._ripple_sabotage](../../src/core/WorldDirector.gd) |
 | `heat ≥ 80` | Bribe costs (politicians *and* Enforcers) **doubled** surcharge. Enforcers **refuse** bribes outright. NetFeed: *"Arrest warrants issued; checkpoints running live facial scans."* | [WorldDirector.effective_bribe_cost](../../src/core/WorldDirector.gd) / [HUD encounter modal](../../src/scenes/HUD.gd) |
 | `heat == 100` | **Run ends.** `PlayerManager.defeat_triggered("ARRESTED", ...)` fires. End-of-run modal with `// DEFEAT //` banner. | [PlayerManager.add_heat](../../src/core/PlayerManager.gd) |
@@ -103,7 +103,7 @@ Heat becomes a decision about *when, where, and how*, not a fixed tax on *what*.
 
 ## Enforcer patrols
 
-[EnforcerPatrol.gd](../../src/entities/EnforcerPatrol.gd) — ambient, visible, embodied enforcement.
+[EnforcerPatrol.gd](../../src/entities/world/EnforcerPatrol.gd) — ambient, visible, embodied enforcement.
 
 ### Appearance
 

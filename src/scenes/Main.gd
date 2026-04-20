@@ -191,7 +191,7 @@ func _on_landscape_ready(landscape: LandscapeGenerator) -> void:
 func _spawn_player(at: Vector3) -> void:
 	_player = CharacterBody3D.new()
 	_player.name = "Player"
-	_player.set_script(load("res://src/entities/PlayerController.gd"))
+	_player.set_script(load("res://src/entities/player/PlayerController.gd"))
 
 	var nav := NavigationAgent3D.new()
 	nav.name = "NavigationAgent3D"

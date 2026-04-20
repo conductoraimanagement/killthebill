@@ -2,7 +2,7 @@
 
 > NPCs aren't quest-givers. They're people you build trust with — or burn through. When trust is high enough, they become operatives you can send on missions.
 
-Implemented across: [NPCData.gd](../../src/entities/NPCData.gd) (per-NPC state) + helper functions called from dialogue / persuasion flows.
+Implemented across: [NPCData.gd](../../src/entities/data/NPCData.gd) (per-NPC state) + helper functions called from dialogue / persuasion flows.
 
 ---
 

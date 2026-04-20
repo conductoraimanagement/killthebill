@@ -2,7 +2,7 @@
 
 > 40 persistent citizens, generated at playthrough start, evolving every cycle. No spawning, no despawning. If the game says *"She was shot during the riot"*, she's gone for the rest of the run.
 
-Implemented by: [src/entities/NPCData.gd](../../src/entities/NPCData.gd) (Resource) and [src/core/PopulationDirector.gd](../../src/core/PopulationDirector.gd) (Singleton).
+Implemented by: [src/entities/data/NPCData.gd](../../src/entities/data/NPCData.gd) (Resource) and [src/core/PopulationDirector.gd](../../src/core/PopulationDirector.gd) (Singleton).
 
 ---
 

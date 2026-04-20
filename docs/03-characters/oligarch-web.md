@@ -1,6 +1,6 @@
 # Oligarch Web
 
-> **Status:** Design spec + stub. See [src/core/OligarchNetwork.gd](../../src/core/OligarchNetwork.gd) and the extensions to [OligarchData.gd](../../src/entities/OligarchData.gd).
+> **Status:** Design spec + stub. See [src/core/OligarchNetwork.gd](../../src/core/OligarchNetwork.gd) and the extensions to [OligarchData.gd](../../src/entities/data/OligarchData.gd).
 
 Today's [billionaire system](oligarchs.md) models each Oligarch as an isolated character. In reality, billionaires don't operate in isolation — they scheme, ally, betray, and prey on each other. The Oligarch Web adds that layer:
 
@@ -152,7 +152,7 @@ Each cycle, `OligarchData.adapt_strategy()`:
 
 ```
 src/core/OligarchNetwork.gd        # NEW singleton — faction graph + org scandal gen
-src/entities/OligarchData.gd       # Extended with tactics memory + adapt_strategy()
+src/entities/data/OligarchData.gd       # Extended with tactics memory + adapt_strategy()
 ```
 
 `OligarchNetwork` is an autoload. It:
