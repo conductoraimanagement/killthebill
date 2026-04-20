@@ -91,6 +91,112 @@ static func job_row(job: Dictionary, current_cycle: int) -> String:
 	return row
 
 
+# RESOURCE + FACTION COLORS — pure value → Color maps
+
+static func color_for_credits(value: int) -> Color:
+	if value >= 1000: return HudTheme.COL_COOL
+	if value >= 300:  return HudTheme.COL_FG
+	if value >= 100:  return HudTheme.COL_WARN
+	return HudTheme.COL_HOT
+
+
+static func color_for_heat(value: int) -> Color:
+	if value > 60: return HudTheme.COL_HOT
+	if value > 30: return HudTheme.COL_WARN
+	return HudTheme.COL_FG
+
+
+static func color_for_hope(value: int) -> Color:
+	if value <= 20:  return HudTheme.COL_HOT
+	if value <= 50:  return HudTheme.COL_WARN
+	return HudTheme.COL_FG
+
+
+# Early (cyan) → mid (fg) → late (warn) → final (hot red).
+static func color_for_month(month: int) -> Color:
+	if month >= 13: return HudTheme.COL_HOT
+	if month >= 10: return HudTheme.COL_WARN
+	if month >= 4:  return HudTheme.COL_FG
+	return HudTheme.COL_COOL
+
+
+static func color_for_faction(faction: String) -> Color:
+	match faction:
+		"CORPORATE_BLOC": return HudTheme.COL_HOT
+		"POPULIST":       return HudTheme.COL_ACCENT
+		"REFORM":         return HudTheme.COL_COOL
+		"INDEPENDENT":    return HudTheme.COL_DIM
+	return HudTheme.COL_DIM
+
+
+static func shorten_faction(faction: String) -> String:
+	match faction:
+		"CORPORATE_BLOC": return "CORP_BLOC"
+		"POPULIST":       return "POPULIST "
+		"REFORM":         return "REFORM   "
+		"INDEPENDENT":    return "INDEP    "
+	return faction
+
+
+static func color_for_approval(value: float) -> Color:
+	if value > 40.0:  return HudTheme.COL_WARN
+	if value > 0.0:   return HudTheme.COL_FG
+	if value > -40.0: return HudTheme.COL_DIM
+	return HudTheme.COL_HOT
+
+
+static func action_label(action_id: String) -> String:
+	match action_id:
+		"leak_scandal":
+			return "LEAK SCANDAL TO NETFEED"
+		"sell_scandal":
+			return "SELL SCANDAL TO MEDIA OLIGARCH"
+		"assassinate_oligarch":
+			return "MARK FOR ASSASSINATION"
+	return action_id.to_upper()
+
+
+# STATE PANEL rows (top-left — economy readout)
+
+static func econ_row(key: String, value, unit: String) -> String:
+	var color_hex := econ_color(key, value)
+	return "[color=#%s]%s[/color]  [color=#%s]%s[/color] [color=#%s]%s[/color]" % [
+		HudTheme.hex(HudTheme.COL_DIM),
+		key.rpad(18),
+		color_hex,
+		str(value).rpad(5),
+		HudTheme.hex(HudTheme.COL_DIM),
+		unit,
+	]
+
+
+# Per-variable color mapping — thresholds chosen so the panel tells
+# the player "you should be worried" without needing a legend.
+static func econ_color(key: String, value) -> String:
+	match key:
+		"food_price":
+			if value > 250: return HudTheme.hex(HudTheme.COL_HOT)
+			if value > 150: return HudTheme.hex(HudTheme.COL_WARN)
+			return HudTheme.hex(HudTheme.COL_FG)
+		"tech_price":
+			if value > 800: return HudTheme.hex(HudTheme.COL_HOT)
+			if value > 600: return HudTheme.hex(HudTheme.COL_WARN)
+			return HudTheme.hex(HudTheme.COL_FG)
+		"security_presence":
+			if value > 70: return HudTheme.hex(HudTheme.COL_HOT)
+			if value > 50: return HudTheme.hex(HudTheme.COL_WARN)
+			return HudTheme.hex(HudTheme.COL_COOL)
+		"public_tension":
+			if value > 70: return HudTheme.hex(HudTheme.COL_HOT)
+			if value > 40: return HudTheme.hex(HudTheme.COL_WARN)
+			return HudTheme.hex(HudTheme.COL_FG)
+		"senate_alignment":
+			if value > 70: return HudTheme.hex(HudTheme.COL_HOT)
+			if value < 30: return HudTheme.hex(HudTheme.COL_COOL)
+			return HudTheme.hex(HudTheme.COL_FG)
+	return HudTheme.hex(HudTheme.COL_FG)
+
+
 # GIG BOARD rows
 
 static func wc_listing_row(idx: int, listing: Dictionary) -> String:

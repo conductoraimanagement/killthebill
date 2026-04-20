@@ -500,23 +500,17 @@ func _on_month_advanced(_m: int) -> void:
 	_refresh_state()
 
 
+# Resource + month color maps delegate to PanelRows pure helpers.
 func _color_for_credits(value: int) -> Color:
-	if value >= 1000: return COL_COOL
-	if value >= 300:  return COL_FG
-	if value >= 100:  return COL_WARN
-	return COL_HOT
+	return PanelRows.color_for_credits(value)
 
 
 func _color_for_heat(value: int) -> Color:
-	if value > 60: return COL_HOT
-	if value > 30: return COL_WARN
-	return COL_FG
+	return PanelRows.color_for_heat(value)
 
 
 func _color_for_hope(value: int) -> Color:
-	if value <= 20:  return COL_HOT
-	if value <= 50:  return COL_WARN
-	return COL_FG
+	return PanelRows.color_for_hope(value)
 
 
 func _on_housing_changed(_homeless: bool) -> void:
@@ -524,11 +518,7 @@ func _on_housing_changed(_homeless: bool) -> void:
 
 
 func _color_for_month(month: int) -> Color:
-	# Early (cyan) → mid (fg) → late (warn) → final (hot red).
-	if month >= 13: return COL_HOT
-	if month >= 10: return COL_WARN
-	if month >= 4:  return COL_FG
-	return COL_COOL
+	return PanelRows.color_for_month(month)
 
 
 func _build_year_progress_bar(ts) -> String:
@@ -551,40 +541,7 @@ func _build_year_progress_bar(ts) -> String:
 
 
 func _econ_row(key: String, value, unit: String) -> String:
-	var color_hex := _color_for(key, value)
-	return "[color=#%s]%s[/color]  [color=#%s]%s[/color] [color=#%s]%s[/color]" % [
-		_hex(COL_DIM),
-		key.rpad(18),
-		color_hex,
-		str(value).rpad(5),
-		_hex(COL_DIM),
-		unit,
-	]
-
-
-func _color_for(key: String, value) -> String:
-	match key:
-		"food_price":
-			if value > 250: return _hex(COL_HOT)
-			if value > 150: return _hex(COL_WARN)
-			return _hex(COL_FG)
-		"tech_price":
-			if value > 800: return _hex(COL_HOT)
-			if value > 600: return _hex(COL_WARN)
-			return _hex(COL_FG)
-		"security_presence":
-			if value > 70: return _hex(COL_HOT)
-			if value > 50: return _hex(COL_WARN)
-			return _hex(COL_COOL)
-		"public_tension":
-			if value > 70: return _hex(COL_HOT)
-			if value > 40: return _hex(COL_WARN)
-			return _hex(COL_FG)
-		"senate_alignment":
-			if value > 70: return _hex(COL_HOT)
-			if value < 30: return _hex(COL_COOL)
-			return _hex(COL_FG)
-	return _hex(COL_FG)
+	return PanelRows.econ_row(key, value, unit)
 
 
 # -------------------------------------------------------------
@@ -876,28 +833,15 @@ func _format_stance(stance: String, prefix: String) -> String:
 
 
 func _color_for_faction(faction: String) -> Color:
-	match faction:
-		"CORPORATE_BLOC": return COL_HOT
-		"POPULIST":       return COL_ACCENT
-		"REFORM":         return COL_COOL
-		"INDEPENDENT":    return COL_DIM
-	return COL_DIM
+	return PanelRows.color_for_faction(faction)
 
 
 func _shorten_faction(faction: String) -> String:
-	match faction:
-		"CORPORATE_BLOC": return "CORP_BLOC"
-		"POPULIST":       return "POPULIST "
-		"REFORM":         return "REFORM   "
-		"INDEPENDENT":    return "INDEP    "
-	return faction
+	return PanelRows.shorten_faction(faction)
 
 
 func _color_for_approval(value: float) -> Color:
-	if value > 40.0:  return COL_WARN
-	if value > 0.0:   return COL_FG
-	if value > -40.0: return COL_DIM
-	return COL_HOT
+	return PanelRows.color_for_approval(value)
 
 
 # -------------------------------------------------------------
@@ -4205,14 +4149,7 @@ func _hex(c: Color) -> String:
 
 
 func _action_label(action_id: String) -> String:
-	match action_id:
-		"leak_scandal":
-			return "LEAK SCANDAL TO NETFEED"
-		"sell_scandal":
-			return "SELL SCANDAL TO MEDIA OLIGARCH"
-		"assassinate_oligarch":
-			return "MARK FOR ASSASSINATION"
-	return action_id.to_upper()
+	return PanelRows.action_label(action_id)
 
 
 func _resolve_politician_name(politician_id: String) -> String:
