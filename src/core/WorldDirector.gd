@@ -265,6 +265,10 @@ func _finish_setup() -> void:
 			ts.phase_changed.connect(_on_phase_changed)
 		if not ts.year_ended.is_connected(_on_year_ended):
 			ts.year_ended.connect(_on_year_ended)
+		if not ts.payday.is_connected(_on_payday):
+			ts.payday.connect(_on_payday)
+		if not ts.rent_due.is_connected(_on_rent_due):
+			ts.rent_due.connect(_on_rent_due)
 		ts.reset()
 		ts.start()
 
@@ -280,6 +284,20 @@ func _on_day_advanced(_day: int) -> void:
 func _on_phase_changed(_phase: int) -> void:
 	# NetFeed + job board refresh on each phase boundary (3x per day).
 	trigger_news_cycle()
+
+
+func _on_payday(_day: int) -> void:
+	# Weekly wage deposit. PlayerManager does its own no-op if there's
+	# nothing pending.
+	if has_node("/root/PlayerManager"):
+		get_node("/root/PlayerManager").apply_weekly_payday()
+
+
+func _on_rent_due(_month: int) -> void:
+	# Month rollover — landlord wants rent. PlayerManager raises its
+	# modal signal for the HUD to catch.
+	if has_node("/root/PlayerManager"):
+		get_node("/root/PlayerManager").handle_rent_due()
 
 
 func _on_year_ended() -> void:
@@ -1157,7 +1175,7 @@ func _try_post_resistance_contract() -> void:
 		"target_kind": "sabotage_sector",
 		"target_ref": target_sector,
 		"target_label": "disrupt %s sector" % target_sector,
-		"bounty": randi_range(800, 2500),
+		"bounty": randi_range(500, 2500),
 		"framing": "%s wants %s's operations damaged. Payment on verification." % [
 			cell_name, target_oligarch.oligarch_name,
 		],
@@ -1207,7 +1225,7 @@ func _try_post_fixer_job() -> void:
 			"target_kind": "leak_oligarch",
 			"target_ref": target_oligarch.oligarch_id,
 			"target_label": "leak on %s" % target_oligarch.oligarch_name,
-			"bounty": randi_range(300, 700),
+			"bounty": randi_range(150, 350),
 			"framing": "%s has been asking around — they want dirt on %s." % [
 				fixer.npc_name, target_oligarch.oligarch_name,
 			],
@@ -1222,7 +1240,7 @@ func _try_post_fixer_job() -> void:
 			"target_kind": "sabotage_sector",
 			"target_ref": sector,
 			"target_label": "disrupt %s" % sector,
-			"bounty": randi_range(400, 900),
+			"bounty": randi_range(200, 400),
 			"framing": "%s wants the %s sector disrupted. They say it's personal." % [
 				fixer.npc_name, sector,
 			],

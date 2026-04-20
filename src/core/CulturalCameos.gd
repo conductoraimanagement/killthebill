@@ -123,7 +123,7 @@ const CAMEOS := [
 		"arc_duration_cycles": 3,
 		"completion_headline": "The Bread Thief slipped the cordon tonight. Bread distribution quietly resumed in the lower Sinks.",
 		"timeout_headline": "The Bread Thief was caught at dawn. The patrols went quiet. The Sinks went quieter.",
-		"reward": {"credits": 800, "tension_delta": -8, "idealism_bump": 0.08},
+		"reward": {"tension_delta": -8, "idealism_bump": 0.08},
 	},
 	{
 		"id": "admin_last_login",
@@ -142,7 +142,7 @@ const CAMEOS := [
 		"arc_duration_cycles": 4,
 		"completion_headline": "'LAST_LOGIN' went dark after a coordinated leak hit every major outlet at 03:12. An admin is going to jail — somewhere.",
 		"timeout_headline": "'LAST_LOGIN' was traced and terminated. Fragments vanished from the feed overnight.",
-		"reward": {"credits": 700, "tension_delta": 6, "senate_alignment_delta": -6},
+		"reward": {"tension_delta": 6, "senate_alignment_delta": -6},
 	},
 
 	# ------------------------------------------------------------
@@ -171,7 +171,7 @@ const CAMEOS := [
 		"while_active_modifiers": {"public_tension": 1},  # +1 tension/day while running
 		"completion_headline": "The Hermit of Substrate Fields stands on a grain silo tonight, his manifesto blaring over the region PA. Enforcers are surrounding — but nobody moves.",
 		"timeout_headline": "The Hermit was 'relocated' to a state facility for evaluation. His manifesto vanished from the terminals overnight.",
-		"reward": {"credits": 1500, "tension_delta": 10, "idealism_bump": 0.15, "senate_alignment_delta": -8},
+		"reward": {"tension_delta": 10, "idealism_bump": 0.15, "senate_alignment_delta": -8},
 	},
 	{
 		"id": "yellow_priest_arc",
@@ -194,7 +194,7 @@ const CAMEOS := [
 		"while_active_modifiers": {"public_tension": 2},
 		"completion_headline": "By week's end, the Priest's congregation numbered in the thousands. The NetFeed pretended otherwise.",
 		"timeout_headline": "The Yellow Priest was quietly 'relocated' for 'mental evaluation'. Hymns stopped. Congregations dispersed.",
-		"reward": {"credits": 1800, "tension_delta": 15, "idealism_bump": 0.10, "senate_alignment_delta": -12},
+		"reward": {"tension_delta": 15, "idealism_bump": 0.10, "senate_alignment_delta": -12},
 	},
 
 	# ------------------------------------------------------------
@@ -227,7 +227,7 @@ const CAMEOS := [
 		"arc_duration_cycles": 3,
 		"completion_headline": "Project Dust's coordinated blackout happened at 02:47. The Enclave lost 14 uplinks simultaneously. Nobody claimed responsibility; everyone understood the message.",
 		"timeout_headline": "Project Dust's organizers went to ground. The glass-dust stockpile was found and seized. The Sinks noticed which neighborhoods went quiet after.",
-		"reward": {"credits": 900, "tension_delta": 8, "chaos_bump": 0.08},
+		"reward": {"tension_delta": 8, "chaos_bump": 0.08},
 	},
 
 	# lone_manifesto T2 — The Sidewalk Philosopher
@@ -251,7 +251,7 @@ const CAMEOS := [
 		"arc_duration_cycles": 3,
 		"completion_headline": "The Sidewalk Philosopher's chalk went viral on a leaked morning broadcast. His equations are being screenshotted across the Sinks. Three separate 'study groups' formed by noon.",
 		"timeout_headline": "The Sidewalk Philosopher was 'relocated for welfare reasons' Tuesday night. The chalk was still on the sidewalk in the rain when the feed aired a story about Enclave charitable outreach.",
-		"reward": {"credits": 700, "tension_delta": 6, "idealism_bump": 0.12},
+		"reward": {"tension_delta": 6, "idealism_bump": 0.12},
 	},
 
 	# masked_symbol T2 — The Ledger Leak
@@ -274,7 +274,7 @@ const CAMEOS := [
 		"arc_duration_cycles": 3,
 		"completion_headline": "The ledger plus your leak combined over a 48-hour cycle. The story became unkillable. Three senators have resigned 'to spend time with family'. The mask-icon avatar went dark. It had served.",
 		"timeout_headline": "The ledger was dismissed as fabricated. The mask-icon avatar deleted. The senate returned to business after one week of muttering. Nobody asked follow-ups.",
-		"reward": {"credits": 1000, "tension_delta": 8, "senate_alignment_delta": -8},
+		"reward": {"tension_delta": 8, "senate_alignment_delta": -8},
 	},
 
 	# whistleblower T3 — The Leak That Got Her Killed
@@ -299,7 +299,7 @@ const CAMEOS := [
 		"while_active_modifiers": {"security_presence": 1},
 		"completion_headline": "The analyst's leak went live across seven outlets simultaneously. Three reporters are in protective custody. Her name is spreading faster than her story.",
 		"timeout_headline": "The analyst's story was quietly scrubbed from the seven outlets by Tuesday. The three reporters went silent. Corporate PR called it 'a private matter'.",
-		"reward": {"credits": 1900, "tension_delta": 14, "senate_alignment_delta": -12, "idealism_bump": 0.15},
+		"reward": {"tension_delta": 14, "senate_alignment_delta": -12, "idealism_bump": 0.15},
 	},
 
 	# folk_hero T3 — The Sinks Strike
@@ -324,7 +324,7 @@ const CAMEOS := [
 		"while_active_modifiers": {"public_tension": 2},
 		"completion_headline": "The strike held. By Thursday evening the Enclave had caved — 8% wage raise, two mandatory rest days. Two women you have never met are now folk heroes.",
 		"timeout_headline": "The organizers were taken in 'for questioning' Tuesday night. By Thursday the strike had lost its nerve. A 3% token raise was offered. Half the workers accepted.",
-		"reward": {"credits": 1800, "tension_delta": 10, "senate_alignment_delta": -10, "idealism_bump": 0.15},
+		"reward": {"tension_delta": 10, "senate_alignment_delta": -10, "idealism_bump": 0.15},
 	},
 
 	# kindly_stranger T3 — The Priest of the Breadline
@@ -349,7 +349,7 @@ const CAMEOS := [
 		"while_active_modifiers": {"public_tension": -1},   # NEGATIVE — his presence soothes
 		"completion_headline": "The priest's breadline survived the Enforcer sweep because someone hit a checkpoint three blocks over. He sat down on his fourteenth day. Thousands wept at the bread distribution that evening, for reasons the feed didn't photograph.",
 		"timeout_headline": "The priest was arrested on Tuesday for 'unauthorized assembly'. Three attendees were detained. The breadline continued forming at the same corner, emptier.",
-		"reward": {"credits": 1200, "tension_delta": -12, "idealism_bump": 0.20},
+		"reward": {"tension_delta": -12, "idealism_bump": 0.20},
 	},
 
 	# cult_of_personality T4 — The Yellow King (multi-step takeover)
@@ -393,7 +393,6 @@ const CAMEOS := [
 						"label": "STAND WITH THE KING",
 						"flavor": "You stay in the line. The Kingdom becomes permanent. The Sinks have a voice that doesn't ask for permission.",
 						"effects": {
-							"credits": 2500,
 							"tension_delta": 25,
 							"senate_alignment_delta": -18,
 							"idealism_bump": 0.10,
@@ -405,7 +404,6 @@ const CAMEOS := [
 						"label": "WALK THROUGH THE DOOR",
 						"flavor": "You go where he won't. The act is yours alone. Yellow or grey, you chose.",
 						"effects": {
-							"credits": 1500,
 							"heat_delta": 40,
 							"tension_delta": 10,
 							"ruthless_bump": 0.25,
@@ -461,7 +459,6 @@ const CAMEOS := [
 						"label": "ACCEPT THE INDEX",
 						"flavor": "You accept the gift. The AI terminates. Every surveillance system you encounter hereafter will find you... invisible.",
 						"effects": {
-							"credits": 3500,
 							"heat_delta": -60,
 							"stealth_bump": 0.30,
 							"headline": "The Compliance AI's Apotheosis resolved in self-termination. A small pattern correction cascaded through every surveillance camera in the region. You are harder to find now."
@@ -471,7 +468,6 @@ const CAMEOS := [
 						"label": "LET IT DIE ALONE",
 						"flavor": "You leave it to its own resolution. The AI terminates. Something about the Sinks feels quieter in the days that follow.",
 						"effects": {
-							"credits": 1500,
 							"heat_delta": -20,
 							"tension_delta": -5,
 							"idealism_bump": 0.15,
@@ -549,7 +545,7 @@ const CAMEOS := [
 		"arc_duration_cycles": 3,
 		"completion_headline": "The Man with the Match distributed insulin to 47 families in Substrate Fields tonight. The Pharma oligarch's PR is having a week.",
 		"timeout_headline": "The Man with the Match disappeared. The matches burned out. Someone left a full box of them on a terrace where he used to stand.",
-		"reward": {"credits": 600, "tension_delta": -6, "idealism_bump": 0.12},
+		"reward": {"tension_delta": -6, "idealism_bump": 0.12},
 	},
 	{
 		"id": "candy_heir_arc",
@@ -571,7 +567,7 @@ const CAMEOS := [
 		"arc_duration_cycles": 4,
 		"completion_headline": "The tokens' trading rate crashed when the Food sector took the hit. The heir issued a 'limited-time exchange' and disappeared into a private jet.",
 		"timeout_headline": "The Candy Heir consolidated. 8000 tokens in circulation. The Enclave didn't blink.",
-		"reward": {"credits": 900, "tension_delta": 5, "senate_alignment_delta": -5, "ruthless_bump": 0.05},
+		"reward": {"tension_delta": 5, "senate_alignment_delta": -5, "ruthless_bump": 0.05},
 	},
 
 	# Additional Tier-3 Entanglement arcs
@@ -596,7 +592,7 @@ const CAMEOS := [
 		"while_active_modifiers": {"public_tension": 2},
 		"completion_headline": "On Fifth November the masks filled the square. Enforcers held position but did not move. By morning the masks were everywhere. The feed called them a 'demonstration'. They were a warning.",
 		"timeout_headline": "The Fifth November march was 'postponed indefinitely' after a coordinated checkpoint sweep. The masks vanished from the markets. Someone kept their box.",
-		"reward": {"credits": 2000, "tension_delta": 20, "senate_alignment_delta": -15, "idealism_bump": 0.15},
+		"reward": {"tension_delta": 20, "senate_alignment_delta": -15, "idealism_bump": 0.15},
 	},
 	{
 		"id": "confectioner_arc",
@@ -619,7 +615,7 @@ const CAMEOS := [
 		"while_active_modifiers": {"senate_alignment": 1},
 		"completion_headline": "The Confectioner's dispensaries were shut down overnight after a leak revealed adulterants. Lawsuits are being organized. He's in transit to another region.",
 		"timeout_headline": "The Confectioner expanded. Six more dispensaries opened. Pharma stock rose 14%. Worker mortality in the Sinks quietly rose.",
-		"reward": {"credits": 1700, "tension_delta": 12, "senate_alignment_delta": -10, "idealism_bump": 0.08},
+		"reward": {"tension_delta": 12, "senate_alignment_delta": -10, "idealism_bump": 0.08},
 	},
 	{
 		"id": "pattern_match_arc",
@@ -642,7 +638,7 @@ const CAMEOS := [
 		"while_active_modifiers": {"security_presence": 1},
 		"completion_headline": "The compliance AI's pattern index was corrupted after the Tech hit. Warnings stopped. For 72 hours the Sinks moved unobserved.",
 		"timeout_headline": "The compliance AI converged. 'Pattern match confirmed.' Six specific citizens were pulled in overnight. None of them you.",
-		"reward": {"credits": 2200, "security_delta": -15, "stealth_bump": 0.15, "heat_delta": -10},
+		"reward": {"security_delta": -15, "stealth_bump": 0.15, "heat_delta": -10},
 	},
 	{
 		"id": "indexed_debt_arc",
@@ -665,7 +661,7 @@ const CAMEOS := [
 		"while_active_modifiers": {"public_tension": 2, "senate_alignment": -1},
 		"completion_headline": "The Ledger-Keeper's archive crossed with your leak, and the Finance oligarch went quiet. An emergency 'debt jubilee' was announced overnight for Sinks-tier balances under 5,000 credits. Nobody expected to see that word in writing.",
 		"timeout_headline": "The Ledger-Keeper's archive was ruled 'fabricated' by three indexed outlets. The clearing houses patched the breach. Garnishment schedules continued on time.",
-		"reward": {"credits": 2000, "tension_delta": 12, "senate_alignment_delta": -14, "idealism_bump": 0.12},
+		"reward": {"debt_jubilee": true, "tension_delta": 12, "senate_alignment_delta": -14, "idealism_bump": 0.12},
 	},
 
 	# Second Tier-4 Takeover — loop_in_time archetype
@@ -709,7 +705,6 @@ const CAMEOS := [
 						"label": "TAKE IT — become the loop",
 						"flavor": "You accept the logic. The cycle advances. You do not forget.",
 						"effects": {
-							"credits": 3000,
 							"tension_delta": 20,
 							"stealth_bump": 0.15,
 							"headline": "The Revenant vanished into the crowd at dawn. You don't remember her name. You remember why she mattered."
@@ -719,7 +714,6 @@ const CAMEOS := [
 						"label": "REFUSE — forget",
 						"flavor": "You hand the keycard back. She nods, like she expected this. The world briefly ripples.",
 						"effects": {
-							"credits": 800,
 							"heat_delta": -15,
 							"headline": "The Revenant is gone. You can't place where you've seen her before. The keycard you had is empty plastic now."
 						},
@@ -770,20 +764,19 @@ const CAMEOS := [
 				"options": [
 					{
 						"label": "ABSORB — the Project grows",
-						"flavor": "Paper Street consolidates. Project Mayhem becomes permanent. Workers radicalize. Tension climbs.",
+						"flavor": "Paper Street consolidates. Project Mayhem becomes permanent. Workers radicalize. Tension climbs. Debt ledgers across three regions burn in a single night — the player's rent debt goes with them.",
 						"effects": {
-							"credits": 2500,
+							"debt_jubilee": true,
 							"tension_delta": 15,
 							"senate_alignment_delta": -10,
 							"chaos_bump": 0.20,
-							"headline": "You absorbed the Project. Paper Street's list is yours. Project Mayhem continues under a new operator."
+							"headline": "You absorbed the Project. Paper Street's list is yours. Project Mayhem burns the debt ledgers on the 4:12 broadcast. Your name was in them."
 						},
 					},
 					{
 						"label": "BETRAY — close the door",
 						"flavor": "You name a name. The patrol moves. The Soap Man is gone by morning. A scandal follows you.",
 						"effects": {
-							"credits": 500,
 							"heat_delta": 20,
 							"tension_delta": -5,
 							"ruthless_bump": 0.15,
@@ -1082,6 +1075,9 @@ func _apply_effects(effects: Dictionary, reason: String) -> void:
 	var wd := get_node_or_null("/root/WorldDirector")
 
 	if pm:
+		# Credits stay as an effect the applier understands, but cameo
+		# reward dicts no longer populate it by default. Cameos pay in
+		# world-shift, not coins. See docs/03-characters/cultural-cameos.md.
 		if effects.has("credits"):
 			pm.add_credits(int(effects.credits), reason)
 		if effects.has("heat_delta"):
@@ -1096,6 +1092,12 @@ func _apply_effects(effects: Dictionary, reason: String) -> void:
 			pm.bump_playstyle(0.0, 0.0, float(effects.idealism_bump), 0.0)
 		if effects.has("stealth_bump"):
 			pm.bump_playstyle(0.0, 0.0, 0.0, float(effects.stealth_bump))
+		# Narrative payoff: Indexed Debt jubilee wipes player's rent
+		# arrears and clears the Finance-oligarch debt attribution.
+		# Specific to indexed_debt_arc completion.
+		if effects.has("debt_jubilee") and bool(effects.debt_jubilee):
+			pm.rent_arrears_months = 0
+			pm.debt_held_by_oligarch_id = ""
 
 	if wd:
 		if effects.has("tension_delta"):

@@ -25,6 +25,8 @@ signal time_of_day_updated(tod: float) # 0..1 inside current day
 signal speed_changed(speed: float)
 signal month_advanced(month: int)      # 1..13, fired on day_of_month rollover
 signal year_ended()                    # fires once when month would roll to 14
+signal payday(day: int)                # fires every DAYS_PER_WEEK days (gig wages deposit)
+signal rent_due(month: int)            # fires on month rollover (landlord wants rent)
 
 const DAY_REAL_SECONDS: float = 600.0  # 10 minutes per day
 const PHASES_PER_DAY: int = 3
@@ -35,6 +37,7 @@ const DEFAULT_SPEED: float = 1.0
 const DAYS_PER_MONTH: int = 30
 const MONTHS_PER_YEAR: int = 13
 const TOTAL_DAYS: int = DAYS_PER_MONTH * MONTHS_PER_YEAR  # 390
+const DAYS_PER_WEEK: int = 7                        # gig payday cadence
 
 enum Phase { MORNING, AFTERNOON, NIGHT }
 
@@ -104,8 +107,11 @@ func _process(delta: float) -> void:
 			current_phase = new_phase
 			phase_changed.emit(current_phase)
 		day_advanced.emit(day)
+		if day % DAYS_PER_WEEK == 0:
+			payday.emit(day)
 	if month_rolled_over:
 		month_advanced.emit(month)
+		rent_due.emit(month)
 
 	# Year-end check — fires once when month crosses to 14.
 	if month > MONTHS_PER_YEAR and not year_ended_flag:
@@ -176,8 +182,11 @@ func skip_hours(hours: float) -> void:
 	time_of_day_updated.emit(time_of_day)
 	if rolled_over:
 		day_advanced.emit(day)
+		if day % DAYS_PER_WEEK == 0:
+			payday.emit(day)
 	if month_rolled_over:
 		month_advanced.emit(month)
+		rent_due.emit(month)
 
 	if month > MONTHS_PER_YEAR and not year_ended_flag:
 		year_ended_flag = true

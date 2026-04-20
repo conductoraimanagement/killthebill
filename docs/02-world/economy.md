@@ -85,3 +85,44 @@ The cascade logic lives in the [Butterfly Effect matrix](butterfly-effect.md) an
 - **No direct player wallet here.** The player has credits (see [progression.md](../04-player/progression.md)), but the global economy is about the *world*. The player's pocket is a cost, not a victory condition.
 - **No single variable collapses the game.** Victory requires a combination (see [victory.md](../04-player/victory.md)).
 - **Black swans are rare but possible.** The NetFeed can cause sudden swings (a pandemic, an assassination nobody expected, a cameo-triggered event). The economy must survive discontinuities without becoming oscillating noise.
+
+---
+
+## Player economy — USD-grounded (1 credit = 1 USD)
+
+Every credit number in this game maps to a real dollar of a real 2025-ish US economy. *Not abstract game points.* This is deliberate: the player looking at `$1,873` understands what that buys instantly.
+
+### Starting wallet
+
+| Class | Start | Interpretation |
+|---|---|---|
+| White Collar | $50,000 | Severance + liquidated 401(k). A year of frayed cushion if you're careful. |
+| Blue Collar | $29,000 | Union payout + cashed-out savings. Covers the year if nothing goes wrong. Something always goes wrong. |
+
+### Fixed monthly burn
+
+- **Rent**: rolled once at run-start in `[$700, $2,000]`. Broad range — a lucky Sinks studio vs. an unlucky one. Paid monthly via HUD prompt (`rent_due_prompt` on month rollover). Two months unpaid → eviction. See [victory.md](../04-player/victory.md) and [loop.md](../04-player/loop.md).
+- **Daily food & utilities**: $25 + `(food_price − 100) / 3`. Homeless adds +$8/day (the exposure tax).
+
+### Income sources
+
+| Source | Range | Cadence | Risk |
+|---|---|---|---|
+| Gig shift (dishwasher, sweeper, delivery, waiter, day-labor, trash) | $30–$84 + tips | Accrues; paid weekly | 40% silent denial, hope-cost humiliation |
+| Resistance cell job | $500–$2,500 | On completion | Sabotage/leak requirement, +heat |
+| NPC fixer leak | $150–$350 | On completion | Fixer trust |
+| NPC fixer sabotage | $200–$400 | On completion | +heat |
+| Sabotage loot | $200 (Food) → $1,400 (Finance) | Immediate | +heat per sector |
+| Pickpocket | $20–$80 | Immediate | +1 heat on success / +3 on failure |
+
+### Spend sinks
+
+| Item | Cost |
+|---|---|
+| Forged IDs (−25 heat) | $500 |
+| Burner datashard | $1,500 |
+| Secure housing (if homeless) | one month's rent ($700–$2,000) |
+| Enforcer bribe | $200 + $200 per 20 heat (capped) |
+| Politician bribe | ~$2,000 base, scandal/corruption discount |
+
+Cameo arcs **do not pay credits**. The cameo reward is a world-state shift (tension / senate / idealism) plus any narrative-specific payoff — e.g. the Indexed Debt jubilee wipes the player's rent arrears and clears Finance-oligarch debt attribution.

@@ -22,7 +22,12 @@ Family-by-family Tier-2+ coverage: chaos_prophet (T2+T4), masked_symbol (T2+T3),
 - **At most one Tier-3+ arc concurrent** (MAX_HIGH_TIER_ACTIVE = 1). The world can sustain one hijacking, not three.
 - Each cameo fires at most once per run (`fired_ids` tracks; `reset()` clears on new run).
 - **HUD**: active arcs render in the JOB BOARD panel (press J) with a `CAMEO T2` / `CAMEO T3` / `CAMEO T4` magenta badge.
-- **Unified effect applier** (`_apply_effects`) supports: `credits`, `heat_delta`, `tension_delta`, `senate_alignment_delta`, `security_delta`, `chaos_bump`, `ruthless_bump`, `idealism_bump`, `stealth_bump`. Used by both the legacy single-step reward path and multi-step decision-option effects.
+- **Unified effect applier** (`_apply_effects`) supports: `credits`, `heat_delta`, `tension_delta`, `senate_alignment_delta`, `security_delta`, `chaos_bump`, `ruthless_bump`, `idealism_bump`, `stealth_bump`, `debt_jubilee`. Used by both the legacy single-step reward path and multi-step decision-option effects.
+- **Cameos do not pay credits.** The reward for resolving a cameo arc is *world shift* — tension swings, senate drift, idealism/chaos/ruthless/stealth bumps, and (rarely) a narrative-specific payoff:
+  - **Indexed Debt T3 completion** → `debt_jubilee: true` wipes the player's `rent_arrears_months` and clears `debt_held_by_oligarch_id`. The reward is not a cash bag; it's the *news* of a jubilee and what it does to your ledger.
+  - **Soap Man ABSORB** → `debt_jubilee: true` (Project Mayhem burns the debt ledgers on broadcast — your name is in them).
+  - **Soap Man BETRAY** → no payoff, just heat. You sold someone out; the game does not reward that with coins.
+  - All other arcs → stat/world effects only.
 
 **Tier-4 (Takeover) — 1 arc live**: `soap_man`. Multi-step arc using the new `arc_steps` array:
 

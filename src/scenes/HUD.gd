@@ -90,6 +90,22 @@ var _jobs_panel: Panel
 var _jobs_text: RichTextLabel
 var _jobs_visible: bool = false
 
+# Gig board panel (G toggle — requires home computer, i.e. !homeless)
+var _gig_panel: Panel
+var _gig_title: Label
+var _gig_text: RichTextLabel
+var _gig_status: Label
+var _gig_visible: bool = false
+
+# Rent-due modal (fires on month rollover via PlayerManager.rent_due_prompt)
+var _rent_root: Control
+var _rent_title: Label
+var _rent_body: Label
+var _rent_pay_btn: Button
+var _rent_skip_btn: Button
+var _rent_pending_rent: int = 0
+var _rent_pending_arrears: int = 0
+
 # Shop modal (terminal menu → SHOP)
 var _shop_root: Control
 var _shop_status: Label
@@ -177,6 +193,8 @@ func _ready() -> void:
 	_build_goal_choice_modal()
 	_build_chronicle_modal()
 	_build_jobs_panel()
+	_build_gig_panel()
+	_build_rent_modal()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
 	WorldDirector.netfeed_event_generated.connect(_on_netfeed_event)
@@ -189,7 +207,7 @@ func _ready() -> void:
 		senate.bill_proposed.connect(_on_bill_proposed)
 		senate.bill_resolved.connect(_on_bill_resolved)
 
-	# PlayerManager hooks (credits + heat + hope + housing + defeat)
+	# PlayerManager hooks (credits + heat + hope + housing + defeat + rent + payday)
 	var pm = get_node_or_null("/root/PlayerManager")
 	if pm:
 		pm.credits_changed.connect(_on_credits_or_heat_changed)
@@ -197,6 +215,15 @@ func _ready() -> void:
 		pm.hope_changed.connect(_on_credits_or_heat_changed)
 		pm.housing_status_changed.connect(_on_housing_changed)
 		pm.defeat_triggered.connect(_on_defeat)
+		pm.rent_due_prompt.connect(_on_rent_due_prompt)
+		pm.payday_deposited.connect(_on_payday_deposited)
+		pm.pending_wages_changed.connect(_on_pending_wages_changed)
+
+	# GigBoard hooks — rejections + shift completions surface on NetFeed.
+	var gig_board = get_node_or_null("/root/GigBoard")
+	if gig_board:
+		gig_board.gig_application_denied.connect(_on_gig_denied)
+		gig_board.gig_shift_completed.connect(_on_gig_shift_completed)
 
 	# LLM dialogue responses route back via llm_response_received.
 	var llm = get_node_or_null("/root/LLMManager")
@@ -368,12 +395,29 @@ func _refresh_state() -> void:
 
 	var pm = get_node_or_null("/root/PlayerManager")
 	if pm:
-		lines.append("[color=#%s]credits[/color]         [color=#%s]%s[/color] [color=#%s]cr[/color]" % [
+		lines.append("[color=#%s]credits[/color]         [color=#%s]$%s[/color]" % [
 			_hex(COL_DIM),
 			_hex(_color_for_credits(pm.credits)),
-			str(pm.credits).rpad(5),
-			_hex(COL_DIM),
+			str(pm.credits).rpad(6),
 		])
+		if int(pm.pending_wages) > 0:
+			lines.append("[color=#%s]pending wages[/color]   [color=#%s]+$%s[/color] [color=#%s](next payday)[/color]" % [
+				_hex(COL_DIM),
+				_hex(COL_COOL),
+				str(int(pm.pending_wages)).rpad(5),
+				_hex(COL_DIM),
+			])
+		lines.append("[color=#%s]rent[/color]            [color=#%s]$%d/mo[/color]" % [
+			_hex(COL_DIM),
+			_hex(COL_DIM),
+			int(pm.monthly_rent),
+		])
+		if int(pm.rent_arrears_months) > 0:
+			lines.append("[color=#%s]arrears[/color]         [color=#%s]%d month(s) unpaid[/color]" % [
+				_hex(COL_DIM),
+				_hex(COL_HOT),
+				int(pm.rent_arrears_months),
+			])
 		lines.append("[color=#%s]heat[/color]            [color=#%s]%s[/color] [color=#%s]/ 100[/color]" % [
 			_hex(COL_DIM),
 			_hex(_color_for_heat(pm.heat)),
@@ -966,7 +1010,7 @@ func _job_row(job: Dictionary) -> String:
 	var ttl_color := COL_HOT if cycles_left <= 1 else COL_DIM
 
 	var row: String = ""
-	row += "[color=#%s]▸ %s[/color]  [color=#%s]+%d cr[/color]  [color=#%s]%d cycles left[/color]\n" % [
+	row += "[color=#%s]▸ %s[/color]  [color=#%s]+$%d[/color]  [color=#%s]%d cycles left[/color]\n" % [
 		_hex(badge_color),
 		badge,
 		_hex(COL_COOL),
@@ -978,6 +1022,318 @@ func _job_row(job: Dictionary) -> String:
 	row += "[color=#%s]%s[/color]\n" % [_hex(COL_DIM), str(job.get("framing", ""))]
 	row += "  → [color=#%s]%s[/color]" % [_hex(COL_WARN), str(job.get("target_label", ""))]
 	return row
+
+
+# -------------------------------------------------------------
+# Gig board panel (G toggle) — the compliance side of income.
+# Requires being at a computer (home apartment → unless homeless).
+# Listings are filtered by the player's current region.
+# Slots 1-6 apply to corresponding gigs.
+# -------------------------------------------------------------
+func _build_gig_panel() -> void:
+	_gig_panel = _make_panel(COL_BG)
+	_gig_panel.anchor_left = 1.0
+	_gig_panel.anchor_top = 0.0
+	_gig_panel.offset_left = -460
+	_gig_panel.offset_top = 80
+	_gig_panel.offset_right = -20
+	_gig_panel.offset_bottom = 400
+	_gig_panel.visible = false
+
+	_gig_title = _make_label("// GIG BOARD  (G to hide)", COL_COOL, 11, true)
+	_gig_title.offset_left = PANEL_PAD
+	_gig_title.offset_top = PANEL_PAD - 2
+	_gig_title.offset_right = 440 - PANEL_PAD
+	_gig_title.offset_bottom = PANEL_PAD + 16
+	_gig_panel.add_child(_gig_title)
+
+	_gig_text = RichTextLabel.new()
+	_gig_text.bbcode_enabled = true
+	_gig_text.fit_content = true
+	_gig_text.scroll_active = false
+	_gig_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_gig_text.anchor_left = 0.0
+	_gig_text.anchor_top = 0.0
+	_gig_text.anchor_right = 1.0
+	_gig_text.offset_left = PANEL_PAD
+	_gig_text.offset_top = PANEL_PAD + 24
+	_gig_text.offset_right = -PANEL_PAD
+	_gig_text.offset_bottom = -40
+	_gig_text.anchor_bottom = 1.0
+	_gig_text.add_theme_color_override("default_color", COL_FG)
+	_gig_text.add_theme_font_size_override("normal_font_size", 12)
+	_gig_text.add_theme_font_size_override("bold_font_size", 12)
+	_gig_panel.add_child(_gig_text)
+
+	_gig_status = _make_label("", COL_DIM, 11, true)
+	_gig_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_gig_status.anchor_left = 0.0
+	_gig_status.anchor_right = 1.0
+	_gig_status.anchor_top = 1.0
+	_gig_status.anchor_bottom = 1.0
+	_gig_status.offset_left = PANEL_PAD
+	_gig_status.offset_top = -32
+	_gig_status.offset_right = -PANEL_PAD
+	_gig_status.offset_bottom = -8
+	_gig_panel.add_child(_gig_status)
+
+
+func _toggle_gig_panel() -> void:
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm and pm.homeless and not _gig_visible:
+		# No home computer. Public terminals land in Commit B.
+		_publish_netfeed_note("You need a computer. The one you had came with the apartment.")
+		return
+	_gig_visible = not _gig_visible
+	_gig_panel.visible = _gig_visible
+	if _gig_visible:
+		_refresh_gig_panel()
+
+
+func _refresh_gig_panel() -> void:
+	if not _gig_panel or not _gig_panel.visible:
+		return
+	var gb = get_node_or_null("/root/GigBoard")
+	var pm = get_node_or_null("/root/PlayerManager")
+	var ts = get_node_or_null("/root/TimeSystem")
+	if gb == null or pm == null:
+		_gig_text.text = "[i]Gig board offline.[/i]"
+		return
+
+	var region_type: String = _current_region_type()
+	var listings: Array = gb.listings_for_region(region_type)
+
+	var pending: int = int(pm.pending_wages)
+	var next_payday_in: int = 7
+	if ts:
+		next_payday_in = 7 - (int(ts.day) % 7)
+		if next_payday_in == 0:
+			next_payday_in = 7
+	_gig_title.text = "// GIG BOARD  (G to hide)  —  pending $%d  ·  next payday in %d days" % [pending, next_payday_in]
+
+	if listings.is_empty():
+		_gig_text.text = "[i][color=#%s]> no gigs available in this region. travel to find work.[/color][/i]" % _hex(COL_DIM)
+		return
+
+	var lines := PackedStringArray()
+	var slot: int = 1
+	for g in listings:
+		if slot > 6:
+			break
+		lines.append(_gig_row(slot, g))
+		lines.append("")
+		slot += 1
+	_gig_text.text = "\n".join(lines)
+
+
+func _gig_row(slot: int, g: Dictionary) -> String:
+	var pay_range: Array = g.get("pay", [0, 0])
+	var tip_range: Array = g.get("tip_variance", [0, 0])
+	var tip_note: String = ""
+	if int(tip_range[1]) > 0:
+		tip_note = " (+ tip 0–$%d)" % int(tip_range[1])
+	var hours: int = int(g.get("hours", 3))
+	var row: String = ""
+	row += "[color=#%s]▸ [%d][/color]  [color=#%s]$%d–$%d%s[/color]  [color=#%s]%dh shift[/color]\n" % [
+		_hex(COL_WARN),
+		slot,
+		_hex(COL_COOL),
+		int(pay_range[0]),
+		int(pay_range[1]),
+		tip_note,
+		_hex(COL_DIM),
+		hours,
+	]
+	row += "[b][color=#%s]%s[/color][/b]" % [_hex(COL_FG), str(g.get("title", ""))]
+	return row
+
+
+func _apply_gig_slot(slot_index: int) -> void:
+	var gb = get_node_or_null("/root/GigBoard")
+	var pm = get_node_or_null("/root/PlayerManager")
+	if gb == null or pm == null:
+		return
+	if pm.homeless:
+		_gig_status.text = "No computer access. Find a public terminal."
+		return
+	var region_type: String = _current_region_type()
+	var listings: Array = gb.listings_for_region(region_type)
+	if slot_index < 0 or slot_index >= listings.size():
+		return
+	var gig: Dictionary = listings[slot_index]
+	var result: Dictionary = gb.apply_for_shift(str(gig.get("kind", "")))
+	if bool(result.get("denied", false)):
+		_gig_status.text = "Application denied."
+		_gig_status.add_theme_color_override("font_color", COL_HOT)
+	else:
+		var pay: int = int(result.get("pay", 0))
+		var humiliation: String = str(result.get("humiliation", ""))
+		_gig_status.text = "Shift done. $%d accrues to payday. %s" % [pay, humiliation]
+		_gig_status.add_theme_color_override("font_color", COL_COOL)
+	_refresh_gig_panel()
+
+
+func _current_region_type() -> String:
+	if not has_node("/root/WorldDirector"):
+		return ""
+	var wd = get_node("/root/WorldDirector")
+	for r in wd.regions:
+		if str(r.get("name", "")) == str(wd.current_region):
+			return str(r.get("type", ""))
+	return ""
+
+
+# -------------------------------------------------------------
+# Rent-due modal (fires on PlayerManager.rent_due_prompt)
+# -------------------------------------------------------------
+func _build_rent_modal() -> void:
+	_rent_root = Control.new()
+	_rent_root.anchor_right = 1.0
+	_rent_root.anchor_bottom = 1.0
+	_rent_root.visible = false
+	_rent_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	_rent_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_rent_root)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.7)
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_rent_root.add_child(backdrop)
+
+	var panel := _make_panel_raw(COL_BG_MODAL)
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -320
+	panel.offset_top = -160
+	panel.offset_right = 320
+	panel.offset_bottom = 160
+	_rent_root.add_child(panel)
+
+	_rent_title = _make_label("// RENT DUE", COL_WARN, 17, true)
+	_rent_title.offset_left = PANEL_PAD + 4
+	_rent_title.offset_top = PANEL_PAD
+	_rent_title.offset_right = 640 - PANEL_PAD
+	_rent_title.offset_bottom = PANEL_PAD + 26
+	panel.add_child(_rent_title)
+
+	_rent_body = _make_label("", COL_FG, 13, false)
+	_rent_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_rent_body.offset_left = PANEL_PAD + 4
+	_rent_body.offset_top = PANEL_PAD + 36
+	_rent_body.offset_right = 640 - PANEL_PAD
+	_rent_body.offset_bottom = PANEL_PAD + 200
+	panel.add_child(_rent_body)
+
+	_rent_pay_btn = Button.new()
+	_rent_pay_btn.text = "PAY"
+	_rent_pay_btn.anchor_left = 0.0
+	_rent_pay_btn.anchor_right = 0.5
+	_rent_pay_btn.anchor_top = 1.0
+	_rent_pay_btn.anchor_bottom = 1.0
+	_rent_pay_btn.offset_left = PANEL_PAD + 4
+	_rent_pay_btn.offset_top = -60
+	_rent_pay_btn.offset_right = -8
+	_rent_pay_btn.offset_bottom = -PANEL_PAD
+	_rent_pay_btn.add_theme_color_override("font_color", COL_COOL)
+	_rent_pay_btn.pressed.connect(_on_rent_pay)
+	panel.add_child(_rent_pay_btn)
+
+	_rent_skip_btn = Button.new()
+	_rent_skip_btn.text = "SKIP"
+	_rent_skip_btn.anchor_left = 0.5
+	_rent_skip_btn.anchor_right = 1.0
+	_rent_skip_btn.anchor_top = 1.0
+	_rent_skip_btn.anchor_bottom = 1.0
+	_rent_skip_btn.offset_left = 8
+	_rent_skip_btn.offset_top = -60
+	_rent_skip_btn.offset_right = -PANEL_PAD - 4
+	_rent_skip_btn.offset_bottom = -PANEL_PAD
+	_rent_skip_btn.add_theme_color_override("font_color", COL_HOT)
+	_rent_skip_btn.pressed.connect(_on_rent_skip)
+	panel.add_child(_rent_skip_btn)
+
+
+func _on_rent_due_prompt(rent_amount: int, months_behind: int) -> void:
+	_rent_pending_rent = rent_amount
+	_rent_pending_arrears = months_behind
+	var total: int = rent_amount * (months_behind + 1)
+	var body_text := ""
+	if months_behind == 0:
+		body_text = "The landlord wants his check. This month's rent: $%d.\n\nPay now, or skip and eat the ding on your record." % rent_amount
+	elif months_behind == 1:
+		body_text = "Second notice. You're one month behind. Two months unpaid and the eviction squad comes.\n\nTotal owed now: $%d (%d months × $%d)." % [total, months_behind + 1, rent_amount]
+	if months_behind > 0:
+		_rent_title.text = "// RENT DUE  (month %d behind)" % months_behind
+	else:
+		_rent_title.text = "// RENT DUE"
+	_rent_body.text = body_text
+	_rent_pay_btn.text = "PAY  $%d" % total
+	_rent_root.visible = true
+	get_tree().paused = true
+
+
+func _on_rent_pay() -> void:
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm == null:
+		return
+	if pm.pay_rent():
+		_rent_root.visible = false
+		get_tree().paused = false
+
+
+func _on_rent_skip() -> void:
+	var pm = get_node_or_null("/root/PlayerManager")
+	if pm == null:
+		return
+	pm.skip_rent()
+	_rent_root.visible = false
+	get_tree().paused = false
+
+
+# -------------------------------------------------------------
+# Gig + payday NetFeed toasts
+# -------------------------------------------------------------
+func _on_gig_denied(_kind: String, reason: String) -> void:
+	_publish_netfeed_note("Application reply: %s  (30 minutes gone)" % reason)
+
+
+func _on_gig_shift_completed(_kind: String, pay: int, humiliation: String) -> void:
+	_publish_netfeed_note("Shift done. $%d accrues to payday. %s" % [pay, humiliation])
+	if _gig_visible:
+		_refresh_gig_panel()
+
+
+func _on_payday_deposited(amount: int, breakdown: Dictionary) -> void:
+	var parts := PackedStringArray()
+	for k in breakdown.keys():
+		parts.append("%s $%d" % [str(k), int(breakdown[k])])
+	var suffix: String = ""
+	if parts.size() > 0:
+		suffix = "  (" + ", ".join(parts) + ")"
+	_publish_netfeed_note("PAYDAY: $%d deposited.%s" % [amount, suffix])
+
+
+func _on_pending_wages_changed(_total: int) -> void:
+	if _gig_visible:
+		_refresh_gig_panel()
+
+
+func _publish_netfeed_note(text: String) -> void:
+	# Piggyback on the NetFeed panel — the existing ticker surfaces it.
+	if not has_node("/root/WorldDirector"):
+		return
+	var wd = get_node("/root/WorldDirector")
+	var event := {
+		"type": "NEWS_TICKER",
+		"headline": text,
+		"timestamp": Time.get_unix_time_from_system(),
+	}
+	wd.netfeed_history.append(event)
+	wd.netfeed_event_generated.emit(event)
 
 
 # -------------------------------------------------------------
@@ -1196,6 +1552,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_J:
 			_toggle_jobs()
 			get_viewport().set_input_as_handled()
+		KEY_G:
+			_toggle_gig_panel()
+			get_viewport().set_input_as_handled()
+		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6:
+			# Quick-apply gig by slot number while the gig panel is open.
+			if _gig_visible:
+				var slot: int = event.keycode - KEY_1   # 0..5
+				_apply_gig_slot(slot)
+				get_viewport().set_input_as_handled()
 		KEY_SPACE:
 			var ts = get_node_or_null("/root/TimeSystem")
 			if ts:
@@ -1764,7 +2129,7 @@ func _on_terminal_shop() -> void:
 # -------------------------------------------------------------
 const SHOP_FORGED_IDS_COST := 500
 const SHOP_FORGED_IDS_HEAT_REDUCTION := 25
-const SHOP_BURNER_COST := 1200
+const SHOP_BURNER_COST := 1500
 
 func _build_shop_modal() -> void:
 	_shop_root = Control.new()
@@ -1821,11 +2186,15 @@ func _build_shop_modal() -> void:
 		SHOP_BURNER_COST,
 		_on_buy_burner)
 
-	# Secure Housing (only meaningful if homeless — see _on_buy_housing)
+	# Secure Housing (only meaningful if homeless — see _on_buy_housing).
+	# Deposit = one month's rolled rent from PlayerManager ($700–$2000).
+	var housing_cost: int = 700
+	if has_node("/root/PlayerManager"):
+		housing_cost = int(get_node("/root/PlayerManager").housing_deposit_cost())
 	_make_shop_row(panel, 240,
 		"Secure Housing (if homeless)",
-		"Buy back a walls-and-a-door deal. Landlord takes a deposit up front, +8 hope, ends the homeless state.",
-		500,
+		"Buy back a walls-and-a-door deal. Landlord takes one month's rent up front, +8 hope, ends the homeless state.",
+		housing_cost,
 		_on_buy_housing)
 
 	_shop_status = _make_label("", COL_DIM, 11, true)
