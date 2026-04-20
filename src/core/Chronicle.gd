@@ -118,7 +118,7 @@ func _compose_recap(month: int, start_snap: Dictionary, end_snap: Dictionary) ->
 		var cameo_start: int = int(start_snap.get("cameo_fired_count", 0))
 		for i in range(cameo_start, fired.size()):
 			# Find the cameo name from id
-			for c in cameos.CAMEOS:
+			for c in CameoCatalog.ALL:
 				if str(c.get("id", "")) == str(fired[i]):
 					cameo_names.append(str(c.get("name", fired[i])))
 					break
