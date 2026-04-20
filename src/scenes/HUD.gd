@@ -1788,13 +1788,7 @@ func _build_goal_choice_modal() -> void:
 	sub.offset_bottom = PANEL_PAD + 56
 	panel.add_child(sub)
 
-	var options: Array = [
-		{"path": "DIRECT_ACTION",        "label": "DIRECT ACTION",        "flavor": "Kill the oligarchs. The rarest, loudest path.",                      "color": COL_HOT},
-		{"path": "POLITICAL_REVOLUTION", "label": "POLITICAL REVOLUTION", "flavor": "Push public_tension to 100. The masses storm.",                      "color": COL_ACCENT},
-		{"path": "POLITICAL_REFORM",     "label": "POLITICAL REFORM",     "flavor": "Drive senate_alignment to 0. Bribe, leak, organize.",                "color": COL_COOL},
-		{"path": "SYSTEMIC_COLLAPSE",    "label": "SYSTEMIC COLLAPSE",    "flavor": "Grind combined oligarch wealth below survival. The grind path.",    "color": COL_WARN},
-		{"path": "ANY",                  "label": "LET THE YEAR DECIDE",  "flavor": "Any condition wins. Less committed, less narrative.",                "color": COL_DIM},
-	]
+	var options: Array = ModalCopy.GOAL_OPTIONS
 
 	var y: int = PANEL_PAD + 72
 	var btn_h: int = 64
@@ -1813,7 +1807,7 @@ func _build_goal_choice_modal() -> void:
 		var btn := Button.new()
 		btn.text = str(opt.label)
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.add_theme_color_override("font_color", opt.color)
+		btn.add_theme_color_override("font_color", ModalCopy.resolve_color(str(opt.color_key)))
 		btn.add_theme_color_override("font_hover_color", COL_FG)
 		btn.add_theme_font_size_override("font_size", 15)
 		btn.pressed.connect(_on_goal_picked.bind(str(opt.path)))
