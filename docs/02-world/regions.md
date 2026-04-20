@@ -68,9 +68,9 @@ After regions are generated, `WorldDirector._assign_oligarch_territories()` matc
 - **Food** → `AGRICULTURAL`
 - **Security** → `TRANSIT`
 - **Tech / Pharma / Energy** → `INDUSTRIAL`
-- **Media** → `URBAN_ELITE`
+- **Media / Finance** → `URBAN_ELITE`
 
-One billionaire per region where possible; unclaimed regions are neutral territory.
+Oligarch sector distribution is **random** (see [oligarchs.md](../03-characters/oligarchs.md)) — multiple oligarchs can share a sector, and some sectors may have zero. Assignment walks the oligarch list and fills the first open slot of the matching region type, skipping any oligarch whose sector-region isn't in the current map. Unclaimed regions stay neutral.
 
 ---
 

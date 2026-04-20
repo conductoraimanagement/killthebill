@@ -145,13 +145,13 @@ Each region type gets sector-appropriate sabotage targets so cameo objectives th
 | Region type | Sabotage kinds | Sector(s) covered |
 |---|---|---|
 | `URBAN_SLUM` | food_depot | Food |
-| `URBAN_ELITE` | financial_center + media_spire | Tech + Media |
+| `URBAN_ELITE` | financial_center + media_spire + clearing_house | Finance + Media |
 | `INDUSTRIAL` | refinery + power_relay | Tech + Energy |
 | `AGRICULTURAL` | hydro_vault + grain_silo | Food |
 | `ISLAND_RETREAT` | private_dock | Security |
 | `TRANSIT` | checkpoint_scanner | Security |
 
-**Financial Center** (new) — tall cyan glass column, Tech-sector sabotage target. Unique to `URBAN_ELITE` — the Enclave's money lives in glass. Same ripple as any Tech-sector hit: `tech_price +150`, `+4 heat`, the Tech oligarch loses 50k wealth.
+**Financial Center** / **Clearing House** — Finance-sector sabotage targets, unique to `URBAN_ELITE`. Hitting one fires `PlayerManager.apply_finance_shock()`: rent drain multiplier ×1.15 for 10 daily ticks, food & tech prices +30, public_tension +20 (the biggest tension wave of any sector — credit markets going dark reaches further than one grain silo does). Sabotage payout 800–1,400 cr, heat +6. See [economy.md](economy.md) for the full Finance cascade.
 
 Visual profile per kind lives in `InteractableTarget.KIND_CONFIGS` — mesh shape (box / tall_box / cylinder), size, albedo + emission color, display prefix. One entity class, many kinds.
 

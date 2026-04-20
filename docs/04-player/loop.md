@@ -126,7 +126,7 @@ Now you have a concrete political objective: influence or sabotage today's bill 
 
 ### 🔁 Day 3–60 (months 1–2, Settling band) — The rhythm sets in
 
-- Every 10 real minutes = 1 in-game day = 1 full simulation tick + 1 Senate bill resolution + rent drain + NPC death rolls + social graph tick.
+- Every 10 real minutes = 1 in-game day = 1 full simulation tick + 1 Senate bill resolution + daily food drain + NPC death rolls + social graph tick. (Rent is monthly, not daily — see [Gigs, Rent & Employment](gigs.md).)
 - Every ~3:20 = 1 NetFeed refresh + possible new job posting + cameo trigger evaluation.
 - **During severance** (months 1–2), hope doesn't decay. You can roam, talk to all 40 NPCs, build bonds, commit to a lover, investigate oligarch patterns — without the despair clock running.
 - Rent still hits daily. Blue Collar at -200 cr goes homeless around day 3 unless they act. Eviction is a state, not a run-ender — but it adds heat/food cost.

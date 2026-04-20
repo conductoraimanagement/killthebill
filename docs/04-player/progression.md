@@ -1,264 +1,300 @@
 # Progression, Credits, and Heat
 
-> **Status:** Partial implementation. See [src/core/PlayerManager.gd](../../src/core/PlayerManager.gd).
+> **Status:** Implemented. See [src/core/PlayerManager.gd](../../src/core/PlayerManager.gd), [src/core/GigBoard.gd](../../src/core/GigBoard.gd).
 
-The player's personal economy is where the design gets honest. You're a broke operative in a collapsing city. Every move costs. The only way to keep acting is to do things that compromise the cause a little — or make you more wanted.
+The player's personal economy is where the design gets honest. You were laid off. Savings carry you, for a while. Every move costs something — credits, hope, idealism, time. The only way to keep acting is to do things that compromise the cause a little, or make you more wanted.
 
-Two resources, one law: **nothing is free.**
+One law: **nothing is free.**
+
+> This page is the condensed reference for the player-facing economy. The **[Gigs, Rent & Employment](gigs.md)** page has the narrative walkthrough; this one is the numbers.
 
 ---
 
 ## The four resources
 
-The starting premise: **the system is killing you because you're jobless, and there is no hope.** The player isn't a free-agent revolutionary — they're a desperate person whose labor was taken by AI, whose savings are gone, whose system is squeezing them daily. Four resources capture that:
+| Resource | Range | Where it lives | Meaning |
+|---|---|---|---|
+| `credits` | −∞..∞ | [PlayerManager](../../src/core/PlayerManager.gd) | The wallet, in credits (cr). Can go negative. |
+| `heat` | 0..100 | [PlayerManager](../../src/core/PlayerManager.gd) | Enforcer attention. At 100 → `ARRESTED` defeat. |
+| `hope` | 0..100 | [PlayerManager](../../src/core/PlayerManager.gd) | Psychological reserve. At 0 → `DESPAIR` defeat. |
+| `homeless` | bool | [PlayerManager](../../src/core/PlayerManager.gd) | Lost the apartment. Extra hope drift, no home computer → no Gig Board. **Not a defeat.** |
 
-| Resource | Range | Where it lives | High state | Low state |
-|---|---|---|---|---|
-| `credits` | −∞..∞ | [PlayerManager](../../src/core/PlayerManager.gd) | Can bribe senators, buy intel, afford housing | Below zero → rent arrears → eviction countdown |
-| `heat` | 0..100 | [PlayerManager](../../src/core/PlayerManager.gd) | Enforcer sweeps, surcharges, despair drift | Invisible. Can work unnoticed. |
-| `hope` | 0..100 | [PlayerManager](../../src/core/PlayerManager.gd) | Psychological reserve. High = acting. 0 = DESPAIR defeat. | Decays passively. Actions restore it. |
-| `homeless` | bool | [PlayerManager](../../src/core/PlayerManager.gd) | Is the player on the streets? Extra hope drift, no rent drain. | Reversible — 500 cr at the shop buys you back indoors. |
+Plus two accumulators that feed payday deposits:
 
----
-
-## Severance period (months 1–2)
-
-The year doesn't start at full intensity. Months 1 and 2 are the
-**severance period** — the money you were laid off with is still
-coming in, and the psychological weight hasn't fully landed. During
-these two months:
-
-- Rent still drains (the landlord doesn't wait).
-- **Hope decay is suspended.** No passive drift.
-- Eviction can still happen if credits stay negative 3 days.
-- All other mechanics (heat, cameos, Senate, NPC social graph) proceed.
-
-At the start of month 3, severance ends. A NetFeed note fires:
-*"Your severance ran out this morning. The weight finds you now. Hope starts to drift."* From that moment, the decay curve described below kicks in.
-
-Design intent: you get two months of breathing room to meet people,
-read the world, pick a path. Past that, the clock starts pressing.
-
-## Travel costs time
-
-Dialogue and modals pause the clock — walking around doesn't. Within
-a region, moving at 5 m/s across a 150m map burns ~1–2 game hours
-naturally. **Inter-region travel** via the transit pillar now
-explicitly advances the clock by **6 game hours** (via
-`TimeSystem.skip_hours(6)`). You don't get to skip across the map for
-free.
-
-## The daily survival tick
-
-`WorldDirector.run_world_cycle` (once per day) calls `PlayerManager.apply_daily_tick`:
-
-```
-daily_cost = 30 + max(0, (food_price − 100) / 4)     # scales with economy
-            = 8  if homeless                           # no rent; still eating
-credits -= daily_cost
-
-if credits < 0 for 3 consecutive cycles → _evict()   # homeless = true
-  • hope −10, NetFeed note
-  • NOT a defeat — you keep playing, just exposed
-
-hope_delta = −1                                       # baseline drift
-           − 1 if credits < 0
-           − 1 if heat > 60
-           − 1 if homeless
-           − 1 if month >= 10                         # endgame weighs
-hope += hope_delta
-
-if hope <= 0 → PlayerManager.fire_defeat("DESPAIR_WITHDRAWAL",
-                                          "DESPAIR",
-                                          "You stopped leaving the apartment...")
-```
-
-In the worst case (broke + hot + homeless + month 13) hope drifts **−5/day**. A player doing nothing runs out of hope around month 2–3.
-
----
-
-## Hope restoration — what makes you keep going
-
-Hope doesn't just decay — actions against the system restore it, while compromised actions erode it:
-
-| Action | Hope Δ |
+| Field | Meaning |
 |---|---|
-| Sabotage a facility | **+3** — you hit back |
-| Hack the grid | **+4** — biggest hit |
-| Leak scandal publicly | **+2** |
-| Fixer job completion (NPC who trusts you) | **+5** |
-| Resistance-cell contract completion | **+4** |
-| Cameo arc resolved | **+3** baseline (can be overridden per-arc) |
-| Sell scandal to Media (corrupt) | **−2** — you compromised |
-| Pickpocket a neighbor (success) | **−1** — you stole from your own |
-| Bribe a senator | **−1** — the system rubs off on you |
-
-Rhythm: a player actively doing resistance work gains +10/day on a good day; a player drifting loses −2/day. The math works out so an ACTIVE playthrough grows hope, an idle one loses it.
+| `pending_wages` | Gig + WC-salary wages that accrue between Mondays. Deposited weekly via `TimeSystem.payday`. |
+| `pending_wages_breakdown` | `source → cr subtotal` for the HUD toast breakdown. |
 
 ---
 
-## Starting class seeds — desperate from day one
+## Starting class seeds
 
 See [`PlayerManager.initialize_run`](../../src/core/PlayerManager.gd).
 
 | Seed | credits | intel | social | hope | Framing |
 |---|---|---|---|---|---|
-| **WHITE_COLLAR** | 2000 | 100 | −50 | 55 | Laid off last month. 2000 credits of quiet savings. The Sinks don't trust you yet. Compliance AI hunts you sooner. |
-| **BLUE_COLLAR** | **−200** | 10 | 80 | 45 | Behind on rent before day one. The landlord sent a registered notice two weeks ago. NPCs open up faster. |
+| **WHITE_COLLAR** | 50,000 cr | 100 | −50 | 55 | Laid off last month. Severance + liquidated 401(k). A year's frayed cushion if you're careful. Hope is fragile because you had more to lose. |
+| **BLUE_COLLAR** | 29,000 cr | 10 | 80 | 45 | Union layoff. Severance + cashed-out savings. Covers the year if nothing goes wrong — and something always goes wrong. Social capital is your edge. |
 
-Blue Collar starts **below zero** — your first day of the game, eviction is already 3 cycles away. The game opens with *"how do I dig out?"* as an immediate problem. That's by design.
+Also rolled at run-start, once per run, fixed for the playthrough:
 
-Every income source **raises heat**. Every spending source is either legal (no heat) or illegal (credits + heat). The only thing you can freely do is walk around — and even that, once you're hot enough, draws attention.
+- **`monthly_rent`** — `randi_range(700, 2000)` cr. A lucky Sinks studio rolls cheap; an Enclave-adjacent 1BR rolls expensive.
+
+No future "syndicate / journalist / veteran" seeds yet — the two core seeds lock in the class-anxiety premise.
 
 ---
 
-## Class Seeds (starting conditions)
+## Severance period (months 1–2)
 
-See [`PlayerManager.initialize_run(seed)`](../../src/core/PlayerManager.gd). Called at the start of every playthrough.
+The year doesn't start at full intensity. Months 1 and 2 are the **severance period**:
 
-| Seed | credits | intel_level | social_capital | What it means |
+- Rent is still due on the 1st of each month (the landlord doesn't wait).
+- Daily food + utilities still drain.
+- **Hope decay is suspended.** No passive drift.
+- All other mechanics (heat, cameos, Senate, NPC social graph) proceed.
+
+At the start of month 3, severance ends. A NetFeed note fires:
+*"Your severance ran out this morning. The weight finds you now. Hope starts to drift."* From that moment, the decay curve below kicks in.
+
+Design intent: two months of breathing room to meet people, read the world, pick a path. Past that, the clock presses.
+
+---
+
+## Daily survival tick
+
+`WorldDirector.run_world_cycle` (once per day) calls `PlayerManager.apply_daily_tick(economy)`:
+
+```
+# Food & utilities — scales with food_price. Homeless: exposure tax.
+daily_cost = 25 + max(0, (food_price - 100) / 3)
+if homeless:
+    daily_cost += 8                                   # exposure tax
+daily_cost *= rent_drain_multiplier                    # ×1.15 during Finance shock
+credits -= daily_cost
+
+# Hope decay — outside severance only.
+hope_delta = -1                                        # baseline drift
+           - 1 if credits < 0
+           - 1 if heat > 60
+           - 1 if homeless
+           - 0.5 if rent_arrears_months >= 1          # envelope says FINAL NOTICE
+           - 1 if month >= 10                          # endgame weighs
+hope += hope_delta
+
+if hope <= 0 → fire_defeat("DESPAIR_WITHDRAWAL", ...)
+```
+
+**Rent is NOT in the daily tick.** Rent is a monthly decision — see below.
+
+---
+
+## Monthly rent — the decision
+
+On the 1st of each in-game month, `TimeSystem.rent_due` fires. `PlayerManager.handle_rent_due()` emits the `rent_due_prompt` signal and the HUD opens a forced modal that pauses the game:
+
+> **// RENT DUE** — landlord wants his check. This month's rent: **X cr**. `[PAY]` / `[SKIP]`
+
+- **Pay** → `PlayerManager.pay_rent()` drains `monthly_rent × (arrears_months + 1)` from credits. Can go negative. +2 hope, arrears cleared.
+- **Skip** → `PlayerManager.skip_rent()` increments `rent_arrears_months`. −4 hope. NetFeed note.
+
+If `rent_arrears_months` hits **2** at a rent-due tick, eviction fires: `homeless = true`, −10 hope. **Not a run-ender** — it's a state. Re-housing via the Shop costs one month's rent as deposit.
+
+The Finance oligarch, if one rolled at run-start, is attributed as the holder of your rent debt via `debt_held_by_oligarch_id`. Killing that oligarch or triggering an Indexed-Debt-style jubilee wipes the attribution.
+
+---
+
+## Weekly payday
+
+`TimeSystem.payday` fires every 7th day (`day % 7 == 0`). `PlayerManager.apply_weekly_payday()`:
+
+1. **Firing roll (if WC-employed)** — 10% chance per week fires `_fire_from_wc_role()`. −5 hope, NetFeed toast, employment ends. Any wages already accrued for that week still deposit.
+2. **Weekly salary slice** — if still employed, `monthly_salary / 4` accrues as a `wc_salary:[Company]` source.
+3. **Deposit** — all `pending_wages` dump into `credits`. `payday_deposited(amount, breakdown)` fires for the HUD toast.
+
+NetFeed toast example:
+*"PAYDAY: 1,245 cr deposited. (waiter 420 cr, dishwasher 180 cr, wc_salary:Paperclip & Thorne, LLP 645 cr)"*
+
+---
+
+## Income sources
+
+### 1. Gig shifts — the compliance floor ✓ *(implemented)*
+
+Open GIG BOARD with **`G`** (home computer required — fails when homeless). Gigs are region-gated and apply via number keys `1`–`6`:
+
+| Gig | Regions | Hours | Pay | Notes |
 |---|---|---|---|---|
-| `WHITE_COLLAR` | 5000 | 100 | −50 | Comfortable start, good intel access, but the Sinks don't trust you. Compliance AI hunts you sooner. |
-| `BLUE_COLLAR` | 100 | 10 | 80 | Broke but trusted. NPCs open up faster. No Enclave contacts. |
+| Dishwasher | any | 3h | 36–48 cr | |
+| Street sweep | any | 3h | 42–54 cr | |
+| Trash hauler | INDUSTRIAL | 4h | 54–72 cr | |
+| Delivery runner | URBAN_SLUM, TRANSIT | 3h | 30–54 + tip 0–22 | |
+| Waiter | URBAN_ELITE | 3h | 30–45 + tip 0–60 | Highest ceiling, worst humiliation |
+| Day-labor | INDUSTRIAL | 4h | 60–84 cr | |
 
-Class seeds are the game's replay flavor: the same world plays differently depending on how you started.
+**40% silent denial** on apply (30 game-min wasted). On accept: game time skips `hours`, wages accrue to `pending_wages`, a humiliation dialogue line fires, 1–3 hope drained, −0.02 idealism drift.
 
-**Future seeds** (designed, not implemented):
-- `SYNDICATE` — starts with debt to an Oligarch rival; forgiven after N sabotage jobs.
-- `JOURNALIST` — starts with a press contact; trades credits for scandal verification.
-- `VETERAN` — high skill / heat resistance, no social capital.
+See [gigs.md](gigs.md) for the full gig catalog + humiliation pool.
 
----
+### 2. White-collar salaried role ✓ *(implemented)*
 
-## Income mechanisms
+Listings appear below gigs, **always present**, refresh weekly. Apply with **`Shift+1`–`Shift+4`**. Triggers a 3-question absurdist interview gauntlet (LLM-generated per interview when an API key is configured; offline-pool fallback otherwise). Posted monthly salaries 2,000–4,000 cr.
 
-Six sources. Each has a thematic tradeoff so the economic pressure *is* the moral pressure.
+**95% rejection** — letter compiled from the specific answers picked. 2 game-hours + 3–5 hope cost. **5% acceptance** — +15 hope, monthly salary paid in 4 weekly slices, 10% weekly firing roll. See [gigs.md](gigs.md).
 
-### 1. Loot from sabotage ✓ *(implemented)*
-Sabotaging a facility drops credits in addition to the economy ripple. The payout scales with the sector being hit.
+### 3. Loot from sabotage ✓ *(implemented)*
+
+Sabotaging a facility drops credits in addition to the economy ripple. Payout scales with sector.
 
 | Sector | Base payout | Heat | Why |
 |---|---|---|---|
-| Food | 300–600 | +3 | Warehouses, pallets of rations |
-| Tech | 500–900 | +4 | Server racks worth black-market gold |
-| Pharma | 600–1000 | +4 | Every capsule is cash |
-| Energy | 400–700 | +3 | Copper, rare earths |
-| Security | 200–400 | +5 | Gear + arrest risk |
-| Media | 200–500 | +2 | PR assets, less tangible haul |
+| Food | 300–600 cr | +3 | Warehouses, pallets of rations |
+| Tech | 500–900 cr | +4 | Server racks worth black-market gold |
+| Pharma | 600–1000 cr | +4 | Every capsule is cash |
+| Energy | 400–700 cr | +3 | Copper, rare earths |
+| Security | 200–400 cr | +5 | Gear + arrest risk |
+| Media | 200–500 cr | +2 | PR assets, less tangible haul |
+| **Finance** | **800–1,400 cr** | **+6** | A clearing-house hit is a vault hit. Also fires `apply_finance_shock()`: rent drain ×1.15 for 10 days + food/tech +30 + tension +20 |
 
-**Tradeoff**: every sabotage raises public tension, attracts Enforcers, and identifies you as a threat. The richer sectors carry the most heat.
+**Tradeoff**: every sabotage raises public tension, attracts Enforcers, and identifies you as a threat.
 
-### 2. Sell scandal to Media oligarch ✓ *(implemented)*
+### 4. Sell scandal to Media oligarch ✓ *(implemented)*
+
 You've surfaced dirt on an oligarch. Two paths:
 
-- **LEAK** (free, existing): NetFeed picks it up. Public sees it. `public_image` of target tanks, `public_tension` up, `senate_alignment` drifts slightly populist.
-- **SELL** (money, new): the Media Oligarch buys the scoop to shelve it. You get paid; the scandal never surfaces. The target's `controversy_level` drops (suppressed), `senate_alignment` shifts corporate.
+- **LEAK** (free, existing): NetFeed picks it up. `public_image` of target tanks, `public_tension` up, `senate_alignment` drifts populist.
+- **SELL** (money, corrupt): Media Oligarch buys the scoop to shelve it. You get paid; scandal never surfaces. Target's `controversy_level` drops, `senate_alignment` shifts corporate.
 
 ```
-payout ≈ 500 + target.controversy_level × 30    # reward for having juicy dirt
-         + 1000 if Media oligarch alive          # premium for the buyer being there
+payout ≈ 500 + target.controversy_level × 30 + 1000 if Media oligarch alive
 ```
 
-**Tradeoff**: the corrupt option. Money now, strengthened Enclave later. The game watches and remembers (future: player_idealism tracker tanks, cameo arcs gate off).
+**Tradeoff**: money now, strengthened Enclave later. Bumps `player_ruthlessness`.
 
-### 3. Resistance cell contract ✓ *(implemented)*
-You don't work for oligarchs — you're fighting them. Underground resistance cells post bounties on oligarch infrastructure instead. Each news cycle, the game rolls ~65% odds of posting a cell contract targeting the sector of an oligarch the resistance particularly hates. Target is weighted by `awareness_of_player` + `paranoia` + whether they hold aggressive ambitions (`"Purge The Sinks"` +2.0, `"Crush the resistance"` +2.5). NetFeed headline: *"Underground broadcast on a pirate frequency — The Red Circle wants X's operations damaged."*
+### 5. Resistance cell contract ✓ *(implemented)*
 
-Any sabotage of the target sector within the TTL window (3 cycles) pays the full bounty (800–2500 credits) out of **black-market funds** — no oligarch is transacting with the player. On completion:
+Each news cycle, the game rolls ~65% odds of posting an underground cell contract targeting the sector of an oligarch the resistance hates most (weighted by `awareness_of_player` + `paranoia` + aggressive ambitions). NetFeed: *"Underground broadcast on a pirate frequency — The Red Circle wants X's operations damaged."*
 
-- `PlayerManager.credits +bounty`
-- No oligarch wealth deduction
-- NetFeed: *"{cell_name} broadcasts a thank-you on the pirate channel. The {sector} sector is audibly limping."*
+Any sabotage of the target sector within 3 cycles pays the full bounty (**500–2,500 cr**) out of **black-market funds**. No oligarch transacts with the player.
 
-Starting pool of 10 cell names: The Red Circle, Paper Street Crew, The Ash Underground, The Sinks Collective, The Unlicensed Dispatch, The Thirteenth Hour, The Rust Coalition, The Night Shift, The Gutter Press, The Unindexed. One contract per cell at a time; only one contract per target sector at a time (no stacking).
+On completion: `+bounty` credits, `+4` hope, NetFeed thank-you.
 
-**Tradeoff**: the cells may have their own agendas you don't fully know. Completing their jobs builds nothing with them specifically — no trust analog. But you're taking money from unknown sources to weaken the Enclave, which is... mostly aligned with your goals. Mostly.
+Cell pool: The Red Circle, Paper Street Crew, The Ash Underground, The Sinks Collective, The Unlicensed Dispatch, The Thirteenth Hour, The Rust Coalition, The Night Shift, The Gutter Press, The Unindexed.
 
-### 4. Fixer jobs from NPCs ✓ *(implemented)*
+### 6. Fixer jobs from NPCs ✓ *(implemented)*
+
 NPCs with `trust >= 30` can post a fixer job via NetFeed: *"Fixer signal in the Sinks — Jon Holt wants the Food sector disrupted. They say it's personal."*
 
-Two flavors roll from the available actions:
-- **Disrupt sector**: sabotage a random sector. Pays 400–900.
-- **Leak on oligarch**: leak scandal on a specified oligarch. Pays 300–700.
+Two flavors:
 
-On completion:
+- **Disrupt sector**: sabotage a random sector. Pays **200–400 cr**.
+- **Leak on oligarch**: leak on a specified oligarch. Pays **150–350 cr**.
 
-- `PlayerManager.credits +bounty`
-- `fixer_npc.trust +15` (bond_history records it)
-- NetFeed: *"NPC quietly paid an unnamed operative. A debt acknowledged."*
+On completion: `+bounty` credits, `+5` hope, fixer NPC's `trust +15`.
 
-Starting trust: NPCs roll `randf_range(0, 60)` on generation (Enforcers are colder; Workers and Destitute trust the player sooner), so ~35% of the roster starts above the 30 threshold for posting jobs. As the player completes fixer jobs, that NPC's trust rises, possibly crossing the `can_recruit()` threshold for [relationships](../03-characters/relationships.md) agent-network mechanics.
+### 7. Pickpocket ✓ *(implemented)*
 
-**Tradeoff**: the small, human-scale economy. No senate_alignment shift, no paranoia amplification, no oligarch patronage debt. Just a citizen paying you for a favor. But the bounties are smaller, and you can only run one at a time per NPC.
+Walk within ~2.6m of a crowd NPC → `[E] Pickpocket {name}`.
 
-### 5. Pickpocket ✓ *(implemented — mugging Enforcers still future)*
-Ambient crowd NPCs spawn in the landscape each phase, drawn from the persistent [roster](../03-characters/npcs.md) (Workers + Destitute, filtered by active_phase). Walk within ~2.6m → prompt *"[E] Pickpocket {name}"* → press E.
-
-Stealth roll:
 ```
-chance = clamp(0.50
-              + player_stealth_preference × 0.40
-              - target.conformity × 0.10,
-              0.15, 0.90)
+chance = clamp(0.50 + player_stealth_preference × 0.40 - target.conformity × 0.10, 0.15, 0.90)
 ```
 
 | Outcome | Effect |
 |---|---|
 | Success | +20–80 cr, +1 heat, target's `opinion_of_player −0.05`, silent NetFeed ripple |
-| Failure | +3 heat, target `knowledge_of_player +0.30`, `opinion −0.15`, NetFeed: *"Witness called the patrol on an attempted lift…"*. Target bolts (despawns) |
+| Failure | +3 heat, target `knowledge_of_player +0.30`, `opinion −0.15`, NetFeed alert, target bolts |
 
-Ambient crowd refreshes each phase (Morning/Afternoon/Night), so the available pool rotates. 6–12 NPCs visible at a time, scaled by region `population_density`.
+**Tradeoff**: reliable trickle but heat compounds. One failed roll at heat 80+ cascades into arrest.
 
-**Mugging Enforcer patrols** (instead of being stopped by them) is still future — currently you *can* bribe or flee them but not reverse the encounter.
+### 8. Hack the grid ✓ *(implemented)*
 
-**Tradeoff**: reliable trickle of income but heat compounds. Can't sustain on this alone — one failed roll at heat 80+ can cascade into arrest. Also erodes trust with that specific NPC (the opinion shift), so pickpocketing someone who could later be a fixer is shortsighted.
+Datashard Terminal menu → `HACK THE GRID`. Flows through the Tech oligarch by default. Retargets to the Finance oligarch first if one exists.
 
-### 6. Hack the grid ✓ *(implemented)*
-Open the Datashard Terminal menu → `HACK THE GRID`. No target picker — the hack flows through the Tech Oligarch by default. Payload:
+- `+1500–3000 cr` (biggest single payout)
+- `+8 heat`
+- Target oligarch: `wealth −15000`, `paranoia +30`, `awareness_of_player +25`
+- `security_presence −20` (grid blinded temporarily)
+- `player_chaos_preference +0.06`, `player_stealth_preference +0.15`
 
-- `PlayerManager.credits +1500-3000` (biggest single payout in the game)
-- `+8 heat` (most visible act)
-- Tech Oligarch's `wealth -15000`, `paranoia +30`, `awareness_of_player +25` — they notice, and hunt
-- `security_presence -20` (grid was controlling it; hacking blinds it temporarily)
-- NetFeed: *"Financial grid breached overnight. Unusual asset movement reported in the Tech sector…"*
-- `player_chaos_preference +0.06`, `player_stealth_preference +0.15` (gates cameos)
-
-**Tradeoff**: the top income mechanism, but dedicated counter-intel from the victim. Tech Oligarch's bumped paranoia makes them more likely to fund militias; bumped awareness of you makes them deploy investigators. If you repeat the hack, the Tech Oligarch finds you faster each time.
+**Tradeoff**: top income mechanism, but the victim oligarch hunts harder each repeat.
 
 ---
 
-## Spending mechanisms
+## Spending sinks
 
-### Implemented
-
-**Bribe a politician on an active bill** — at the [Datashard Terminal](../../src/entities/DatashardTerminal.gd), menu → `LOBBY POLITICIAN`. Shows each senator with their predicted stance on the current bill and a cost:
-
-```
-cost = 2000 × (1 − scandal_level/100) × (1 − corruption)
-clamped ≥ 100
-```
-
-A scandal-riddled, corrupt senator runs ~100 credits to flip. A clean, principled senator runs up to 2000. The bribe lasts one vote — `pending_bribe_direction` is cleared after SenateDirector resolves the bill. Raises heat by 2.
-
-**Sabotage / leak-scandal** (existing) — no credit cost, but heat cost.
-
-### Implemented — Shop at the Datashard Terminal
-
-Terminal menu → `SHOP` opens the black-market shop. Two items on the rack:
+### Shop at the Datashard Terminal ✓ *(implemented)*
 
 | Item | Cost | Effect |
 |---|---|---|
-| **Forged IDs** | 500 | `PlayerManager.heat -25` instantly |
-| **Burner Datashard** | 1200 | Reveals the current bill's `honest_rationale` + `scandal_hooks` in the Senate panel (only works while a bill is in debate; reveal resets when the bill resolves) |
+| Forged IDs | 500 cr | `heat −25` instantly |
+| Burner Datashard | 1,500 cr | Reveals the current bill's `honest_rationale` + `scandal_hooks` in the Senate panel while the bill is in debate |
+| Secure Housing (if homeless) | one month's rent (700–2,000 cr) | `homeless = false`, +8 hope — deposit scales with the run's rolled `monthly_rent` |
+
+### Bribes ✓ *(implemented)*
+
+**Politician (Datashard Terminal → LOBBY POLITICIAN):**
+```
+cost = 2000 × (1 − scandal_level/100) × (1 − corruption)     # clamp ≥ 100
+```
+A scandal-riddled, corrupt senator runs ~100 cr; a clean one, up to 2,000 cr. +2 heat per bribe. One vote only.
+
+**Enforcer (encounter modal, heat ≤ 80):** base 200 cr + 200 cr per 20 heat.
+
+### Sabotage / leak-scandal ✓
+
+No credit cost, but heat cost and world-state cost.
 
 ### Designed, not yet implemented
 
 | Action | Cost range | What it unlocks |
 |---|---|---|
-| Buy intel from a fixer | 200–800 | Reveals a random oligarch's current ambition |
+| Buy intel from a fixer | 200–800 cr | Reveals a random oligarch's current ambition |
 | Safehouse bribe | 200/cycle | Passive heat decay while paid up |
-| Black-market weapon | 800–2500 | Unlocks the combat lever (future) |
-| Recruit cameo operative | 3000+ | When a cultural cameo arc resolves with recruitment |
+| Black-market weapon | 800–2500 cr | Unlocks the combat lever (future) |
+| Recruit cameo operative | 3000+ cr | When a cameo arc resolves with recruitment |
+
+---
+
+## Hope restoration — what makes you keep going
+
+| Action | Hope Δ |
+|---|---|
+| Sabotage a facility | +3 — you hit back |
+| Hack the grid | +4 — biggest hit |
+| Leak scandal publicly | +2 |
+| Fixer job completion (NPC who trusts you) | +5 |
+| Resistance-cell contract completion | +4 |
+| Cameo arc resolved | +3 baseline (can be overridden per-arc) |
+| **Hired at a WC role** | +15 — the hook sinks in |
+| **Rent paid on time** | +2 |
+| **Securing housing after homelessness** | +8 |
+| Sell scandal to Media (corrupt) | −2 |
+| Pickpocket a neighbor (success) | −1 |
+| Bribe a senator | −1 |
+| **Gig shift completed** | −1 to −3 (humiliation dialogue line) |
+| **WC interview rejected** | −3 to −5 |
+| **Partner death** | −40 / −20 / −15 / −10 (scales inversely with partner count) |
+| **Rent skipped** | −4 |
+| **Evicted** | −10 |
+| **Fired from WC role** | −5 |
+
+Rhythm: a player actively doing resistance work gains ~+10 hope per good day; a pure-compliance grinder bleeds ~−4 hope per day from gig humiliation alone.
+
+---
+
+## Playstyle trackers
+
+`PlayerManager.bump_playstyle(chaos, ruthlessness, idealism, stealth)` nudges four cumulative floats in `[0, 1]`. Read by `CulturalCameos` to gate archetype eligibility:
+
+| Tracker | Nudged up by | Used by |
+|---|---|---|
+| `player_chaos_preference` | Sabotage, hack | `chaos_prophet` arcs (Soap Man, Project Dust) |
+| `player_ruthlessness` | Sell-scandal, assassinate, betray | `kindly_stranger` gates OFF at high values |
+| `player_idealism` | Leak publicly, cell jobs, Bread Thief | `folk_hero_from_the_sinks`, `whistleblower` arcs |
+| `player_stealth_preference` | Pickpocket, hack | `rogue_ai` arcs, low-profile cameos |
+
+Gigs and WC interviews both drift `player_idealism` downward — the compliance path costs you your capacity to see cameos that reward conviction.
 
 ---
 
@@ -268,60 +304,68 @@ Terminal menu → `SHOP` opens the black-market shop. Two items on the rack:
 
 | Event | Heat delta |
 |---|---|
-| Sabotage a facility | +2 to +5 (see sector table) |
-| Sell scandal to Media | +2 (it's a *crime* to deal in stolen info) |
+| Sabotage a facility | +2 to +6 (see sector table) |
+| Sell scandal to Media | +2 |
 | Bribe a politician | +2 |
-| Pickpocket / mug | +1 to +5 |
+| Pickpocket / mug | +1 to +3 |
 | Hack financial grid | +8 |
-| Assassinate oligarch *(existing)* | Sets heat to max |
-| Cycle tick *(passive)* | −1 (heat slowly cools) |
+| Assassinate oligarch | sets heat to max |
+| Cycle tick (passive) | −1 × `TimeSystem.heat_decay_multiplier()` (halved in Climactic band, quartered in Year's End) |
 
-Threshold effects (currently implemented):
+Threshold effects:
 
-| Threshold | Effect | Status |
-|---|---|---|
-| `heat ≥ 30` | NetFeed warning: *"Enforcer patrols thicken near the Sinks."* | ✓ |
-| `heat ≥ 60` | Sabotage loot halved; NetFeed warning: *"Compliance AI flags a person of interest."* | ✓ |
-| `heat ≥ 80` | Bribe costs **doubled** (heat surcharge flagged in bribe modal); NetFeed warning: *"Arrest warrants issued…"* | ✓ |
-| `heat == 100` | **Run ends.** `PlayerManager.defeat_triggered` fires; HUD shows the end-of-run modal with the `// DEFEAT //` banner and `ARRESTED` kind. | ✓ |
-| `heat > 30` | Enforcer patrols spawn ambient in landscape *(future)* | — |
-| `heat > 60` | NPCs refuse to talk; fixer jobs dry up *(future)* | — |
-| `heat > 80` | Compliance AI actively hunts the player *(future)* | — |
+| Threshold | Effect |
+|---|---|
+| `heat ≥ 30` | NetFeed warning: *"Enforcer patrols thicken near the Sinks."* |
+| `heat ≥ 60` | NetFeed warning: *"Compliance AI flags a person of interest."* |
+| `heat ≥ 80` | Bribe costs **doubled**; NetFeed: *"Arrest warrants issued…"* |
+| `heat == 100` | `ARRESTED` defeat. |
 
 Cooling mechanisms:
-- Passive decay (−1 per day cycle)
-- **Forged IDs** at the Shop: −25 heat, 500 cr ✓
-- Safehouse bribe *(designed)*
-- Travel to a low-security region *(requires multi-region travel, future)*
+- Passive decay (−1/day × pacing multiplier)
+- **Forged IDs** at the Shop: 500 cr for −25 heat
+
+See [heat.md](heat.md) for Enforcer encounter mechanics.
 
 ---
 
 ## UI
 
-The HUD state panel (top-left) shows two extra rows at the bottom:
+The HUD state panel (top-left) shows:
 
 ```
-credits           1850    (color: cyan if ≥ 1000, fg if > 200, dim if ≤ 200)
-heat                34    (color: hot red if > 60, warn yellow if > 30, fg otherwise)
+credits            29000  cr        (color cyan if ≥ 1000, fg > 200, dim ≤ 200)
+pending wages      +420   cr        (only shown if > 0)
+rent                1200  cr/mo
+arrears             1 month(s) unpaid   (only shown if > 0)
+heat                  34  / 100     (hot red > 60, warn yellow > 30, fg otherwise)
+hope        ▓▓▓▓░░░░░░  42
+housing             HOMELESS              (only shown when homeless)
 ```
 
-Both update via signals (`credits_changed`, `heat_changed`) so the HUD never polls.
+Updates flow via signals (`credits_changed`, `heat_changed`, `hope_changed`, `housing_status_changed`, `pending_wages_changed`) — the HUD never polls.
 
 ---
 
 ## What the player can't do (by design)
 
-- **Farm endless credits without consequences.** Every income source raises heat or senate_alignment or erodes an NPC bond.
-- **Buy victory.** Credits can't directly move global economy variables. They can only pay for *actions* that move them (bribes, sabotage gear).
-- **Stockpile past what a run needs.** Roguelite run-end zeros credits; the `SYNDICATE` seed even starts them negative.
+- **Farm endless credits without consequences.** Every income source raises heat, erodes hope, or drifts idealism.
+- **Buy victory.** Credits can't directly move global economy variables. They can only pay for *actions* that move them.
+- **Grind only the compliance path to safety.** Gigs cover rent, but the hope bleed + idealism drift makes DESPAIR likely before month 13.
+- **Grind only the resistance path to safety.** Sabotage covers rent, but heat caps trigger ARRESTED before month 13.
+
+The year is survivable. Not cleanly.
 
 ---
 
 ## Cross-references
 
-- [PlayerManager](../../src/core/PlayerManager.gd) — source of truth for `credits` and `heat`
-- [WorldDirector](../../src/core/WorldDirector.gd) — ripples now call `PlayerManager.add_credits`/`add_heat`
-- [Politicians](../03-characters/politicians.md) — the `bribe` action is defined there and implemented via `get_bribe_cost()` + `pending_bribe_direction`
-- [Oligarchs](../03-characters/oligarchs.md) — sell-scandal reads `controversy_level` and reacts on their side
-- [The Senate](../02-world/senate.md) — bribes are resolved when `_tally_and_resolve` runs; pending bribes are cleared after the vote
-- [Cultural Cameos](../03-characters/cultural-cameos.md) — several cameo archetypes gate on the player's cumulative choices in the economy layer (`chaos_prophet` likes money-hungry players, `kindly_stranger` likes fixer-job-only players)
+- [Gigs, Rent & Employment](gigs.md) — the narrative walkthrough for the compliance layer
+- [PlayerManager](../../src/core/PlayerManager.gd) — source of truth for `credits`, `heat`, `hope`, `homeless`, rent, employment
+- [GigBoard](../../src/core/GigBoard.gd) — gig catalog + WC listings + interview gauntlet
+- [TimeSystem](../../src/core/TimeSystem.gd) — `day_advanced`, `payday`, `rent_due`, `month_advanced` signals
+- [WorldDirector](../../src/core/WorldDirector.gd) — ripples call `PlayerManager.add_credits`/`add_heat`/`add_hope`
+- [Politicians](../03-characters/politicians.md) — bribe mechanics
+- [Oligarchs](../03-characters/oligarchs.md) — sell-scandal, Finance debt attribution
+- [The Senate](../02-world/senate.md) — bribes resolve when `_tally_and_resolve` runs
+- [Cultural Cameos](../03-characters/cultural-cameos.md) — cameos gate on `player_*_preference` trackers; rewards are world-shift + narrative payoffs, never cash
