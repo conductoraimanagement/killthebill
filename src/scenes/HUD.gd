@@ -4282,39 +4282,23 @@ func _on_playthrough_ready() -> void:
 # -------------------------------------------------------------
 # Helpers
 # -------------------------------------------------------------
+# Thin wrappers around HudTheme so existing HUD code doesn't need a
+# rename pass. New panel/modal extractions should call HudTheme.foo()
+# directly.
 func _make_panel(bg: Color) -> Panel:
-	var p := _make_panel_raw(bg)
-	add_child(p)
-	return p
+	return HudTheme.make_panel(self, bg)
 
 
 func _make_panel_raw(bg: Color) -> Panel:
-	var p := Panel.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = bg
-	sb.border_width_left = 1
-	sb.border_width_right = 1
-	sb.border_width_top = 1
-	sb.border_width_bottom = 1
-	sb.border_color = COL_BORDER
-	sb.corner_radius_top_left = 0
-	sb.corner_radius_top_right = 0
-	sb.corner_radius_bottom_left = 0
-	sb.corner_radius_bottom_right = 0
-	p.add_theme_stylebox_override("panel", sb)
-	return p
+	return HudTheme.make_panel_raw(bg)
 
 
 func _make_label(text: String, color: Color, size: int, _mono: bool) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_color_override("font_color", color)
-	l.add_theme_font_size_override("font_size", size)
-	return l
+	return HudTheme.make_label(text, color, size)
 
 
 func _hex(c: Color) -> String:
-	return c.to_html(false)
+	return HudTheme.hex(c)
 
 
 func _action_label(action_id: String) -> String:
