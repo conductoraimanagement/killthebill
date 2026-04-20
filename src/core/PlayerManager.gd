@@ -29,6 +29,36 @@ const RENT_ARREARS_MONTHS_TO_EVICTION: int = 2   # 2 months unpaid → eviction
 const RENT_MIN: int = 700                         # credits — rolled per run
 const RENT_MAX: int = 2000
 
+# =============================================================
+# HEAT IDENTIFIABILITY MODEL
+# =============================================================
+# Heat rises only when an act leaves an identifiable trail. The base
+# heat cost of an action is multiplied by an "identifiability" factor
+# derived from region, time of day, player stealth, witnesses present,
+# and method specifics. An empty-street-at-night hit in a rural region
+# can round to zero heat; the same hit in URBAN_ELITE at noon can
+# double it. See docs/04-player/heat.md for the design rationale.
+const REGION_IDENTIFIABILITY: Dictionary = {
+	"URBAN_ELITE":    1.5,   # camera density, Enforcer saturation, facial ID
+	"TRANSIT":        1.3,   # checkpoint scanners, border sensors
+	"ISLAND_RETREAT": 2.0,   # private security + tiny pop remembers everyone
+	"INDUSTRIAL":     1.0,   # baseline — cameras exist but gaps matter
+	"URBAN_SLUM":     0.7,   # patrols exist, coverage is threadbare
+	"AGRICULTURAL":   0.5,   # remote; you blend into dirt and distance
+}
+
+const METHOD_IDENTIFIABILITY: Dictionary = {
+	"sabotage":           1.0,
+	"sabotage_quiet":     0.7,
+	"hack":               1.2,   # digital trail outlives darkness
+	"sell_scandal":       0.9,   # backroom deal, small paper trail
+	"bribe_politician":   0.9,
+	"leak":               0.8,   # released through anonymizers
+	"pickpocket_success": 0.8,   # subtle — target felt something, wasn't sure
+	"pickpocket_failure": 1.3,   # witness already called the patrol
+	"assassination":      2.0,   # a body is found
+}
+
 var current_class: ClassSeed = ClassSeed.BLUE_COLLAR
 
 # Player State
@@ -212,6 +242,77 @@ func can_afford(amount: int) -> bool:
 # =============================================================
 # HEAT
 # =============================================================
+
+# Scale a base heat cost by the identifiability of the current act.
+# Callers should use this for every heat GAIN tied to a player action
+# (sabotage, hack, bribe, pickpocket, sell-scandal). Heat *reductions*
+# (forged IDs, passive decay, bribing an enforcer away) bypass it —
+# they're outcomes of paying to be forgotten, not new acts to profile.
+#
+# ctx keys (all optional):
+#   region_type   — override current region's type
+#   witness_count — explicit witness sample; else default ambient count
+#   method        — key into METHOD_IDENTIFIABILITY; default 1.0
+#   digital       — bool. Digital footprints ignore region/time (the
+#                   wire doesn't care about darkness) but stealth still
+#                   matters (hack-covering-tracks).
+func compute_heat_cost(base_heat: int, ctx: Dictionary = {}) -> int:
+	if base_heat <= 0:
+		return base_heat
+	var digital: bool = bool(ctx.get("digital", false))
+
+	var region_mod: float = 1.0
+	if not digital:
+		var region_type: String = str(ctx.get("region_type", _current_region_type()))
+		region_mod = float(REGION_IDENTIFIABILITY.get(region_type, 1.0))
+
+	var time_mod: float = 1.0
+	if not digital:
+		var ts := get_node_or_null("/root/TimeSystem")
+		if ts and ts.is_night():
+			time_mod = 0.6
+
+	var stealth_mod: float = 1.0 - 0.5 * clamp(player_stealth_preference, 0.0, 1.0)
+
+	var witness_count: int
+	if ctx.has("witness_count"):
+		witness_count = int(ctx.witness_count)
+	else:
+		witness_count = _ambient_witness_count()
+	var witness_mod: float = 1.0
+	if witness_count >= 6:
+		witness_mod = 1.3
+	elif witness_count == 0:
+		witness_mod = 0.8
+
+	var method_mod: float = float(METHOD_IDENTIFIABILITY.get(str(ctx.get("method", "")), 1.0))
+
+	var final_heat: float = float(base_heat) * region_mod * time_mod * stealth_mod * witness_mod * method_mod
+	return int(round(final_heat))
+
+
+func _current_region_type() -> String:
+	var wd := get_node_or_null("/root/WorldDirector")
+	if wd == null:
+		return ""
+	for r in wd.regions:
+		if str(r.get("name", "")) == str(wd.current_region):
+			return str(r.get("type", ""))
+	return ""
+
+
+func _ambient_witness_count() -> int:
+	# Fast proxy: the crowd NPC density in the currently-active landscape.
+	# LandscapeGenerator scales the spawn count with region population
+	# density, so this already reflects "how populated am I right now?"
+	var main := get_tree().current_scene
+	if main == null or not "landscape" in main or main.landscape == null:
+		return 0
+	var crowds: Array = main.landscape.crowd_npcs
+	if crowds == null:
+		return 0
+	return crowds.size()
+
 
 func add_heat(amount: int, reason: String = "") -> void:
 	if amount == 0:

@@ -300,17 +300,21 @@ Gigs and WC interviews both drift `player_idealism` downward — the compliance 
 
 ## Heat system
 
-`heat` is 0–100, capped. Raises on illegal acts:
+`heat` is 0–100, capped. It rises only when an act leaves a trail the Compliance AI can tie to you — a quiet hit in a rural region at night can net zero heat, the same hit in the Enclave at noon can double it. Full model and worked examples in **[heat.md](heat.md)**.
 
-| Event | Heat delta |
+Base per-action costs (pre-modifier):
+
+| Event | Base heat |
 |---|---|
-| Sabotage a facility | +2 to +6 (see sector table) |
-| Sell scandal to Media | +2 |
-| Bribe a politician | +2 |
-| Pickpocket / mug | +1 to +3 |
-| Hack financial grid | +8 |
-| Assassinate oligarch | sets heat to max |
-| Cycle tick (passive) | −1 × `TimeSystem.heat_decay_multiplier()` (halved in Climactic band, quartered in Year's End) |
+| Sabotage a facility | 2–6 (sector-dependent; see sabotage table above) |
+| Sell scandal to Media | 2 |
+| Bribe a politician | 2 |
+| Pickpocket success / failure | 1 / 3 (failure forces witness_count = 8) |
+| Hack financial grid | 8 (digital — region/time don't apply; stealth still does) |
+| Assassinate oligarch | sets heat to 100 directly |
+| Cycle tick (passive) | −1 × `TimeSystem.heat_decay_multiplier()` |
+
+The final heat gain is `round(base × region × time × stealth × witness × method)` — see [heat.md § Identifiability multipliers](heat.md#identifiability-multipliers).
 
 Threshold effects:
 
@@ -321,11 +325,11 @@ Threshold effects:
 | `heat ≥ 80` | Bribe costs **doubled**; NetFeed: *"Arrest warrants issued…"* |
 | `heat == 100` | `ARRESTED` defeat. |
 
-Cooling mechanisms:
+Cooling mechanisms (these bypass the identifiability model — reductions are fixed):
 - Passive decay (−1/day × pacing multiplier)
 - **Forged IDs** at the Shop: 500 cr for −25 heat
-
-See [heat.md](heat.md) for Enforcer encounter mechanics.
+- Bribe an Enforcer: −20 on encounter
+- Successful flee: −10
 
 ---
 

@@ -19,24 +19,74 @@ Heat is the *abstract* signal; patrols are the *embodied* response. You can rais
 
 ---
 
-## Sources of heat
+## Sources of heat — identifiability-adjusted
 
-Comprehensive list in [progression.md](progression.md#heat-system). Representative sample:
+Heat rises only when an act leaves a **trail the Compliance AI can tie to you**. The base heat cost of an action is multiplied by an *identifiability* factor derived from where/when/how the act happened. An empty-street hit in a rural region at night with high stealth can round to **zero heat**; the same hit in URBAN_ELITE at noon with no stealth can **double** it.
 
-| Action | Heat |
+`PlayerManager.compute_heat_cost(base_heat, ctx)` is the single source of truth. Every callsite that adds heat for a player act passes through it:
+
+```
+heat_gain = round(
+    base_heat
+    × region_modifier       # 0.5 rural … 2.0 island enclave
+    × time_modifier         # 0.6 night … 1.0 day (digital acts skip this)
+    × (1 − 0.5 × player_stealth_preference)
+    × witness_modifier      # 0.8 empty … 1.3 crowded
+    × method_modifier       # 0.7 subtle … 2.0 body-on-floor
+)
+```
+
+### Base heat per action
+
+This is the **pre-multiplier** cost. See `WorldDirector._sabotage_heat_for` and the individual ripples.
+
+| Action | Base heat |
 |---|---|
-| Sabotage Food / Energy depot | +3 |
-| Sabotage Tech / Pharma facility | +4 |
-| Sabotage Security asset | +5 |
-| Sell scandal to Media | +2 |
-| Bribe a politician | +2 |
-| Hack the Grid | +8 |
-| Assassinate an oligarch | max |
-| Flee a patrol (fail) | +25 |
-| Passive idle (per day) | −1 |
-| Forged IDs purchase | −25 |
-| Bribe an Enforcer patrol | −20 |
-| Flee a patrol (success) | −10 |
+| Sabotage Food / Energy depot | 3 |
+| Sabotage Tech / Pharma facility | 4 |
+| Sabotage Security asset | 5 |
+| Sabotage Finance clearing house | 6 |
+| Sabotage Media spire | 2 |
+| Sell scandal to Media | 2 |
+| Bribe a politician | 2 |
+| Pickpocket success | 1 |
+| Pickpocket failure | 3 (forced witness_count = 8 — someone called) |
+| Hack the Grid | 8 (digital — region/time modifiers skipped) |
+| Assassinate an oligarch | sets heat to 100 directly |
+| Flee a patrol (fail) | +25 (fixed — you were ID'd) |
+| Passive idle (per day) | −1 × `TimeSystem.heat_decay_multiplier()` |
+| Forged IDs purchase | −25 (bypass — you paid to be forgotten) |
+| Bribe an Enforcer patrol | −20 (bypass) |
+| Flee a patrol (success) | −10 (bypass) |
+
+### Identifiability multipliers
+
+| Modifier | High → worse | Low → better |
+|---|---|---|
+| **Region** | URBAN_ELITE ×1.5, TRANSIT ×1.3, ISLAND_RETREAT ×2.0 (cameras + private security) | URBAN_SLUM ×0.7, AGRICULTURAL ×0.5 |
+| **Time of day** | Morning/Afternoon ×1.0 | Night ×0.6 |
+| **Stealth preference** | naive player ×1.0 | maxed stealth ×0.5 |
+| **Witnesses nearby** | ≥ 6 crowd NPCs ×1.3 | 0 ×0.8 |
+| **Method** | assassination ×2.0, hack ×1.2, sabotage ×1.0 | subtle sabotage ×0.7, leak ×0.8 |
+
+### Worked examples
+
+- **Sabotage an AGRICULTURAL grain silo at night, stealth 0.8, empty street**
+  `3 × 0.5 × 0.6 × 0.6 × 0.8 × 1.0 = 0.43 → 0 heat.` Genuinely untraceable.
+- **Same silo, URBAN_ELITE at noon, stealth 0.0, crowd 8**
+  `3 × 1.5 × 1.0 × 1.0 × 1.3 × 1.0 = 5.85 → 6 heat.` You were seen.
+- **Hack the grid, URBAN_SLUM, stealth 0.5**
+  Digital — region + time modifiers skipped. `8 × 0.75 × 1.2 = 7.2 → 7 heat.` Packet signatures survive darkness.
+- **Pickpocket failure on a Sinks afternoon**
+  Forces witness_count = 8. `3 × 0.7 × 1.0 × 1.0 × 1.3 × 1.3 = 3.55 → 4 heat.` The one witness carries the trail.
+
+### Heat reductions bypass the model
+
+Heat **reductions** (forged IDs, passive decay, bribing an enforcer away, successful flee) don't route through `compute_heat_cost`. They're outcomes of *paying to be forgotten*, not new acts to profile. They remain fixed.
+
+### Design intent
+
+Heat becomes a decision about *when, where, and how*, not a fixed tax on *what*. A cautious player can run a 13-month campaign of surgical rural sabotage and keep heat near zero. A brash player running waist-high through the Elite at noon hits heat cap in 10 acts. The game no longer treats every act equally — it treats every act *contextually*, the way a surveillance state actually does.
 
 ---
 

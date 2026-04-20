@@ -631,7 +631,8 @@ func _ripple_sabotage(target_sector: String):
 		var loot: int = _sabotage_loot_for(target_sector)
 		if pm.heat > 60:
 			loot = int(loot * 0.5)
-		var heat_amt: int = _sabotage_heat_for(target_sector)
+		var base_heat: int = _sabotage_heat_for(target_sector)
+		var heat_amt: int = pm.compute_heat_cost(base_heat, {"method": "sabotage"})
 		pm.add_credits(loot, "sabotage loot: %s" % target_sector)
 		pm.add_heat(heat_amt, "sabotage: %s" % target_sector)
 		pm.bump_playstyle(0.08, 0.02, 0.0, 0.0)
@@ -733,7 +734,9 @@ func _ripple_grid_hack():
 	if has_node("/root/PlayerManager"):
 		var pm = get_node("/root/PlayerManager")
 		pm.add_credits(payout, "grid hack")
-		pm.add_heat(8, "grid hack")
+		# Digital act — darkness and empty streets don't help hide packet
+		# flow, but covering tracks (stealth) still reduces the trail.
+		pm.add_heat(pm.compute_heat_cost(8, {"method": "hack", "digital": true}), "grid hack")
 		pm.bump_playstyle(0.06, 0.04, 0.0, 0.15)  # chaos + stealth
 		pm.add_hope(4.0, "hit the grid")     # big payoff, feels like a blow
 
@@ -819,7 +822,7 @@ func _ripple_sell_scandal(target_id: String):
 	if has_node("/root/PlayerManager"):
 		var pm = get_node("/root/PlayerManager")
 		pm.add_credits(payout, "scandal sold to Media")
-		pm.add_heat(2, "dealing in stolen info")
+		pm.add_heat(pm.compute_heat_cost(2, {"method": "sell_scandal"}), "dealing in stolen info")
 		pm.bump_playstyle(0.0, 0.08, 0.0, 0.04)
 		pm.add_hope(-2.0, "you compromised")    # corrupt act eats hope
 
@@ -851,7 +854,7 @@ func _ripple_bribe_politician(politician_id: String, direction: String) -> void:
 	p.pending_bribe_direction = 1.0 if direction == "YES" else -1.0
 	p.player_leverage = min(100.0, p.player_leverage + 20.0)
 
-	pm.add_heat(2, "bribery")
+	pm.add_heat(pm.compute_heat_cost(2, {"method": "bribe_politician"}), "bribery")
 	pm.bump_playstyle(0.0, 0.05, 0.0, 0.03)
 	pm.add_hope(-1.0, "compromised a senator")
 
@@ -1058,7 +1061,8 @@ func apply_pickpocket_result(npc_id: String, success: bool) -> void:
 	if success:
 		var take: int = randi_range(20, 80)
 		pm.add_credits(take, "pickpocket: %s" % target.npc_name)
-		pm.add_heat(1, "pickpocket")
+		# Success = subtle lift. Target felt something, wasn't sure.
+		pm.add_heat(pm.compute_heat_cost(1, {"method": "pickpocket_success"}), "pickpocket")
 		pm.bump_playstyle(0.02, 0.03, 0.0, 0.06)
 		target.opinion_of_player = max(-1.0, target.opinion_of_player - 0.05)
 		pm.add_hope(-1.0, "stole from a neighbor")
@@ -1071,7 +1075,10 @@ func apply_pickpocket_result(npc_id: String, success: bool) -> void:
 		netfeed_history.append(event)
 		netfeed_event_generated.emit(event)
 	else:
-		pm.add_heat(3, "pickpocket failed")
+		# Failure = a witness is already on the phone. Force a high
+		# witness count into the ctx so the Sinks don't forgive you
+		# just because the street was empty — the ONE witness matters.
+		pm.add_heat(pm.compute_heat_cost(3, {"method": "pickpocket_failure", "witness_count": 8}), "pickpocket failed")
 		pm.bump_playstyle(0.01, 0.02, 0.0, 0.0)
 		target.knowledge_of_player = min(1.0, target.knowledge_of_player + 0.30)
 		target.opinion_of_player = max(-1.0, target.opinion_of_player - 0.15)
