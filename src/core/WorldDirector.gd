@@ -1117,18 +1117,6 @@ func _maybe_post_jobs() -> void:
 		_try_post_fixer_job()
 
 
-const _RESISTANCE_CELL_NAMES: Array[String] = [
-	"The Red Circle",
-	"Paper Street Crew",
-	"The Ash Underground",
-	"The Sinks Collective",
-	"The Unlicensed Dispatch",
-	"The Thirteenth Hour",
-	"The Rust Coalition",
-	"The Night Shift",
-	"The Gutter Press",
-	"The Unindexed",
-]
 
 
 func _try_post_resistance_contract() -> void:
@@ -1164,7 +1152,7 @@ func _try_post_resistance_contract() -> void:
 			target_oligarch = living[i]
 			break
 
-	var cell_name: String = _RESISTANCE_CELL_NAMES.pick_random()
+	var cell_name: String = JobBoardData.RESISTANCE_CELLS.pick_random()
 	var target_sector: String = target_oligarch.sector_of_influence
 
 	# Skip if this cell already has a live contract — and skip if another
@@ -1265,7 +1253,7 @@ func _post_job(job: Dictionary) -> void:
 
 	var event := {
 		"type": "NEWS_TICKER",
-		"headline": _job_post_headline(job),
+		"headline": JobBoardData.post_headline(job),
 		"timestamp": Time.get_unix_time_from_system(),
 	}
 	netfeed_history.append(event)
@@ -1324,7 +1312,7 @@ func _complete_job(job: Dictionary) -> void:
 
 	var event := {
 		"type": "NEWS_TICKER",
-		"headline": _job_complete_headline(job),
+		"headline": JobBoardData.complete_headline(job),
 		"timestamp": Time.get_unix_time_from_system(),
 	}
 	netfeed_history.append(event)
@@ -1333,22 +1321,5 @@ func _complete_job(job: Dictionary) -> void:
 	job_completed.emit(job)
 
 
-func _job_post_headline(job: Dictionary) -> String:
-	match str(job.get("source_type", "")):
-		"resistance_cell":
-			return "Underground broadcast on a pirate frequency — %s" % str(job.get("framing", ""))
-		"npc_fixer":
-			return "Fixer signal in the Sinks — %s" % str(job.get("framing", ""))
-	return "Job posted."
 
 
-func _job_complete_headline(job: Dictionary) -> String:
-	match str(job.get("source_type", "")):
-		"resistance_cell":
-			return "%s broadcasts a thank-you on the pirate channel. The %s sector is audibly limping." % [
-				str(job.get("source_name", "A resistance cell")),
-				str(job.get("target_ref", "")),
-			]
-		"npc_fixer":
-			return "%s quietly paid an unnamed operative. A debt acknowledged." % str(job.get("source_name", "Someone"))
-	return "Job completed."
