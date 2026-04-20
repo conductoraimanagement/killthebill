@@ -32,135 +32,6 @@ const METERS_PER_STORY := 3.0
 const STREET_EVERY_N := 4     # every 4th grid row/column stays clear for streets
 
 # Per-region-type base config. Biome seed adds variation (see _variant_offset).
-const REGION_CONFIGS := {
-	"URBAN_SLUM": {
-		"size":            Vector2(160, 160),
-		"cell":            7.5,
-		"building_density": 0.58,
-		"height_range":    Vector2i(2, 6),
-		"ground_color":    Color(0.10, 0.09, 0.09),
-		"building_palette": [
-			Color(0.45, 0.25, 0.15),
-			Color(0.30, 0.18, 0.14),
-			Color(0.25, 0.25, 0.30),
-			Color(0.38, 0.32, 0.28),
-		],
-		"accent_color":    Color(1.00, 0.40, 0.10),
-		"fog_color":       Color(0.18, 0.13, 0.10),
-		"fog_density":     0.015,
-		"ambient_color":   Color(0.35, 0.32, 0.38),
-		"ambient_energy":  0.40,
-		"sun_energy":      0.65,
-		"sun_color":       Color(1.00, 0.78, 0.55),
-		"prop_kind":       "barrel_fire",
-		"prop_count":      18,
-	},
-	"URBAN_ELITE": {
-		"size":            Vector2(150, 150),
-		"cell":            10.0,
-		"building_density": 0.28,
-		"height_range":    Vector2i(7, 14),
-		"ground_color":    Color(0.82, 0.84, 0.88),
-		"building_palette": [
-			Color(0.14, 0.18, 0.28),
-			Color(0.88, 0.90, 0.95),
-			Color(0.55, 0.60, 0.68),
-		],
-		"accent_color":    Color(0.30, 0.79, 0.79),
-		"fog_color":       Color(0.78, 0.84, 0.92),
-		"fog_density":     0.003,
-		"ambient_color":   Color(0.80, 0.85, 0.95),
-		"ambient_energy":  0.85,
-		"sun_energy":      1.10,
-		"sun_color":       Color(1.00, 0.97, 0.92),
-		"prop_kind":       "planter",
-		"prop_count":      22,
-	},
-	"INDUSTRIAL": {
-		"size":            Vector2(170, 170),
-		"cell":            10.0,
-		"building_density": 0.42,
-		"height_range":    Vector2i(2, 7),
-		"ground_color":    Color(0.12, 0.10, 0.08),
-		"building_palette": [
-			Color(0.40, 0.20, 0.10),
-			Color(0.25, 0.25, 0.28),
-			Color(0.16, 0.14, 0.12),
-			Color(0.35, 0.30, 0.22),
-		],
-		"accent_color":    Color(1.00, 0.65, 0.15),
-		"fog_color":       Color(0.20, 0.16, 0.12),
-		"fog_density":     0.017,
-		"ambient_color":   Color(0.50, 0.38, 0.22),
-		"ambient_energy":  0.55,
-		"sun_energy":      0.70,
-		"sun_color":       Color(1.00, 0.72, 0.40),
-		"prop_kind":       "smoke_stack",
-		"prop_count":      8,
-	},
-	"AGRICULTURAL": {
-		"size":            Vector2(180, 180),
-		"cell":            9.0,
-		"building_density": 0.22,
-		"height_range":    Vector2i(1, 3),
-		"ground_color":    Color(0.16, 0.14, 0.09),
-		"building_palette": [
-			Color(0.78, 0.82, 0.78),
-			Color(0.42, 0.32, 0.20),
-			Color(0.55, 0.55, 0.50),
-		],
-		"accent_color":    Color(0.35, 0.85, 0.45),
-		"fog_color":       Color(0.24, 0.26, 0.18),
-		"fog_density":     0.006,
-		"ambient_color":   Color(0.55, 0.70, 0.50),
-		"ambient_energy":  0.60,
-		"sun_energy":      0.90,
-		"sun_color":       Color(0.90, 1.00, 0.85),
-		"prop_kind":       "grow_lamp",
-		"prop_count":      28,
-	},
-	"ISLAND_RETREAT": {
-		"size":            Vector2(110, 110),
-		"cell":            9.0,
-		"building_density": 0.14,
-		"height_range":    Vector2i(2, 5),
-		"ground_color":    Color(0.78, 0.70, 0.50),
-		"building_palette": [
-			Color(0.92, 0.90, 0.85),
-			Color(0.70, 0.68, 0.62),
-		],
-		"accent_color":    Color(0.30, 0.78, 0.92),
-		"fog_color":       Color(0.82, 0.88, 0.94),
-		"fog_density":     0.002,
-		"ambient_color":   Color(0.85, 0.92, 1.00),
-		"ambient_energy":  1.00,
-		"sun_energy":      1.20,
-		"sun_color":       Color(1.00, 0.98, 0.88),
-		"prop_kind":       "palm",
-		"prop_count":      14,
-	},
-	"TRANSIT": {
-		"size":            Vector2(200, 100),
-		"cell":            8.0,
-		"building_density": 0.24,
-		"height_range":    Vector2i(2, 4),
-		"ground_color":    Color(0.12, 0.12, 0.14),
-		"building_palette": [
-			Color(0.42, 0.42, 0.46),
-			Color(0.56, 0.22, 0.22),
-			Color(0.28, 0.28, 0.30),
-		],
-		"accent_color":    Color(1.00, 0.72, 0.18),
-		"fog_color":       Color(0.20, 0.20, 0.22),
-		"fog_density":     0.009,
-		"ambient_color":   Color(0.50, 0.48, 0.44),
-		"ambient_energy":  0.55,
-		"sun_energy":      0.85,
-		"sun_color":       Color(1.00, 0.90, 0.75),
-		"prop_kind":       "warning_beacon",
-		"prop_count":      10,
-	},
-}
 
 var region: Dictionary = {}
 var config: Dictionary = {}
@@ -192,14 +63,6 @@ var sabotage_targets: Array = []
 # is thematically appropriate, which means cameo objectives that name
 # a sector (e.g. the Bread Thief asking for a Security sabotage) can
 # actually be completed by traveling to a matching region.
-const LANDMARK_RECIPES: Dictionary = {
-	"URBAN_SLUM":     ["food_depot"],
-	"URBAN_ELITE":    ["financial_center", "media_spire", "clearing_house"],
-	"INDUSTRIAL":     ["refinery", "power_relay"],
-	"AGRICULTURAL":   ["hydro_vault", "grain_silo"],
-	"ISLAND_RETREAT": ["private_dock"],
-	"TRANSIT":        ["checkpoint_scanner"],
-}
 
 var _nav_region: NavigationRegion3D
 var _rng: RandomNumberGenerator
@@ -223,7 +86,7 @@ const _NIGHT_BG           := Color(0.01, 0.01, 0.03)
 func generate(region_data: Dictionary) -> void:
 	region = region_data
 	var type_key: String = str(region.get("type", "URBAN_SLUM"))
-	config = REGION_CONFIGS.get(type_key, REGION_CONFIGS["URBAN_SLUM"]).duplicate(true)
+	config = RegionConfig.BASES.get(type_key, RegionConfig.BASES["URBAN_SLUM"]).duplicate(true)
 	_apply_biome_variant(str(region.get("visual_biome", "")))
 
 	_rng = RandomNumberGenerator.new()
@@ -819,14 +682,14 @@ func _despawn_crowd() -> void:
 
 # -------------------------------------------------------------
 # Sabotage targets — per-region-type InteractableTarget entities.
-# Each region type has a recipe in LANDMARK_RECIPES; the generator
+# Each region type has a recipe in RegionConfig.LANDMARK_RECIPES; the generator
 # spawns one of each kind in the recipe. Cameo objectives that name
 # a sector (e.g. "Security") can now actually be satisfied by
 # traveling to a TRANSIT or ISLAND_RETREAT region.
 # -------------------------------------------------------------
 func _spawn_sabotage_targets() -> void:
 	var type_key: String = str(region.get("type", "URBAN_SLUM"))
-	var recipe: Array = LANDMARK_RECIPES.get(type_key, ["food_depot"])
+	var recipe: Array = RegionConfig.LANDMARK_RECIPES.get(type_key, ["food_depot"])
 	var region_name: String = str(region.get("name", "Region"))
 
 	for kind in recipe:
