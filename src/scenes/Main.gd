@@ -104,11 +104,14 @@ func _on_playthrough_ready() -> void:
 		push_error("Main: no current region data; falling back to URBAN_SLUM stub")
 		region_data = {"name": "Ash Row", "type": "URBAN_SLUM", "visual_biome": "brutalist_fog"}
 
+	print("Main: _on_playthrough_ready received. current region = ", region_data)
 	_landscape = LandscapeGenerator.new()
 	_landscape.name = "Landscape"
 	add_child(_landscape)
 	_landscape.landscape_ready.connect(_on_landscape_ready)
+	print("Main: calling landscape.generate(...)")
 	_landscape.generate(region_data)
+	print("Main: landscape.generate() returned (synchronous — should see _on_landscape_ready next)")
 
 
 func _current_region_data() -> Dictionary:
@@ -125,6 +128,12 @@ func _current_region_data() -> Dictionary:
 
 
 func _on_landscape_ready(landscape: LandscapeGenerator) -> void:
+	print("Main: _on_landscape_ready received — spawning player + camera + terminal")
+	# World is now visible-worthy. Tick the bar to 100 and drop the
+	# overlay so the player sees the fully-built region, not a mid-build one.
+	if _hud:
+		_hud.update_loading_progress(100, "> world ready — dropping you in")
+		_hud.hide_loading_overlay()
 	var spawn: Vector3 = landscape.player_spawn
 	var terminal_pos: Vector3 = landscape.landmark_spawns.get("datashard_terminal", Vector3(-10, 0, -6))
 	terminal_pos.y = 0
@@ -197,37 +206,60 @@ func _spawn_player(at: Vector3) -> void:
 	nav.name = "NavigationAgent3D"
 	_player.add_child(nav)
 
+	# Bigger body so the player is findable among multi-story buildings.
+	var body_radius: float = 0.9
+	var body_height: float = 3.2
+
 	var col := CollisionShape3D.new()
 	var caps := CapsuleShape3D.new()
-	caps.radius = 0.4
-	caps.height = 1.6
+	caps.radius = body_radius
+	caps.height = body_height
 	col.shape = caps
 	_player.add_child(col)
 
 	var mesh_inst := MeshInstance3D.new()
 	var mesh := CapsuleMesh.new()
-	mesh.radius = 0.4
-	mesh.height = 1.6
+	mesh.radius = body_radius
+	mesh.height = body_height
 	mesh_inst.mesh = mesh
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(1.00, 0.34, 0.13)
 	mat.emission_enabled = true
 	mat.emission = Color(1.00, 0.34, 0.13)
-	mat.emission_energy_multiplier = 0.25
+	mat.emission_energy_multiplier = 1.5
 	mesh_inst.material_override = mat
 	_player.add_child(mesh_inst)
 
-	# Facing indicator
+	# Facing indicator — scaled with the bigger body.
 	var nose := MeshInstance3D.new()
 	var nose_mesh := BoxMesh.new()
-	nose_mesh.size = Vector3(0.15, 0.15, 0.5)
+	nose_mesh.size = Vector3(0.3, 0.3, 1.0)
 	nose.mesh = nose_mesh
-	nose.position = Vector3(0, 0.2, -0.5)
+	nose.position = Vector3(0, 0.4, -1.0)
 	nose.material_override = mat
 	_player.add_child(nose)
 
+	# Vertical beacon — a thin bright pillar that rises above the tallest
+	# building so the player is always findable from any camera angle.
+	# Cheap visual: a tall, thin emissive box.
+	var beacon := MeshInstance3D.new()
+	var beacon_mesh := BoxMesh.new()
+	beacon_mesh.size = Vector3(0.3, 40.0, 0.3)
+	beacon.mesh = beacon_mesh
+	beacon.position = Vector3(0, 20.0, 0)
+	var beacon_mat := StandardMaterial3D.new()
+	beacon_mat.albedo_color = Color(1.00, 0.60, 0.20)
+	beacon_mat.emission_enabled = true
+	beacon_mat.emission = Color(1.00, 0.60, 0.20)
+	beacon_mat.emission_energy_multiplier = 3.0
+	beacon_mat.flags_unshaded = true
+	beacon_mat.no_depth_test = false
+	beacon.material_override = beacon_mat
+	_player.add_child(beacon)
+
 	_player.position = at
 	add_child(_player)
+	print("Main: player spawned at ", at, " with beacon — look up!")
 
 
 func _setup_camera() -> void:

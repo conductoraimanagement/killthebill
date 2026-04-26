@@ -164,7 +164,7 @@ const BASES = {
 # is thematically appropriate.
 const LANDMARK_RECIPES: Dictionary = {
 	"URBAN_SLUM":     ["food_depot"],
-	"URBAN_ELITE":    ["financial_center", "media_spire", "clearing_house"],
+	"URBAN_ELITE":    ["financial_center", "media_spire", "clearing_house", "training_cluster"],
 	"INDUSTRIAL":     ["refinery", "power_relay"],
 	"AGRICULTURAL":   ["hydro_vault", "grain_silo"],
 	"ISLAND_RETREAT": ["private_dock"],

@@ -104,18 +104,31 @@ func generate(region_data: Dictionary) -> void:
 			row.append(false)
 		_occupied.append(row)
 
+	print("Landscape.generate: building nav region...")
 	_build_nav_region()
+	print("Landscape.generate: building environment...")
 	_build_environment()
+	print("Landscape.generate: building ground...")
 	_build_ground()
+	print("Landscape.generate: placing buildings...")
 	_place_buildings()
+	print("Landscape.generate: placing landmarks...")
 	_place_landmarks()
+	print("Landscape.generate: choosing player spawn...")
 	_choose_player_spawn()
+	print("Landscape.generate: building ambient props...")
 	_build_ambient()
+	print("Landscape.generate: baking navmesh...")
 	_bake_nav()
+	print("Landscape.generate: spawning enforcer patrols...")
 	_spawn_enforcer_patrols()
+	print("Landscape.generate: spawning crowd...")
 	_spawn_crowd()
+	print("Landscape.generate: spawning transit zone...")
 	_spawn_transit_zone()
+	print("Landscape.generate: spawning sabotage targets...")
 	_spawn_sabotage_targets()
+	print("Landscape.generate: emitting landscape_ready")
 
 	# Refresh patrols each phase so day→night doubles the presence
 	# and heat spikes don't leave an empty street forever.
@@ -549,8 +562,10 @@ func _build_single_patrol() -> EnforcerPatrol:
 		tries += 1
 
 	var patrol := EnforcerPatrol.new()
-	patrol.set_waypoints(a, b)
+	# Must be in-tree before set_waypoints — it calls get_global_transform
+	# which errors otherwise. add_child first, configure second.
 	add_child(patrol)
+	patrol.set_waypoints(a, b)
 	if alerted:
 		patrol.raise_alert(_last_known_player_position)
 	return patrol

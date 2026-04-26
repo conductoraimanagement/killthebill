@@ -73,7 +73,7 @@ const KIND_CONFIGS: Dictionary = {
 		"display_prefix": "Grain Silo",
 	},
 	"private_dock": {
-		"sector": "Security",
+		"sector": "Military",
 		"color": Color(0.32, 0.32, 0.36),
 		"emission": Color(1.00, 0.40, 0.40),
 		"mesh": "long_box",
@@ -81,7 +81,7 @@ const KIND_CONFIGS: Dictionary = {
 		"display_prefix": "Private Dock",
 	},
 	"checkpoint_scanner": {
-		"sector": "Security",
+		"sector": "Military",
 		"color": Color(0.25, 0.25, 0.30),
 		"emission": Color(1.00, 0.20, 0.20),
 		"mesh": "tall_box",
@@ -95,6 +95,18 @@ const KIND_CONFIGS: Dictionary = {
 		"mesh": "tall_box",
 		"size": Vector3(1.5, 7.0, 1.5),
 		"display_prefix": "Media Spire",
+	},
+	"training_cluster": {
+		# AI-sector sabotage target. Hitting one cuts Compliance AI's
+		# pattern matching — security_presence DROPS, tech_price spikes.
+		# Looks like a bank of server rack monoliths with deep-violet
+		# status lights cycling.
+		"sector": "AI",
+		"color": Color(0.18, 0.12, 0.32),
+		"emission": Color(0.55, 0.20, 0.95),
+		"mesh": "box",
+		"size": Vector3(3.6, 2.6, 3.6),
+		"display_prefix": "Training Cluster",
 	},
 }
 

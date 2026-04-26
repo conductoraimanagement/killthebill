@@ -12,9 +12,10 @@ class_name OligarchData
 
 # Identity
 @export var oligarch_id: String = ""
-@export var oligarch_name: String = ""
-@export var title: String = "" # "CEO", "Chairman", "Director-General"
-@export var sector_of_influence: String = "" # "Food", "Tech", "Security", "Media", "Pharma", "Energy"
+@export var oligarch_name: String = ""                # the person (e.g. "Arkady Stroma")
+@export var company_name: String = ""                 # the firm they founded/run (e.g. "Vextol Capital Partners")
+@export var title: String = "Founder & CEO"           # role at the company
+@export var sector_of_influence: String = ""          # category: Food · Tech · Security · Media · Finance · Pharma · Energy
 @export var alive: bool = true
 
 # =============================================================
@@ -210,7 +211,8 @@ func reevaluate_ambitions(current_cycle: int) -> Array:
 		var old: String = abandoned_now.pop_front() if abandoned_now.size() > 0 else ""
 		swapped.append({"from": old, "to": pick})
 
-	ambitions = Array(kept, TYPE_STRING, &"", null)
+	# Godot 4.6: the 4-arg Array() constructor is gone. Use assign().
+	ambitions.assign(kept)
 	return swapped
 
 
@@ -319,7 +321,7 @@ func _pursue_ambition(ambition: String, economy: Dictionary) -> Dictionary:
 				ambition_progress[ambition] = progress + 0.12
 				return {
 					"type": "AMBITION_ACTION",
-					"description": "%s announces a new human augmentation program. Costs skyrocket." % oligarch_name,
+					"description": "%s's foundation pours %d into a longevity + cognition research initiative. Insiders call it a vanity play." % [oligarch_name, 400000],
 					"impact": {"tech_price_increase": 50}
 				}
 		"Purge The Sinks":
@@ -381,7 +383,7 @@ func get_behavioral_profile() -> String:
 # =============================================================
 
 func get_llm_context_string() -> String:
-	var context = "You are %s, %s of the %s sector. " % [oligarch_name, title, sector_of_influence]
+	var context = "You are %s, %s of %s (%s sector). " % [oligarch_name, title, company_name, sector_of_influence]
 	context += "Behavioral profile: %s. " % get_behavioral_profile()
 	context += "Wealth: %d credits. Paranoia: %.0f/100. Public Image: %.0f/100. " % [wealth, paranoia, public_image]
 	

@@ -125,7 +125,7 @@ const ALL := [
 		"intro_headline": "A woman's been hitting Enclave bakeries at night and leaving bread in the Sinks. NetFeed says patrols are closing on her.",
 		"objective": {
 			"kind": "sabotage_sector",
-			"target_ref": "Security",
+			"target_ref": "Military",
 			"label": "hit Security-sector infrastructure to draw patrols away from her route"
 		},
 		"arc_duration_cycles": 3,
@@ -350,7 +350,7 @@ const ALL := [
 		"intro_headline": "An old man has taken up position at the longest food line in the Sinks. He doesn't beg. He doesn't preach. He quietly greets each person who passes, remembers their name, and when the line ends, he remains standing. Ten days running.",
 		"objective": {
 			"kind": "sabotage_sector",
-			"target_ref": "Security",
+			"target_ref": "Military",
 			"label": "disrupt Security — his blessing circles have been infiltrated by Enforcers"
 		},
 		"arc_duration_cycles": 6,
@@ -593,7 +593,7 @@ const ALL := [
 		"intro_headline": "Identical blank masks are being printed on underground 3D rigs at a rate of 2000 per day. A date is scrawled on every box: 'Fifth November.' Nobody knows what year.",
 		"objective": {
 			"kind": "sabotage_sector",
-			"target_ref": "Security",
+			"target_ref": "Military",
 			"label": "hit Security infrastructure to keep the masked march uninterrupted"
 		},
 		"arc_duration_cycles": 5,
@@ -699,7 +699,7 @@ const ALL := [
 				"kind": "action_objective",
 				"objective": {
 					"kind": "leak_sector",
-					"target_ref": "Security",
+					"target_ref": "Military",
 					"label": "leak on the Security oligarch — 'the one she said killed us last time'"
 				},
 				"on_completion_headline": "The keycard worked. The leak went clean. 'I told you,' she said, when you returned. 'She killed us last time too.'",

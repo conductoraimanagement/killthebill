@@ -13,6 +13,9 @@ signal netfeed_event_generated(event_data: Dictionary)
 signal oligarch_action_taken(action: Dictionary)
 signal playthrough_setup_complete() # Fired when regions, oligarchs, and NPCs are ready
 signal victory_achieved(kind: String, title: String, flavor: String)
+# Run-start generation progress — fires at each async step so the HUD
+# loading overlay can update its bar + phase label live.
+signal generation_progress(pct: int, phase: String)
 
 # Flips true the first time a victory condition hits; prevents repeat fires
 # until the scene is reloaded / playthrough reinitialized.
@@ -27,6 +30,21 @@ var _snitch_warning_fired: bool = false
 # NETFEED (The Internet/Communication Array)
 # ---------------------------------------------------------
 var netfeed_history = [] # Stores { "type": String, "headline": String, "timestamp": int }
+
+# Continuous NetFeed: the LLM returns a batch (~6-10 events) per cycle;
+# we queue them and drip one to the HUD every NETFEED_DRIP_SECONDS so
+# the feed streams continuously instead of lurching per phase. When
+# the queue runs low (< 2), we optimistically pull the next batch.
+var _netfeed_queue: Array[Dictionary] = []
+var _netfeed_drip_timer: Timer
+const NETFEED_DRIP_SECONDS: float = 30.0
+const NETFEED_QUEUE_REFILL_THRESHOLD: int = 2
+var _netfeed_request_in_flight: bool = false
+
+# Debug toggle — while true, SILENT_RIPPLE events (impact-only, no
+# headline) get a synthesized debug line in the NetFeed so we can see
+# what the sim is doing under the hood. Flip to false to hide them.
+const DEBUG_SHOW_SILENT_RIPPLES: bool = true
 
 # ---------------------------------------------------------
 # GLOBAL ECONOMY STATE
@@ -75,6 +93,36 @@ const JOB_TTL_CYCLES := 3
 func _ready():
 	print("WorldDirector initialized. Economy online.")
 
+
+# Godot 4.6 removed the Array(arr, TYPE_STRING, &"", null) 4-arg
+# constructor. Also: LLMs (DeepSeek in particular) sometimes return a
+# field as a single String when the prompt asked for an array. This
+# helper handles both: accepts Array OR String, returns Array[String].
+# Strings are split on ';' or newline — plausible cases when the model
+# concatenates list items.
+static func _coerce_string_array(value) -> Array[String]:
+	var out: Array[String] = []
+	if value == null:
+		return out
+	match typeof(value):
+		TYPE_ARRAY:
+			for item in value:
+				out.append(str(item))
+		TYPE_STRING:
+			var raw_str: String = str(value)
+			# Try semicolon split first, then newline — pick whichever
+			# yields multiple non-empty pieces.
+			var parts_semi: PackedStringArray = raw_str.split(";", false)
+			var parts_newline: PackedStringArray = raw_str.split("\n", false)
+			var chosen: PackedStringArray = parts_semi if parts_semi.size() >= parts_newline.size() else parts_newline
+			if chosen.size() == 0:
+				chosen = [raw_str]
+			for part in chosen:
+				var clean: String = part.strip_edges()
+				if clean != "":
+					out.append(clean)
+	return out
+
 # =============================================================
 # PLAYTHROUGH INITIALIZATION
 # =============================================================
@@ -94,6 +142,8 @@ func initialize_playthrough(preloaded_config: Dictionary = {}) -> void:
 	cycle = 0
 	_victory_locked = false
 	_snitch_warning_fired = false
+	if has_node("/root/LLMManager"):
+		get_node("/root/LLMManager").reset_usage_totals()
 	# Don't wipe current_region — Main.gd sets it before calling us.
 
 	if has_node("/root/SenateDirector"):
@@ -121,6 +171,7 @@ func initialize_playthrough(preloaded_config: Dictionary = {}) -> void:
 		_apply_preloaded_config(preloaded_config)
 		return
 
+	generation_progress.emit(5, "> generating world geography…")
 	# 1. World Geography (Asynchronous)
 	if has_node("/root/RegionGenerator"):
 		var region_gen = get_node("/root/RegionGenerator")
@@ -133,7 +184,8 @@ func initialize_playthrough(preloaded_config: Dictionary = {}) -> void:
 func _on_world_generated() -> void:
 	if has_node("/root/RegionGenerator"):
 		current_region = get_node("/root/RegionGenerator").starting_region
-	
+
+	generation_progress.emit(20, "> regions seeded — requesting oligarchs…")
 	# 2. Oligarchs (Asynchronous)
 	_generate_oligarchs_async()
 
@@ -143,7 +195,9 @@ func _generate_oligarchs_async() -> void:
 		if not llm.oligarchs_generated.is_connected(_on_oligarchs_generated):
 			llm.oligarchs_generated.connect(_on_oligarchs_generated)
 		
-		var count = randi_range(4, 6)
+		# Minimum 5 so the guaranteed 2 AI + 2 Tech still leaves room for
+		# at least one non-AI / non-Tech oligarch (Food / Finance / etc.).
+		var count = randi_range(5, 7)
 		print("WorldDirector: Requesting %d procedural oligarchs from LLM..." % count)
 		llm.request_oligarch_generation(count)
 	else:
@@ -157,18 +211,30 @@ func _on_oligarchs_generated(data: Array) -> void:
 		var o = OligarchData.new()
 		o.oligarch_id = "oligarch_%s" % str(oligarchs.size())
 		o.oligarch_name = o_data.get("first_name", "Unknown") + " " + o_data.get("last_name", "Oligarch")
-		o.title = o_data.get("title", "Executive")
+		o.title = o_data.get("title", "Founder & CEO")
 		o.sector_of_influence = o_data.get("sector", "Various")
-		o.ambitions = Array(o_data.get("ambitions", []), TYPE_STRING, &"", null)
-		o.quirks = Array(o_data.get("quirks", []), TYPE_STRING, &"", null)
+		# company_name is the made-up corporate brand the oligarch founded.
+		# Fall back to a synthetic "<LastName> Holdings" if the generator
+		# (old save, partial LLM response) didn't supply one — never use
+		# the raw sector as a company name.
+		var supplied_company: String = str(o_data.get("company_name", ""))
+		if supplied_company.is_empty():
+			supplied_company = "%s Holdings" % str(o_data.get("last_name", "Unknown"))
+		o.company_name = supplied_company
+		o.ambitions = _coerce_string_array(o_data.get("ambitions", []))
+		o.quirks = _coerce_string_array(o_data.get("quirks", []))
 		
-		# Randomize intrinsic traits
-		o.ruthlessness = randf()
-		o.vanity = randf()
-		o.paranoia_base = randf()
-		o.intelligence = randf()
-		o.greed = randf()
-		o.ideology = randf()
+		# Intrinsic traits. Default is random per run, but alter-ego mode
+		# (and any LLM response that supplies a 'traits' dict) can pin
+		# specific values so the archetype lands — a Musk-alter-ego is
+		# always vain + intelligent, a Thiel-alter-ego is always paranoid.
+		var trait_overrides: Dictionary = o_data.get("traits", {}) if typeof(o_data.get("traits", null)) == TYPE_DICTIONARY else {}
+		o.ruthlessness = clamp(float(trait_overrides.get("ruthlessness", randf())), 0.0, 1.0)
+		o.vanity = clamp(float(trait_overrides.get("vanity", randf())), 0.0, 1.0)
+		o.paranoia_base = clamp(float(trait_overrides.get("paranoia_base", randf())), 0.0, 1.0)
+		o.intelligence = clamp(float(trait_overrides.get("intelligence", randf())), 0.0, 1.0)
+		o.greed = clamp(float(trait_overrides.get("greed", randf())), 0.0, 1.0)
+		o.ideology = clamp(float(trait_overrides.get("ideology", randf())), 0.0, 1.0)
 		
 		# Starting state
 		o.wealth = randi_range(500000, 3000000)
@@ -180,7 +246,7 @@ func _on_oligarchs_generated(data: Array) -> void:
 			o.ambition_progress[ambition] = 0.0
 			
 		oligarchs.append(o)
-		print("  - %s (%s of %s)" % [o.oligarch_name, o.title, o.sector_of_influence])
+		print("  - %s — %s of %s [%s]" % [o.oligarch_name, o.title, o.company_name, o.sector_of_influence])
 
 	# 3. Assign territories
 	if has_node("/root/RegionGenerator"):
@@ -195,6 +261,7 @@ func _on_oligarchs_generated(data: Array) -> void:
 				pm_debt.debt_held_by_oligarch_id = o.oligarch_id
 				break
 	
+	generation_progress.emit(40, "> oligarchs named — populating the city…")
 	# 4. NPC roster (Asynchronous)
 	if has_node("/root/PopulationDirector"):
 		var pop_dir = get_node("/root/PopulationDirector")
@@ -205,6 +272,7 @@ func _on_oligarchs_generated(data: Array) -> void:
 		_finish_setup()
 
 func _on_population_generated() -> void:
+	generation_progress.emit(60, "> citizens seeded — assembling the senate…")
 	# 5. Politicians (Asynchronous)
 	_generate_politicians_async()
 
@@ -231,7 +299,7 @@ func _on_politicians_generated(data: Array) -> void:
 		p.faction = p_data.get("faction", "INDEPENDENT")
 		p.cause = p_data.get("cause", "")
 		p.seat_district = p_data.get("seat_district", "At-Large")
-		p.quirks = Array(p_data.get("quirks", []), TYPE_STRING, &"", null)
+		p.quirks = _coerce_string_array(p_data.get("quirks", []))
 
 		# Randomize intrinsic traits
 		p.integrity = randf()
@@ -253,6 +321,7 @@ func _on_politicians_generated(data: Array) -> void:
 	if has_node("/root/SenateDirector"):
 		get_node("/root/SenateDirector").register_politicians(politicians)
 
+	generation_progress.emit(80, "> senate sworn in — building the region…")
 	_finish_setup()
 
 func _finish_setup() -> void:
@@ -272,8 +341,26 @@ func _finish_setup() -> void:
 		ts.reset()
 		ts.start()
 
+	# NetFeed drip timer — emits one queued event every N seconds so the
+	# feed streams continuously. First batch request happens immediately.
+	if _netfeed_drip_timer == null:
+		_netfeed_drip_timer = Timer.new()
+		_netfeed_drip_timer.name = "NetFeedDripTimer"
+		_netfeed_drip_timer.wait_time = NETFEED_DRIP_SECONDS
+		_netfeed_drip_timer.autostart = false
+		_netfeed_drip_timer.one_shot = false
+		add_child(_netfeed_drip_timer)
+		_netfeed_drip_timer.timeout.connect(_on_netfeed_drip)
+	_netfeed_drip_timer.start()
+
+	# Emit setup-complete BEFORE firing the first news cycle. If the
+	# news-cycle build ever errors, we still want Main to spawn the
+	# landscape and let the player into the world.
 	playthrough_setup_complete.emit()
 	print("WorldDirector: Playthrough setup complete.")
+
+	# Kick a first batch so the feed isn't empty at run-start.
+	trigger_news_cycle()
 
 
 func _on_day_advanced(_day: int) -> void:
@@ -379,11 +466,11 @@ func _assign_oligarch_territories(region_gen) -> void:
 		match o.sector_of_influence:
 			"Food":
 				_try_assign_to_first_region(region_gen, "AGRICULTURAL", o)
-			"Security":
+			"Military":
 				_try_assign_to_first_region(region_gen, "TRANSIT", o)
 			"Tech", "Pharma", "Energy":
 				_try_assign_to_first_region(region_gen, "INDUSTRIAL", o)
-			"Media", "Finance":
+			"Media", "Finance", "AI":
 				_try_assign_to_first_region(region_gen, "URBAN_ELITE", o)
 
 
@@ -610,9 +697,22 @@ func _ripple_sabotage(target_sector: String):
 		global_economy["tech_price"] += 30
 		if has_node("/root/PlayerManager"):
 			get_node("/root/PlayerManager").apply_finance_shock()
+	elif target_sector == "AI":
+		# A training-cluster hit cripples the Compliance AI's pattern
+		# matching for a stretch — surveillance goes partially blind.
+		# Net effect: security_presence DROPS (rare — this is the one
+		# sector whose sabotage reduces enforcer saturation), tech_price
+		# spikes (GPUs + training data go scarce).
+		global_economy["tech_price"] += 40
+		global_economy["security_presence"] = clamp(
+			global_economy["security_presence"] - 15, 0, 100)
+	if target_sector != "AI":
+		# Non-AI sabotage always bumps security saturation (Enforcers
+		# respond). AI sabotage is the exception — handled above.
+		global_economy["security_presence"] = clamp(
+			global_economy["security_presence"] + 10, 0, 100)
 	global_economy["public_tension"] = clamp(
 		global_economy["public_tension"] + (20 if target_sector == "Finance" else 15), 0, 100)
-	global_economy["security_presence"] = clamp(global_economy["security_presence"] + 10, 0, 100)
 	print("Ripple: %s sector sabotaged. Prices spike, tension rises." % target_sector)
 
 	var headline: String = _sabotage_headline(target_sector)
@@ -649,9 +749,10 @@ func _sabotage_loot_for(sector: String) -> int:
 		"Tech":     return randi_range(500, 900)
 		"Pharma":   return randi_range(600, 1000)
 		"Energy":   return randi_range(400, 700)
-		"Security": return randi_range(200, 400)
+		"Military": return randi_range(200, 400)
 		"Media":    return randi_range(200, 500)
 		"Finance":  return randi_range(800, 1400)   # a vault hit is a vault hit
+		"AI":       return randi_range(700, 1200)   # GPU racks resell on the black market
 	return 250
 
 
@@ -661,9 +762,10 @@ func _sabotage_heat_for(sector: String) -> int:
 		"Tech":     return 4
 		"Pharma":   return 4
 		"Energy":   return 3
-		"Security": return 5
+		"Military": return 5
 		"Media":    return 2
 		"Finance":  return 6                        # the grid notices everything
+		"AI":       return 7                        # the Compliance AI itself goes looking
 	return 3
 
 
@@ -678,12 +780,14 @@ func _sabotage_headline(sector: String) -> String:
 			return "%s pharma store torched. Medicine shortages reported in The Sinks." % region_tag
 		"Energy":
 			return "%s power relay downed. Enclave switches to backup; tensions spike." % region_tag
-		"Security":
+		"Military":
 			return "Checkpoint near %s breached overnight. Patrols redeployed." % region_tag
 		"Media":
 			return "%s media spire goes dark for 18 minutes. No statement issued." % region_tag
 		"Finance":
 			return "%s clearing house hit overnight. Credit markets froze for 91 minutes. The feed is careful with numbers." % region_tag
+		"AI":
+			return "%s training cluster taken offline. Compliance AI's arrest-rate dropped 40%% for 96 hours. The board is not returning calls." % region_tag
 	return "Sabotage reported in %s. Authorities investigating." % region_tag
 
 func _ripple_assassination(target_id: String):
@@ -858,8 +962,42 @@ func _ripple_bribe_politician(politician_id: String, direction: String) -> void:
 	pm.bump_playstyle(0.0, 0.05, 0.0, 0.03)
 	pm.add_hope(-1.0, "compromised a senator")
 
-	print("Ripple: Bribed %s for %s on the active bill (%d credits)." % [
-		p.politician_name, direction, cost,
+	# Most real bribes go unreported — roll for a leak. About 1 in 3
+	# bumps up as a SILENT_RIPPLE (off-screen scandal seed); the rest
+	# fire a proper NetFeed line, which also nudges the politician's
+	# scandal level.
+	var leaked_publicly: bool = randf() > 0.33
+	var bribe_line: String = "Records leaked overnight suggest a single operative paid %s for a %s vote on the bill in debate. The sum was not disclosed. %s's office 'strongly denies' any arrangement." % [
+		p.politician_name, direction, p.politician_name.split(" ")[-1],
+	]
+	var bribe_event: Dictionary = {}
+	if leaked_publicly:
+		bribe_event = {
+			"type": "NEWS_TICKER",
+			"headline": bribe_line,
+			"timestamp": Time.get_unix_time_from_system(),
+		}
+	else:
+		# Debug-visible ripple: attach an impact dict so the debug
+		# formatter surfaces it in the feed while DEBUG_SHOW_SILENT_RIPPLES
+		# is on. The scandal bump below would fire anyway; this just
+		# makes it readable.
+		var ripple_headline: String = ""
+		if DEBUG_SHOW_SILENT_RIPPLES:
+			ripple_headline = "[color=#888][DEBUG • silent ripple][/color] player bribe · %s.scandal +6 (unleaked)" % p.politician_name
+		bribe_event = {
+			"type": "SILENT_RIPPLE" if not DEBUG_SHOW_SILENT_RIPPLES else "NEWS_TICKER",
+			"headline": ripple_headline,
+			"timestamp": Time.get_unix_time_from_system(),
+		}
+	netfeed_history.append(bribe_event)
+	netfeed_event_generated.emit(bribe_event)
+	# Scandal + controversy shift on the politician regardless — the
+	# world moves whether or not the public saw it.
+	p.scandal_level = clamp(p.scandal_level + 6.0, 0.0, 100.0)
+
+	print("Ripple: Bribed %s for %s on the active bill (%d credits). Leaked: %s." % [
+		p.politician_name, direction, cost, str(leaked_publicly),
 	])
 
 func _travel_to_region(target_region: String):
@@ -911,6 +1049,8 @@ func trigger_news_cycle():
 		for o in oligarchs:
 			if o.alive:
 				oligarch_context[o.oligarch_name] = {
+					"company": o.company_name,
+					"title": o.title,
 					"sector": o.sector_of_influence,
 					"wealth": o.wealth,
 					"paranoia": o.paranoia,
@@ -919,22 +1059,229 @@ func trigger_news_cycle():
 					"ambitions": o.ambitions,
 					"profile": o.get_behavioral_profile()
 				}
-		
-		llm.request_netfeed_events(global_economy, oligarch_context)
+
+		# Pack a sample of politicians + NPCs so the LLM can attribute
+		# posts across the whole cast, not just oligarchs. Keep it lean
+		# so the prompt stays within token budget.
+		var politician_context = {}
+		for p in politicians:
+			if p.alive:
+				politician_context[p.politician_name] = {
+					"faction": p.faction,
+					"approval": int(p.public_approval),
+					"scandal": int(p.scandal_level),
+					"corruption": p.corruption,
+				}
+
+		var npc_context = {}
+		var pop_dir = get_node_or_null("/root/PopulationDirector")
+		if pop_dir and "roster" in pop_dir and pop_dir.roster != null:
+			var sample: Array = pop_dir.roster.duplicate()
+			sample.shuffle()
+			var take: int = min(8, sample.size())
+			for i in range(take):
+				var n = sample[i]
+				if n == null or not is_instance_valid(n):
+					continue
+				if "alive" in n and not n.alive:
+					continue
+				var nname: String = str(n.npc_name) if "npc_name" in n else ""
+				if nname == "":
+					continue
+				var entry: Dictionary = {}
+				entry["archetype"] = str(n.archetype) if "archetype" in n else "citizen"
+				if n.has_method("get_behavioral_profile"):
+					entry["mood"] = n.get_behavioral_profile()
+				else:
+					entry["mood"] = ""
+				entry["trust_in_player"] = int(n.trust) if "trust" in n else 0
+				npc_context[nname] = entry
+
+		_netfeed_request_in_flight = true
+		llm.request_netfeed_events(global_economy, oligarch_context, politician_context, npc_context)
 	else:
 		push_warning("LLMManager not found. Cannot evaluate complex conjectures.")
 
 func _on_netfeed_stream_received(events: Array):
+	_netfeed_request_in_flight = false
+	# NEWS_TICKER events drip to the HUD over time. Both NEWS_TICKER and
+	# SILENT_RIPPLE can carry a structured 'impact' dict — we apply it
+	# immediately as bounded deltas to world state. The news the player
+	# reads has REAL consequences; SILENT_RIPPLEs are the same mechanic
+	# but without a headline, for pure off-screen shifts.
 	for event in events:
 		event["timestamp"] = Time.get_unix_time_from_system()
 		var event_type = event.get("type", "NEWS_TICKER")
-		
+		var impact = event.get("impact", null)
+		if impact != null and typeof(impact) == TYPE_DICTIONARY:
+			_apply_systemic_impact(impact)
 		if event_type == "NEWS_TICKER":
-			netfeed_history.append(event)
-			netfeed_event_generated.emit(event)
-			print(">>> [PUBLIC NEWS] " + event.get("headline", ""))
+			var headline: String = str(event.get("headline", ""))
+			if headline == "":
+				continue
+			_netfeed_queue.append(event)
 		elif event_type == "SILENT_RIPPLE":
-			print(">>> [INVISIBLE SHIFT] " + event.get("systemic_impact", ""))
+			var legacy_str: String = str(event.get("systemic_impact", ""))
+			if DEBUG_SHOW_SILENT_RIPPLES:
+				# Surface SILENT_RIPPLEs in the feed with a visible DEBUG
+				# tag so we can audit what the LLM is nudging. Set the flag
+				# to false (top of file) to hide them for release.
+				var debug_line: String = _format_impact_for_debug(impact, legacy_str)
+				if debug_line != "":
+					event["headline"] = "[color=#888][DEBUG • silent ripple][/color] " + debug_line
+					_netfeed_queue.append(event)
+			elif legacy_str != "" and impact == null:
+				print(">>> [INVISIBLE SHIFT] " + legacy_str)
+	print("LLMManager stream: %d headlines queued, drip starting" % _netfeed_queue.size())
+
+
+# Format a silent-ripple impact dict (or a legacy string) as a readable
+# one-line summary so debug mode can surface it in the NetFeed panel.
+func _format_impact_for_debug(impact, legacy_str: String = "") -> String:
+	var parts: Array[String] = []
+	if impact != null and typeof(impact) == TYPE_DICTIONARY:
+		for key in _SYSTEMIC_GLOBAL_CAPS.keys():
+			if impact.has(key):
+				var v: int = int(impact[key])
+				var short: String = key.replace("_delta", "")
+				parts.append("%s %+d" % [short, v])
+		if impact.has("oligarch") and typeof(impact.oligarch) == TYPE_DICTIONARY:
+			var oname: String = str(impact.oligarch.get("name", "?"))
+			for k in _SYSTEMIC_OLIGARCH_CAPS.keys():
+				if impact.oligarch.has(k):
+					parts.append("%s.%s %+d" % [oname, k, int(impact.oligarch[k])])
+		if impact.has("politician") and typeof(impact.politician) == TYPE_DICTIONARY:
+			var pname: String = str(impact.politician.get("name", "?"))
+			for k in _SYSTEMIC_POLITICIAN_CAPS.keys():
+				if impact.politician.has(k):
+					parts.append("%s.%s %+d" % [pname, k, int(impact.politician[k])])
+	if parts.is_empty() and legacy_str != "":
+		return legacy_str
+	return " · ".join(parts) if not parts.is_empty() else ""
+
+
+# =============================================================
+# SYSTEMIC IMPACT — bounded LLM-driven world mutation
+# =============================================================
+# SILENT_RIPPLE events can ship a structured impact dict that nudges
+# world state. Only whitelisted keys with clamped ranges are honored;
+# unknown keys are logged + ignored. This is the "middle path":
+# the LLM narrates AND moves the sim by small increments, but can
+# never swing a variable by more than the caps here.
+const _SYSTEMIC_GLOBAL_CAPS: Dictionary = {
+	"public_tension_delta":     5,     # ±5 per ripple
+	"security_presence_delta":  5,
+	"senate_alignment_delta":   3,
+	"food_price_delta":         20,
+	"tech_price_delta":         50,
+}
+const _SYSTEMIC_OLIGARCH_CAPS: Dictionary = {
+	"controversy":   10,
+	"paranoia":      10,
+	"public_image":  15,
+	"wealth":        50000,   # ±50k per ripple
+}
+const _SYSTEMIC_POLITICIAN_CAPS: Dictionary = {
+	"scandal":   10,
+	"approval":  15,
+}
+
+
+func _apply_systemic_impact(impact: Dictionary) -> void:
+	# --- Global economy deltas ---
+	for key in _SYSTEMIC_GLOBAL_CAPS.keys():
+		if not impact.has(key):
+			continue
+		var raw: float = float(impact[key])
+		var cap: int = int(_SYSTEMIC_GLOBAL_CAPS[key])
+		var delta: int = int(clamp(raw, -cap, cap))
+		var economy_key: String = key.replace("_delta", "")
+		if not global_economy.has(economy_key):
+			continue
+		var new_val: int = int(global_economy[economy_key]) + delta
+		# Clamp 0..100 for normalized sim variables; no upper bound on prices.
+		if economy_key in ["public_tension", "security_presence", "senate_alignment"]:
+			new_val = clamp(new_val, 0, 100)
+		elif economy_key in ["food_price", "tech_price"]:
+			new_val = max(0, new_val)
+		global_economy[economy_key] = new_val
+		print(">>> [RIPPLE] %s %+d → %d" % [economy_key, delta, new_val])
+
+	# --- Oligarch-targeted impacts (by name, since LLM only sees names) ---
+	var oligarch_impact = impact.get("oligarch", null)
+	if oligarch_impact != null and typeof(oligarch_impact) == TYPE_DICTIONARY:
+		var target_name: String = str(oligarch_impact.get("name", ""))
+		var target_o: OligarchData = _find_oligarch_by_name(target_name)
+		if target_o != null and target_o.alive:
+			for k in _SYSTEMIC_OLIGARCH_CAPS.keys():
+				if not oligarch_impact.has(k):
+					continue
+				var raw: float = float(oligarch_impact[k])
+				var cap: int = int(_SYSTEMIC_OLIGARCH_CAPS[k])
+				var delta: int = int(clamp(raw, -cap, cap))
+				match k:
+					"controversy":  target_o.controversy_level = clamp(target_o.controversy_level + delta, 0.0, 100.0)
+					"paranoia":     target_o.paranoia = clamp(target_o.paranoia + delta, 0.0, 100.0)
+					"public_image": target_o.public_image = clamp(target_o.public_image + delta, -100.0, 100.0)
+					"wealth":       target_o.wealth = max(0, target_o.wealth + delta)
+				print(">>> [RIPPLE] %s.%s %+d" % [target_o.oligarch_name, k, delta])
+		elif target_name != "":
+			push_warning("Systemic impact named unknown oligarch: " + target_name)
+
+	# --- Politician-targeted impacts ---
+	var politician_impact = impact.get("politician", null)
+	if politician_impact != null and typeof(politician_impact) == TYPE_DICTIONARY:
+		var target_name: String = str(politician_impact.get("name", ""))
+		var target_p: PoliticianData = _find_politician_by_name(target_name)
+		if target_p != null and target_p.alive:
+			for k in _SYSTEMIC_POLITICIAN_CAPS.keys():
+				if not politician_impact.has(k):
+					continue
+				var raw: float = float(politician_impact[k])
+				var cap: int = int(_SYSTEMIC_POLITICIAN_CAPS[k])
+				var delta: int = int(clamp(raw, -cap, cap))
+				match k:
+					"scandal":   target_p.scandal_level = clamp(target_p.scandal_level + delta, 0.0, 100.0)
+					"approval":  target_p.public_approval = clamp(target_p.public_approval + delta, -100.0, 100.0)
+				print(">>> [RIPPLE] %s.%s %+d" % [target_p.politician_name, k, delta])
+		elif target_name != "":
+			push_warning("Systemic impact named unknown politician: " + target_name)
+
+	world_state_changed.emit()
+
+
+func _find_oligarch_by_name(name: String) -> OligarchData:
+	if name == "":
+		return null
+	for o in oligarchs:
+		if o.oligarch_name == name:
+			return o
+	return null
+
+
+func _find_politician_by_name(name: String) -> PoliticianData:
+	if name == "":
+		return null
+	for p in politicians:
+		if p.politician_name == name:
+			return p
+	return null
+
+
+# Fires every NETFEED_DRIP_SECONDS. Pops the oldest queued event,
+# publishes it to the HUD + history. Pulls a fresh batch from LLM when
+# the queue is running low so the feed never starves.
+func _on_netfeed_drip() -> void:
+	if _netfeed_queue.size() > 0:
+		var event: Dictionary = _netfeed_queue.pop_front()
+		netfeed_history.append(event)
+		netfeed_event_generated.emit(event)
+		print(">>> [PUBLIC NEWS] " + str(event.get("headline", "")))
+
+	# Top up before the well runs dry. Guard in-flight so we don't fire
+	# multiple concurrent requests at the LLM.
+	if _netfeed_queue.size() <= NETFEED_QUEUE_REFILL_THRESHOLD and not _netfeed_request_in_flight:
+		trigger_news_cycle()
 
 # ---------------------------------------------------------
 # QUERIES
@@ -1319,7 +1666,3 @@ func _complete_job(job: Dictionary) -> void:
 	netfeed_event_generated.emit(event)
 
 	job_completed.emit(job)
-
-
-
-

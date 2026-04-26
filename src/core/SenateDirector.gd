@@ -24,6 +24,13 @@ var active_bill: Dictionary = {}      # current bill in debate; {} if none
 var bill_history: Array[Dictionary] = []
 var _next_bill_index: int = 0
 
+# Failed-bill cooldown. A bill that the Senate has voted down cannot be
+# re-proposed for 90 in-game days (3 months). Entries stay in the list
+# forever; _recently_failed_titles() prunes by game day on read.
+var _failed_bills: Array[Dictionary] = []   # [{ title: String, norm_key: String, fail_day: int }]
+const FAIL_COOLDOWN_DAYS: int = 90
+const FALLBACK_COOLDOWN_WINDOW: int = 12    # used to rotate offline fallback titles
+
 
 func register_politicians(pols: Array) -> void:
 	politicians = pols
@@ -103,31 +110,47 @@ func _faction_pressure(faction: String, tension: float, senate_alignment: float)
 
 func _propose_bill_async(sponsor: PoliticianData, world: Dictionary, oligarchs: Array, recent_netfeed: Array) -> void:
 	_next_bill_index += 1
+	var forbidden: Array = _recent_bill_topics()
+	for t in _recently_failed_titles():
+		if not (t in forbidden):
+			forbidden.append(t)
 	var request: Dictionary = {
 		"sponsor_context": sponsor.get_llm_context_string(),
 		"world_snapshot": world,
 		"recent_netfeed": recent_netfeed,
 		"active_oligarch_ambitions": _collect_active_ambitions(oligarchs),
-		"forbidden_topics": _recent_bill_topics(),
+		"forbidden_topics": forbidden,
+		"cooldown_failed_titles": _recently_failed_titles(),
+		"cooldown_window_days": FAIL_COOLDOWN_DAYS,
 		"effect_whitelist": _effect_whitelist(),
 	}
-	# LLMManager is expected to post back via _on_bill_generated with parsed JSON.
-	# (Mirrors the pattern used for oligarch/region generation.)
+	# LLMManager is the only bill source. If it's missing, the cycle is skipped.
 	if has_node("/root/LLMManager"):
 		var llm = get_node("/root/LLMManager")
 		llm.request_bill(request, Callable(self, "_on_bill_generated").bind(sponsor))
 	else:
-		_on_bill_generated(_fallback_bill(sponsor), sponsor)
+		push_warning("SenateDirector: LLMManager missing — skipping bill cycle.")
+		_next_bill_index -= 1
 
 
 func _on_bill_generated(result: Dictionary, sponsor: PoliticianData) -> void:
-	var bill: Dictionary
+	# Bills are LLM-generated only. If the model failed or returned a title
+	# already in the 90-day cooldown, we SKIP this Senate cycle entirely —
+	# no placeholder bill is ever emitted. Next cycle will try again.
 	if result.is_empty() or result.has("error") or not result.has("title"):
-		push_warning("SenateDirector: LLM failed, using fallback bill")
-		bill = _fallback_bill(sponsor)
-	else:
-		bill = result
+		push_warning("SenateDirector: LLM failed to generate a bill this cycle — skipping (no placeholder).")
+		active_bill = {}
+		_next_bill_index -= 1   # reuse this index next cycle
+		return
 
+	var failed_keys: Array = _recently_failed_keys()
+	if _normalize_title(String(result.get("title", ""))) in failed_keys:
+		push_warning("SenateDirector: LLM returned a title still in 90-day cooldown — skipping cycle.")
+		active_bill = {}
+		_next_bill_index -= 1
+		return
+
+	var bill: Dictionary = result
 	bill["bill_id"] = "bill_%05d" % _next_bill_index
 	bill["sponsor_id"] = sponsor.politician_id
 	active_bill = bill
@@ -171,8 +194,52 @@ func _tally_and_resolve(world: Dictionary, oligarchs: Array) -> void:
 	active_bill["margin"] = yes - no
 	active_bill["vote_record"] = votes
 	bill_history.append(active_bill)
+	if result == "FAIL":
+		_record_failed_bill(active_bill)
 	emit_signal("bill_resolved", active_bill, result, votes)
 	active_bill = {}
+
+
+func _record_failed_bill(bill: Dictionary) -> void:
+	var fail_day: int = 0
+	if Engine.has_singleton("TimeSystem") or has_node("/root/TimeSystem"):
+		var ts = get_node_or_null("/root/TimeSystem")
+		if ts != null and "day" in ts:
+			fail_day = int(ts.day)
+	_failed_bills.append({
+		"title":    String(bill.get("title", "")),
+		"norm_key": _normalize_title(String(bill.get("title", ""))),
+		"fail_day": fail_day,
+	})
+
+
+func _recently_failed_titles() -> Array:
+	# Titles still inside the 90-day cooldown window.
+	var cur_day: int = 0
+	var ts = get_node_or_null("/root/TimeSystem")
+	if ts != null and "day" in ts:
+		cur_day = int(ts.day)
+	var out: Array = []
+	for entry in _failed_bills:
+		if cur_day - int(entry.get("fail_day", 0)) < FAIL_COOLDOWN_DAYS:
+			out.append(String(entry.get("title", "")))
+	return out
+
+
+func _recently_failed_keys() -> Array:
+	var cur_day: int = 0
+	var ts = get_node_or_null("/root/TimeSystem")
+	if ts != null and "day" in ts:
+		cur_day = int(ts.day)
+	var out: Array = []
+	for entry in _failed_bills:
+		if cur_day - int(entry.get("fail_day", 0)) < FAIL_COOLDOWN_DAYS:
+			out.append(String(entry.get("norm_key", "")))
+	return out
+
+
+func _normalize_title(t: String) -> String:
+	return t.strip_edges().to_lower()
 
 
 func _compute_oligarch_stances(bill: Dictionary, oligarchs: Array) -> Dictionary:
@@ -227,32 +294,6 @@ func _effect_whitelist() -> Dictionary:
 		"senate_alignment":  {"min": -20, "max": 20},
 	}
 
-# =============================================================
-# FALLBACK — offline / LLM-failure path
-# =============================================================
-
-func _fallback_bill(sponsor: PoliticianData) -> Dictionary:
-	var ideo: float = 0.0
-	match sponsor.faction:
-		"CORPORATE_BLOC": ideo = 0.6
-		"POPULIST":       ideo = -0.6
-		"REFORM":         ideo = -0.3
-		"INDEPENDENT":    ideo = 0.1
-	return {
-		"title": "Omnibus Appropriations Amendment",
-		"summary": "Adjusts sector allocations based on quarterly projections.",
-		"stated_rationale": "Fiscal responsibility.",
-		"honest_rationale": "",
-		"ideological_score": ideo,
-		"faction_preferences": {
-			"CORPORATE_BLOC":  0.5,
-			"POPULIST":       -0.5,
-			"REFORM":         -0.2,
-			"INDEPENDENT":     0.0,
-		},
-		"proposed_effects": {
-			"senate_alignment": int(ideo * 10.0),
-		},
-		"scandal_hooks": [],
-		"netfeed_flavor": "routine legislation; small print, big effect",
-	}
+# Bills are LLM-generated ONLY. There is no hardcoded fallback — if the LLM
+# call fails, we skip the Senate cycle rather than emit a template bill.
+# See _on_bill_generated() above.

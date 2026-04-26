@@ -31,6 +31,17 @@ func _process(delta: float) -> void:
 
 func _input(event: InputEvent) -> void:
     _handle_zooming(event)
+    # C key — emergency recenter. Resets angle to default isometric and
+    # re-locks follow onto the current target. Useful if the camera ever
+    # drifts or the player gets lost among the buildings.
+    if event is InputEventKey and event.pressed and not event.echo:
+        if event.keycode == KEY_C:
+            rotation_degrees = Vector3(-30, 45, 0)
+            position.y = 50.0
+            _current_zoom = 15.0
+            size = _current_zoom
+            if target != null:
+                _is_following = true
 
 func set_target(new_target: Node3D) -> void:
     target = new_target

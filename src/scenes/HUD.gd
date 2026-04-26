@@ -36,6 +36,11 @@ var _state_text: RichTextLabel
 var _netfeed_panel: Panel
 var _netfeed_title: Label
 var _netfeed_text: RichTextLabel
+var _netfeed_history: Array[String] = []   # newest first; last N formatted headlines
+const NETFEED_MAX_ENTRIES: int = 8
+
+var _senate_recent: Array[String] = []     # last N formatted vote-result blocks
+const SENATE_RECENT_MAX: int = 6
 
 var _senate_panel: Panel
 var _senate_text: RichTextLabel
@@ -96,6 +101,27 @@ var _gig_title: Label
 var _gig_text: RichTextLabel
 var _gig_status: Label
 var _gig_visible: bool = false
+
+# Full-screen loading overlay — shown between BEGIN and the first
+# spawned player. Blocks the 3D view while async generation finishes.
+var _loading_overlay: Control
+var _loading_status_label: Label
+var _loading_phase: String = ""            # most recent phase text, e.g. "generating oligarchs..."
+var _loading_bar_track: ColorRect
+var _loading_bar_fill: ColorRect
+var _loading_percent_label: Label
+var _loading_percent: int = 0
+const LOADING_BAR_WIDTH: float = 420.0
+const LOADING_BAR_HEIGHT: float = 14.0
+
+
+var _senate_resolved_ids: Array[String] = []    # bill_ids already recorded — dedupe re-emits
+
+# Bottom-left debug readout — live LLM cost. Only visible when
+# WorldDirector.DEBUG_SHOW_SILENT_RIPPLES is true.
+var _debug_cost_panel: Panel
+var _debug_cost_label: RichTextLabel
+
 
 # Rent-due modal (fires on month rollover via PlayerManager.rent_due_prompt)
 var _rent_root: Control
@@ -213,11 +239,15 @@ func _ready() -> void:
 	_build_rent_modal()
 	_build_wc_interview_modal()
 	_build_wc_letter_modal()
+	_build_loading_overlay()
+	_build_debug_cost_panel()
 
 	WorldDirector.world_state_changed.connect(_refresh_state)
 	WorldDirector.netfeed_event_generated.connect(_on_netfeed_event)
 	WorldDirector.playthrough_setup_complete.connect(_on_playthrough_ready)
 	WorldDirector.victory_achieved.connect(_on_victory)
+	if not WorldDirector.generation_progress.is_connected(_on_generation_progress):
+		WorldDirector.generation_progress.connect(_on_generation_progress)
 
 	# Senate hooks (autoload-safe)
 	var senate = get_node_or_null("/root/SenateDirector")
@@ -292,6 +322,202 @@ func show_loading(text: String) -> void:
 	_netfeed_title.text = "SYSTEM // BOOT"
 	_netfeed_title.add_theme_color_override("font_color", COL_WARN)
 	_netfeed_text.text = "[i][color=#%s]%s[/color][/i]" % [_hex(COL_DIM), text]
+	# Also update the full-screen overlay's status line, if it's up.
+	_loading_phase = text
+	if _loading_status_label and _loading_overlay and _loading_overlay.visible:
+		_loading_status_label.text = text
+
+
+# -------------------------------------------------------------
+# Full-screen loading overlay — shown after BEGIN until landscape
+# finishes spawning. Opaque backdrop blocks the half-built world
+# from peeking through.
+# -------------------------------------------------------------
+func _build_loading_overlay() -> void:
+	_loading_overlay = Control.new()
+	_loading_overlay.anchor_right = 1.0
+	_loading_overlay.anchor_bottom = 1.0
+	_loading_overlay.visible = false
+	_loading_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_loading_overlay.z_index = 200
+	add_child(_loading_overlay)
+
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.02, 0.02, 0.04, 1.0)  # fully opaque — hides the 3D
+	backdrop.anchor_right = 1.0
+	backdrop.anchor_bottom = 1.0
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_loading_overlay.add_child(backdrop)
+
+	var banner := _make_label("// PREPARING THE YEAR", COL_ACCENT, 22, true)
+	banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	banner.anchor_left = 0.0
+	banner.anchor_right = 1.0
+	banner.anchor_top = 0.5
+	banner.anchor_bottom = 0.5
+	banner.offset_left = 0
+	banner.offset_right = 0
+	banner.offset_top = -40
+	banner.offset_bottom = -12
+	_loading_overlay.add_child(banner)
+
+	_loading_status_label = _make_label("", COL_DIM, 13, false)
+	_loading_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_loading_status_label.anchor_left = 0.0
+	_loading_status_label.anchor_right = 1.0
+	_loading_status_label.anchor_top = 0.5
+	_loading_status_label.anchor_bottom = 0.5
+	_loading_status_label.offset_left = -400
+	_loading_status_label.offset_right = 400
+	_loading_status_label.offset_top = 0
+	_loading_status_label.offset_bottom = 24
+	_loading_overlay.add_child(_loading_status_label)
+
+	# Progress bar — a track rect + fill rect stacked, with a percent
+	# label to the right. Fill width animates in update_loading_progress.
+	_loading_bar_track = ColorRect.new()
+	_loading_bar_track.color = Color(0.15, 0.15, 0.18, 1.0)
+	_loading_bar_track.anchor_left = 0.5
+	_loading_bar_track.anchor_right = 0.5
+	_loading_bar_track.anchor_top = 0.5
+	_loading_bar_track.anchor_bottom = 0.5
+	_loading_bar_track.offset_left = -LOADING_BAR_WIDTH * 0.5
+	_loading_bar_track.offset_right = LOADING_BAR_WIDTH * 0.5
+	_loading_bar_track.offset_top = 32
+	_loading_bar_track.offset_bottom = 32 + LOADING_BAR_HEIGHT
+	_loading_overlay.add_child(_loading_bar_track)
+
+	_loading_bar_fill = ColorRect.new()
+	_loading_bar_fill.color = COL_ACCENT
+	_loading_bar_fill.anchor_left = 0.0
+	_loading_bar_fill.anchor_right = 0.0   # width controlled in update
+	_loading_bar_fill.anchor_top = 0.0
+	_loading_bar_fill.anchor_bottom = 1.0
+	_loading_bar_fill.offset_left = 0
+	_loading_bar_fill.offset_right = 0
+	_loading_bar_fill.offset_top = 0
+	_loading_bar_fill.offset_bottom = 0
+	_loading_bar_track.add_child(_loading_bar_fill)
+
+	_loading_percent_label = _make_label("0%", COL_COOL, 12, true)
+	_loading_percent_label.anchor_left = 0.5
+	_loading_percent_label.anchor_right = 0.5
+	_loading_percent_label.anchor_top = 0.5
+	_loading_percent_label.anchor_bottom = 0.5
+	_loading_percent_label.offset_left = LOADING_BAR_WIDTH * 0.5 + 10
+	_loading_percent_label.offset_right = LOADING_BAR_WIDTH * 0.5 + 80
+	_loading_percent_label.offset_top = 32
+	_loading_percent_label.offset_bottom = 32 + LOADING_BAR_HEIGHT
+	_loading_overlay.add_child(_loading_percent_label)
+
+	var hint := _make_label("One year. Four ways to win. Two to lose.", COL_DIM, 11, false)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.anchor_left = 0.0
+	hint.anchor_right = 1.0
+	hint.anchor_top = 0.5
+	hint.anchor_bottom = 0.5
+	hint.offset_top = 64
+	hint.offset_bottom = 88
+	_loading_overlay.add_child(hint)
+
+
+func show_loading_overlay(status: String = "") -> void:
+	if _loading_overlay == null:
+		return
+	if status == "":
+		status = _loading_phase if _loading_phase != "" else "> generating world…"
+	_loading_status_label.text = status
+	_loading_overlay.visible = true
+
+
+func hide_loading_overlay() -> void:
+	if _loading_overlay and _loading_overlay.visible:
+		_loading_overlay.visible = false
+
+
+# -------------------------------------------------------------
+# Debug cost readout — bottom-left corner, live LLM spend.
+# Hidden entirely unless WorldDirector.DEBUG_SHOW_SILENT_RIPPLES is true.
+# -------------------------------------------------------------
+func _build_debug_cost_panel() -> void:
+	_debug_cost_panel = _make_panel(COL_BG)
+	_debug_cost_panel.anchor_left = 0.0
+	_debug_cost_panel.anchor_right = 0.0
+	_debug_cost_panel.anchor_top = 1.0
+	_debug_cost_panel.anchor_bottom = 1.0
+	_debug_cost_panel.offset_left = 20
+	_debug_cost_panel.offset_right = 320
+	_debug_cost_panel.offset_top = -76
+	_debug_cost_panel.offset_bottom = -20
+	_debug_cost_panel.visible = false
+
+	_debug_cost_label = RichTextLabel.new()
+	_debug_cost_label.bbcode_enabled = true
+	_debug_cost_label.fit_content = true
+	_debug_cost_label.scroll_active = false
+	_debug_cost_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_debug_cost_label.anchor_left = 0.0
+	_debug_cost_label.anchor_top = 0.0
+	_debug_cost_label.anchor_right = 1.0
+	_debug_cost_label.anchor_bottom = 1.0
+	_debug_cost_label.offset_left = PANEL_PAD
+	_debug_cost_label.offset_top = PANEL_PAD - 4
+	_debug_cost_label.offset_right = -PANEL_PAD
+	_debug_cost_label.offset_bottom = -PANEL_PAD + 2
+	_debug_cost_label.add_theme_color_override("default_color", COL_FG)
+	_debug_cost_label.add_theme_font_size_override("normal_font_size", 11)
+	_debug_cost_panel.add_child(_debug_cost_label)
+
+	_refresh_debug_cost()
+
+
+func _refresh_debug_cost() -> void:
+	if _debug_cost_panel == null:
+		return
+	# Tied to the same debug flag that controls silent-ripple visibility.
+	if not WorldDirector.DEBUG_SHOW_SILENT_RIPPLES:
+		_debug_cost_panel.visible = false
+		return
+	var llm = get_node_or_null("/root/LLMManager")
+	if llm == null:
+		_debug_cost_panel.visible = false
+		return
+	_debug_cost_panel.visible = true
+	var cost_color: Color = COL_WARN if llm.total_cost_usd > 0.10 else COL_COOL
+	var lines: Array[String] = []
+	lines.append("[color=#%s]// DEBUG[/color]  [color=#%s]llm spend[/color]" % [
+		_hex(COL_DIM), _hex(COL_DIM),
+	])
+	lines.append("[b][color=#%s]$%.4f[/color][/b]   [color=#%s]%d calls · %d in / %d out[/color]" % [
+		_hex(cost_color),
+		float(llm.total_cost_usd),
+		_hex(COL_DIM),
+		int(llm.total_llm_calls),
+		int(llm.total_prompt_tokens),
+		int(llm.total_completion_tokens),
+	])
+	_debug_cost_label.text = "\n".join(lines)
+
+
+func _on_generation_progress(pct: int, phase: String) -> void:
+	update_loading_progress(pct, phase)
+
+
+# Public: update the loading bar. pct is 0..100, phase is the human-
+# readable label ("regions received", "oligarchs named", "senate sworn in").
+# Called from WorldDirector as each generation step finishes.
+func update_loading_progress(pct: int, phase: String) -> void:
+	_loading_percent = clamp(pct, 0, 100)
+	if _loading_percent_label:
+		_loading_percent_label.text = "%d%%" % _loading_percent
+	if _loading_bar_fill:
+		# Drive fill width via anchor_right — the fill lives in the
+		# track's local space, so anchor_right=fraction is the cleanest
+		# way to make it fill the exact percentage of the parent.
+		_loading_bar_fill.anchor_right = float(_loading_percent) / 100.0
+	if _loading_status_label:
+		_loading_status_label.text = phase
+		_loading_phase = phase
 
 
 func show_oligarch_target_modal(action_id: String) -> void:
@@ -468,6 +694,7 @@ func _refresh_state() -> void:
 			])
 
 	_state_text.text = "\n".join(lines)
+	_refresh_debug_cost()
 
 
 func _on_credits_or_heat_changed(_new: int, _delta: int, _reason: String) -> void:
@@ -547,38 +774,97 @@ func _econ_row(key: String, value, unit: String) -> String:
 # -------------------------------------------------------------
 # NetFeed panel (top-right)
 # -------------------------------------------------------------
+var _netfeed_expand_btn: Button
+var _senate_expand_btn: Button
+var _netfeed_expanded: bool = false
+var _senate_expanded: bool = false
+
+
 func _build_netfeed_panel() -> void:
 	_netfeed_panel = _make_panel(COL_BG)
-	_netfeed_panel.anchor_left = 1.0
-	_netfeed_panel.anchor_top = 0.0
-	_netfeed_panel.offset_left = -460
-	_netfeed_panel.offset_top = 20
-	_netfeed_panel.offset_right = -20
-	_netfeed_panel.offset_bottom = 160
+	_apply_netfeed_layout()
 
 	_netfeed_title = _make_label("NETFEED // STANDBY", COL_HOT, 11, true)
 	_netfeed_title.offset_left = PANEL_PAD
 	_netfeed_title.offset_top = PANEL_PAD - 2
-	_netfeed_title.offset_right = 440 - PANEL_PAD
+	_netfeed_title.offset_right = -PANEL_PAD - 32     # leave room for expand button
+	_netfeed_title.anchor_right = 1.0
 	_netfeed_title.offset_bottom = PANEL_PAD + 16
 	_netfeed_panel.add_child(_netfeed_title)
 
+	# Expand/collapse toggle in the top-right corner.
+	_netfeed_expand_btn = Button.new()
+	_netfeed_expand_btn.text = "⤢"
+	_netfeed_expand_btn.flat = true
+	_netfeed_expand_btn.tooltip_text = "Expand (or collapse) NetFeed to full height"
+	_netfeed_expand_btn.anchor_left = 1.0
+	_netfeed_expand_btn.anchor_right = 1.0
+	_netfeed_expand_btn.anchor_top = 0.0
+	_netfeed_expand_btn.offset_left = -28
+	_netfeed_expand_btn.offset_right = -6
+	_netfeed_expand_btn.offset_top = 4
+	_netfeed_expand_btn.offset_bottom = 24
+	_netfeed_expand_btn.add_theme_color_override("font_color", COL_DIM)
+	_netfeed_expand_btn.add_theme_color_override("font_hover_color", COL_ACCENT)
+	_netfeed_expand_btn.pressed.connect(_toggle_netfeed_expand)
+	_netfeed_panel.add_child(_netfeed_expand_btn)
+
 	_netfeed_text = RichTextLabel.new()
 	_netfeed_text.bbcode_enabled = true
-	_netfeed_text.fit_content = true
-	_netfeed_text.scroll_active = false
-	_netfeed_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_netfeed_text.fit_content = false
+	_netfeed_text.scroll_active = true   # wheel-scrollable for older entries
 	_netfeed_text.anchor_left = 0.0
 	_netfeed_text.anchor_top = 0.0
 	_netfeed_text.anchor_right = 1.0
+	_netfeed_text.anchor_bottom = 1.0    # fills parent vertically — grows with expand
 	_netfeed_text.offset_left = PANEL_PAD
 	_netfeed_text.offset_top = PANEL_PAD + 24
 	_netfeed_text.offset_right = -PANEL_PAD
-	_netfeed_text.offset_bottom = 140
+	_netfeed_text.offset_bottom = -PANEL_PAD
 	_netfeed_text.add_theme_color_override("default_color", COL_FG)
 	_netfeed_text.add_theme_font_size_override("normal_font_size", 14)
 	_netfeed_text.text = "[i][color=#%s]> waiting for first broadcast...[/color][/i]" % _hex(COL_DIM)
+	# STOP (not IGNORE) so the label can receive hover events on [url]
+	# metas — that's what lets hovering a name pop the entity tooltip.
+	_netfeed_text.mouse_filter = Control.MOUSE_FILTER_STOP
+	_netfeed_text.meta_hover_started.connect(_on_netfeed_meta_hover_started)
+	_netfeed_text.meta_hover_ended.connect(_on_netfeed_meta_hover_ended)
 	_netfeed_panel.add_child(_netfeed_text)
+
+	_build_entity_tooltip()
+
+
+# Anchor the NetFeed to the top half of the right column (collapsed) or
+# the full right column (expanded). Called at build time and on toggle.
+func _apply_netfeed_layout() -> void:
+	_netfeed_panel.anchor_left = 1.0
+	_netfeed_panel.anchor_right = 1.0
+	_netfeed_panel.anchor_top = 0.0
+	_netfeed_panel.offset_left = -460
+	_netfeed_panel.offset_right = -20
+	if _netfeed_expanded:
+		_netfeed_panel.anchor_bottom = 1.0
+		_netfeed_panel.offset_top = 20
+		_netfeed_panel.offset_bottom = -20
+	else:
+		_netfeed_panel.anchor_bottom = 0.5
+		_netfeed_panel.offset_top = 20
+		_netfeed_panel.offset_bottom = -6
+
+
+func _toggle_netfeed_expand() -> void:
+	_netfeed_expanded = not _netfeed_expanded
+	if _netfeed_expanded and _senate_expanded:
+		# Only one expanded at a time — collapse the other.
+		_senate_expanded = false
+		_apply_senate_layout()
+		if _senate_panel:
+			_senate_panel.visible = true
+	if _senate_panel:
+		_senate_panel.visible = not _netfeed_expanded
+	_apply_netfeed_layout()
+	if _netfeed_expand_btn:
+		_netfeed_expand_btn.text = "⤡" if _netfeed_expanded else "⤢"
 
 
 func _on_netfeed_event(event_data: Dictionary) -> void:
@@ -587,7 +873,273 @@ func _on_netfeed_event(event_data: Dictionary) -> void:
 		return
 	_netfeed_title.text = "NETFEED // LIVE"
 	_netfeed_title.add_theme_color_override("font_color", COL_ACCENT)
-	_netfeed_text.text = "[color=#%s]▸[/color] %s" % [_hex(COL_ACCENT), headline]
+	# Prepend newest to the history, truncate to max. Annotate names now
+	# (names might leave the roster later — e.g. oligarch assassinated —
+	# so we freeze the markup at emit time). Each entry gets the in-game
+	# timestamp it was surfaced at.
+	var ts_prefix: String = "[color=#%s]%s[/color] " % [_hex(COL_DIM), _format_game_time()]
+	var formatted: String = "%s[color=#%s]▸[/color] %s" % [ts_prefix, _hex(COL_ACCENT), _annotate_entities(headline)]
+	_netfeed_history.push_front(formatted)
+	if _netfeed_history.size() > NETFEED_MAX_ENTRIES:
+		_netfeed_history.resize(NETFEED_MAX_ENTRIES)
+	_netfeed_text.text = "\n\n".join(_netfeed_history)
+
+
+# Compact in-game timestamp — "M3 D12 · 14:30". Used as a prefix on
+# NetFeed headlines and Senate bill entries so the player can trace
+# when things happened across the run.
+func _format_game_time() -> String:
+	var ts := get_node_or_null("/root/TimeSystem")
+	if ts == null:
+		return "M? D? · ??:??"
+	return "M%d D%d · %s" % [int(ts.month), int(ts.day_of_month), str(ts.clock_string())]
+
+
+# Scan a headline for oligarch / politician / NPC names and wrap each
+# match in a [url=kind:id]name[/url] BBCode tag. Underlines + makes
+# hoverable. For oligarchs and politicians, append the sector/faction.
+# For NPCs, append the archetype so the feed is readable without hover.
+# Longer matches win so "Arkady Stroma" replaces as a unit before
+# "Arkady" alone would.
+func _annotate_entities(text: String) -> String:
+	var matches: Array = []   # [{name, meta, length, tag}]
+	for o in WorldDirector.oligarchs:
+		var full: String = str(o.oligarch_name)
+		if full != "" and full in text:
+			matches.append({
+				"name": full,
+				"meta": "oligarch:" + str(o.oligarch_id),
+				"length": full.length(),
+				"tag": str(o.sector_of_influence),
+			})
+	for p in WorldDirector.politicians:
+		var pname: String = str(p.politician_name)
+		if pname != "" and pname in text:
+			matches.append({
+				"name": pname,
+				"meta": "politician:" + str(p.politician_id),
+				"length": pname.length(),
+				"tag": str(p.faction),
+			})
+	var pop_dir = get_node_or_null("/root/PopulationDirector")
+	if pop_dir and "roster" in pop_dir:
+		for n in pop_dir.roster:
+			var nname: String = str(n.npc_name) if "npc_name" in n else ""
+			if nname != "" and nname in text:
+				matches.append({
+					"name": nname,
+					"meta": "npc:" + str(n.npc_id),
+					"length": nname.length(),
+					"tag": _npc_class_label(n),
+				})
+	matches.sort_custom(func(a, b): return int(a.length) > int(b.length))
+	var out := text
+	for m in matches:
+		var tag_suffix: String = ""
+		if str(m.tag) != "":
+			tag_suffix = " [color=#%s](%s)[/color]" % [HudTheme.hex(HudTheme.COL_DIM), str(m.tag)]
+		var replacement: String = "[url=%s][u]%s[/u][/url]%s" % [str(m.meta), str(m.name), tag_suffix]
+		out = out.replace(str(m.name), replacement)
+	return out
+
+
+# -------------------------------------------------------------
+# Entity tooltip — popup panel shown on hover over a NetFeed name.
+# -------------------------------------------------------------
+var _entity_tooltip: Panel
+var _entity_tooltip_label: RichTextLabel
+
+const TOOLTIP_WIDTH: int = 360
+const TOOLTIP_PAD: int = 12
+
+
+func _build_entity_tooltip() -> void:
+	# Opaque panel with a 2px accent border so it pops off siblings.
+	# Size is set per-hover in _size_tooltip_to_content so the panel
+	# auto-fits whatever the label renders. No fixed minimum.
+	_entity_tooltip = Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.04, 0.04, 0.06, 1.0)
+	sb.border_width_left = 2
+	sb.border_width_right = 2
+	sb.border_width_top = 2
+	sb.border_width_bottom = 2
+	sb.border_color = COL_ACCENT
+	_entity_tooltip.add_theme_stylebox_override("panel", sb)
+	_entity_tooltip.visible = false
+	_entity_tooltip.top_level = true
+	_entity_tooltip.z_index = 1000
+	_entity_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Start with a sane non-zero size so even if sizing fails the panel
+	# is visible. _size_tooltip_to_content overrides on each hover.
+	_entity_tooltip.size = Vector2(TOOLTIP_WIDTH, 140)
+	add_child(_entity_tooltip)
+
+	# Label uses explicit positioning (not anchors) because the parent
+	# panel is top_level with a size driven by the label's own
+	# get_content_height(). fit_content = true + explicit width = auto
+	# vertical sizing that matches the text exactly.
+	_entity_tooltip_label = RichTextLabel.new()
+	_entity_tooltip_label.bbcode_enabled = true
+	_entity_tooltip_label.fit_content = true
+	_entity_tooltip_label.scroll_active = false
+	_entity_tooltip_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_entity_tooltip_label.position = Vector2(TOOLTIP_PAD, TOOLTIP_PAD)
+	_entity_tooltip_label.size.x = TOOLTIP_WIDTH - TOOLTIP_PAD * 2
+	_entity_tooltip_label.add_theme_color_override("default_color", COL_FG)
+	_entity_tooltip_label.add_theme_font_size_override("normal_font_size", 12)
+	_entity_tooltip.add_child(_entity_tooltip_label)
+
+
+func _on_netfeed_meta_hover_started(meta) -> void:
+	var meta_str: String = str(meta)
+	var parts: PackedStringArray = meta_str.split(":", true, 1)
+	if parts.size() < 2:
+		return
+	var kind: String = parts[0]
+	var id: String = parts[1]
+	var body: String = ""
+	match kind:
+		"oligarch":
+			body = _format_oligarch_tooltip(id)
+		"politician":
+			body = _format_politician_tooltip(id)
+		"npc":
+			body = _format_npc_tooltip(id)
+	if body == "":
+		return
+	_entity_tooltip_label.text = body
+	_size_tooltip_to_content()
+	_position_tooltip_near_mouse()
+	_entity_tooltip.visible = true
+
+
+# After the label's text is set, resize the panel so it wraps the
+# RichTextLabel's rendered content. Using custom_minimum_size (not
+# reset_size) so the explicit width sticks while fit_content drives
+# the height. get_content_height needs a laid-out width to return a
+# non-zero value, so we lock width first.
+func _size_tooltip_to_content() -> void:
+	if _entity_tooltip_label == null or _entity_tooltip == null:
+		return
+	var label_w: int = TOOLTIP_WIDTH - TOOLTIP_PAD * 2
+	_entity_tooltip_label.custom_minimum_size = Vector2(label_w, 0)
+	_entity_tooltip_label.size = Vector2(label_w, 0)
+	# fit_content + bbcode_enabled + a fixed width → label will measure
+	# the wrapped text. Force a layout pass so get_content_height is fresh.
+	_entity_tooltip_label.queue_redraw()
+	var content_h: float = _entity_tooltip_label.get_content_height()
+	# Fallback — if content_h is 0 (first-frame race), use a sane default
+	# based on line count so the tooltip is still visible.
+	if content_h <= 0.0:
+		var line_count: int = _entity_tooltip_label.text.count("\n") + 1
+		content_h = float(line_count) * 18.0
+	_entity_tooltip_label.size = Vector2(label_w, content_h)
+	_entity_tooltip.size = Vector2(TOOLTIP_WIDTH, content_h + TOOLTIP_PAD * 2)
+
+
+func _on_netfeed_meta_hover_ended(_meta) -> void:
+	_entity_tooltip.visible = false
+
+
+func _position_tooltip_near_mouse() -> void:
+	var mouse_pos: Vector2 = get_viewport().get_mouse_position()
+	var w: float = _entity_tooltip.size.x
+	var h: float = _entity_tooltip.size.y
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	# Offset up-and-right so the cursor doesn't cover the tooltip.
+	# Clamp to viewport so it stays on-screen even at edges.
+	var x: float = clamp(mouse_pos.x + 18, 0, vp.x - w)
+	var y: float = clamp(mouse_pos.y - h - 12, 0, vp.y - h)
+	_entity_tooltip.position = Vector2(x, y)
+
+
+func _format_oligarch_tooltip(oligarch_id: String) -> String:
+	for o in WorldDirector.oligarchs:
+		if o.oligarch_id != oligarch_id:
+			continue
+		var lines := PackedStringArray()
+		lines.append("[b][color=#%s]%s[/color][/b]" % [_hex(COL_ACCENT), o.oligarch_name])
+		lines.append("[color=#%s]%s of %s[/color]" % [_hex(COL_DIM), o.title, o.company_name])
+		lines.append("[color=#%s]%s sector  ·  %s[/color]" % [
+			_hex(COL_COOL), o.sector_of_influence, o.get_behavioral_profile(),
+		])
+		lines.append("")
+		lines.append("[color=#%s]wealth[/color]    %d cr" % [_hex(COL_DIM), int(o.wealth)])
+		lines.append("[color=#%s]paranoia[/color]  %d/100" % [_hex(COL_DIM), int(o.paranoia)])
+		lines.append("[color=#%s]image[/color]     %+d" % [_hex(COL_DIM), int(o.public_image)])
+		if o.ambitions.size() > 0:
+			lines.append("")
+			lines.append("[color=#%s]ambitions[/color]" % _hex(COL_DIM))
+			for a in o.ambitions:
+				lines.append("  · %s" % str(a))
+		return "\n".join(lines)
+	return ""
+
+
+func _npc_class_label(n) -> String:
+	if not "social_class" in n:
+		return "citizen"
+	match int(n.social_class):
+		0: return "Oligarch"
+		1: return "Enforcer"
+		2: return "Worker"
+		3: return "Destitute"
+	return "citizen"
+
+
+func _format_npc_tooltip(npc_id: String) -> String:
+	var pop_dir = get_node_or_null("/root/PopulationDirector")
+	if pop_dir == null or not "roster" in pop_dir:
+		return ""
+	for n in pop_dir.roster:
+		if not "npc_id" in n or str(n.npc_id) != npc_id:
+			continue
+		var lines := PackedStringArray()
+		lines.append("[b][color=#%s]%s[/color][/b]  [color=#%s]%s[/color]" % [
+			_hex(COL_ACCENT), str(n.npc_name),
+			_hex(COL_DIM), _npc_class_label(n),
+		])
+		if "alive" in n and not n.alive:
+			lines.append("[color=#%s]deceased — %s (cycle %d)[/color]" % [
+				_hex(COL_HOT),
+				str(n.death_cause) if "death_cause" in n else "unknown",
+				int(n.died_on_cycle) if "died_on_cycle" in n else -1,
+			])
+			return "\n".join(lines)
+		if n.has_method("get_behavioral_profile"):
+			lines.append("[color=#%s]mood[/color]      %s" % [_hex(COL_DIM), n.get_behavioral_profile()])
+		if "immediate_need" in n:
+			lines.append("[color=#%s]need[/color]      %s" % [_hex(COL_DIM), str(n.immediate_need)])
+		if "active_phase" in n:
+			lines.append("[color=#%s]active[/color]    %s" % [_hex(COL_DIM), str(n.active_phase)])
+		if "trust" in n:
+			lines.append("[color=#%s]trust[/color]     %d/100" % [_hex(COL_DIM), int(n.trust)])
+		if "opinion_of_player" in n:
+			var op: float = float(n.opinion_of_player)
+			lines.append("[color=#%s]opinion[/color]   %+.2f" % [_hex(COL_DIM), op])
+		if "quirks" in n and n.quirks != null and n.quirks.size() > 0:
+			lines.append("")
+			lines.append("[color=#%s]quirks[/color]" % _hex(COL_DIM))
+			for q in n.quirks:
+				lines.append("  · %s" % str(q))
+		return "\n".join(lines)
+	return ""
+
+
+func _format_politician_tooltip(politician_id: String) -> String:
+	for p in WorldDirector.politicians:
+		if p.politician_id != politician_id:
+			continue
+		var lines := PackedStringArray()
+		lines.append("[b][color=#%s]%s[/color][/b]  [color=#%s]%s[/color]" % [
+			_hex(COL_ACCENT), p.politician_name, _hex(COL_DIM), p.faction,
+		])
+		lines.append("[color=#%s]approval[/color]  %+d" % [_hex(COL_DIM), int(p.public_approval)])
+		lines.append("[color=#%s]scandal[/color]   %d/100" % [_hex(COL_DIM), int(p.scandal_level)])
+		lines.append("[color=#%s]corruption[/color] %.2f" % [_hex(COL_DIM), p.corruption])
+		return "\n".join(lines)
+	return ""
 
 
 # -------------------------------------------------------------
@@ -595,37 +1147,123 @@ func _on_netfeed_event(event_data: Dictionary) -> void:
 # -------------------------------------------------------------
 func _build_senate_panel() -> void:
 	_senate_panel = _make_panel(COL_BG)
-	_senate_panel.anchor_left = 1.0
-	_senate_panel.anchor_top = 0.0
-	_senate_panel.offset_left = -460
-	_senate_panel.offset_top = 180
-	_senate_panel.offset_right = -20
-	_senate_panel.offset_bottom = 400
+	_apply_senate_layout()
 
 	var title := _make_label("// SENATE DOCKET", COL_ACCENT, 11, true)
 	title.offset_left = PANEL_PAD
 	title.offset_top = PANEL_PAD - 2
-	title.offset_right = 440 - PANEL_PAD
+	title.offset_right = -PANEL_PAD - 32
+	title.anchor_right = 1.0
 	title.offset_bottom = PANEL_PAD + 16
 	_senate_panel.add_child(title)
 
+	_senate_expand_btn = Button.new()
+	_senate_expand_btn.text = "⤢"
+	_senate_expand_btn.flat = true
+	_senate_expand_btn.tooltip_text = "Expand (or collapse) Senate Docket to full height"
+	_senate_expand_btn.anchor_left = 1.0
+	_senate_expand_btn.anchor_right = 1.0
+	_senate_expand_btn.anchor_top = 0.0
+	_senate_expand_btn.offset_left = -28
+	_senate_expand_btn.offset_right = -6
+	_senate_expand_btn.offset_top = 4
+	_senate_expand_btn.offset_bottom = 24
+	_senate_expand_btn.add_theme_color_override("font_color", COL_DIM)
+	_senate_expand_btn.add_theme_color_override("font_hover_color", COL_ACCENT)
+	_senate_expand_btn.pressed.connect(_toggle_senate_expand)
+	_senate_panel.add_child(_senate_expand_btn)
+
 	_senate_text = RichTextLabel.new()
 	_senate_text.bbcode_enabled = true
-	_senate_text.fit_content = true
-	_senate_text.scroll_active = false
-	_senate_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_senate_text.fit_content = false
+	_senate_text.scroll_active = true     # wheel-scrollable for older bills
+	_senate_text.mouse_filter = Control.MOUSE_FILTER_STOP
 	_senate_text.anchor_left = 0.0
 	_senate_text.anchor_top = 0.0
 	_senate_text.anchor_right = 1.0
+	_senate_text.anchor_bottom = 1.0     # fills parent vertically
 	_senate_text.offset_left = PANEL_PAD
 	_senate_text.offset_top = PANEL_PAD + 24
 	_senate_text.offset_right = -PANEL_PAD
-	_senate_text.offset_bottom = 220
+	_senate_text.offset_bottom = -PANEL_PAD
 	_senate_text.add_theme_color_override("default_color", COL_FG)
 	_senate_text.add_theme_font_size_override("normal_font_size", 13)
 	_senate_text.add_theme_font_size_override("italics_font_size", 13)
 	_senate_text.text = "[i][color=#%s]> Senate idle. Chamber awaits first cycle.[/color][/i]" % _hex(COL_DIM)
 	_senate_panel.add_child(_senate_text)
+
+
+func _apply_senate_layout() -> void:
+	_senate_panel.anchor_left = 1.0
+	_senate_panel.anchor_right = 1.0
+	_senate_panel.anchor_bottom = 1.0
+	_senate_panel.offset_left = -460
+	_senate_panel.offset_right = -20
+	_senate_panel.offset_bottom = -20
+	if _senate_expanded:
+		_senate_panel.anchor_top = 0.0
+		_senate_panel.offset_top = 20
+	else:
+		_senate_panel.anchor_top = 0.5
+		_senate_panel.offset_top = 6
+
+
+func _toggle_senate_expand() -> void:
+	_senate_expanded = not _senate_expanded
+	if _senate_expanded and _netfeed_expanded:
+		_netfeed_expanded = false
+		_apply_netfeed_layout()
+		if _netfeed_panel:
+			_netfeed_panel.visible = true
+	if _netfeed_panel:
+		_netfeed_panel.visible = not _senate_expanded
+	_apply_senate_layout()
+	if _senate_expand_btn:
+		_senate_expand_btn.text = "⤡" if _senate_expanded else "⤢"
+
+
+func _refresh_senate_panel() -> void:
+	var sections := PackedStringArray()
+
+	if not _active_bill.is_empty():
+		var bill: Dictionary = _active_bill
+		var sponsor_id: String = str(bill.get("sponsor_id", ""))
+		var sponsor_name := _resolve_politician_name(sponsor_id)
+		var title: String = str(bill.get("title", "Untitled Bill"))
+		var rationale: String = str(bill.get("stated_rationale", ""))
+		var summary: String = str(bill.get("summary", ""))
+		var honest: String = str(bill.get("honest_rationale", ""))
+		var hooks: Array = bill.get("scandal_hooks", [])
+
+		var active_lines := PackedStringArray()
+		active_lines.append("[color=#%s]%s[/color]  [color=#%s]IN DEBATE[/color]   [color=#%s]sponsor: %s[/color]" % [
+			_hex(COL_DIM), _format_game_time(),
+			_hex(COL_WARN),
+			_hex(COL_DIM), sponsor_name,
+		])
+		active_lines.append("[b][color=#%s]%s[/color][/b]" % [_hex(COL_FG), title])
+		active_lines.append("[color=#%s]%s[/color]" % [_hex(COL_DIM), summary])
+		if rationale != "":
+			active_lines.append("[i][color=#%s]Stated: %s[/color][/i]" % [_hex(COL_COOL), rationale])
+		if _hooks_revealed:
+			if honest != "":
+				active_lines.append("[color=#%s]Honest:[/color] [i][color=#%s]%s[/color][/i]" % [
+					_hex(COL_HOT), _hex(COL_WARN), honest,
+				])
+			if hooks.size() > 0:
+				for hook in hooks:
+					active_lines.append("[color=#%s]  ⚠ %s[/color]" % [_hex(COL_HOT), str(hook)])
+		sections.append("\n".join(active_lines))
+
+	if _senate_recent.size() > 0:
+		var header: String = "[color=#%s]── RECENT VOTES ──[/color]" % _hex(COL_DIM)
+		var recent: Array = _senate_recent.duplicate()
+		sections.append(header + "\n\n" + "\n\n".join(recent))
+
+	if sections.is_empty():
+		_senate_text.text = "[i][color=#%s]> Senate idle. Chamber awaits first cycle.[/color][/i]" % _hex(COL_DIM)
+	else:
+		_senate_text.text = "\n\n".join(sections)
 
 
 func _on_bill_proposed(bill: Dictionary) -> void:
@@ -636,39 +1274,22 @@ func _on_bill_proposed(bill: Dictionary) -> void:
 		_hooks_revealed = false
 	_active_bill = bill
 	_last_vote_record = []
-	var sponsor_id: String = str(bill.get("sponsor_id", ""))
-	var sponsor_name := _resolve_politician_name(sponsor_id)
-	var title: String = str(bill.get("title", "Untitled Bill"))
-	var rationale: String = str(bill.get("stated_rationale", ""))
-	var summary: String = str(bill.get("summary", ""))
-	var honest: String = str(bill.get("honest_rationale", ""))
-	var hooks: Array = bill.get("scandal_hooks", [])
-
-	var lines := PackedStringArray()
-	lines.append("[color=#%s]IN DEBATE[/color]   [color=#%s]%s[/color]" % [
-		_hex(COL_WARN),
-		_hex(COL_DIM),
-		"sponsor: " + sponsor_name,
-	])
-	lines.append("[b][color=#%s]%s[/color][/b]" % [_hex(COL_FG), title])
-	lines.append("[color=#%s]%s[/color]" % [_hex(COL_DIM), summary])
-	if rationale != "":
-		lines.append("[i][color=#%s]Stated: %s[/color][/i]" % [_hex(COL_COOL), rationale])
-	if _hooks_revealed:
-		if honest != "":
-			lines.append("[color=#%s]Honest:[/color] [i][color=#%s]%s[/color][/i]" % [
-				_hex(COL_HOT), _hex(COL_WARN), honest,
-			])
-		if hooks.size() > 0:
-			for hook in hooks:
-				lines.append("[color=#%s]  ⚠ %s[/color]" % [_hex(COL_HOT), str(hook)])
-	_senate_text.text = "\n".join(lines)
-
+	_refresh_senate_panel()
 	if _pol_visible:
 		_refresh_politicians()
 
 
 func _on_bill_resolved(bill: Dictionary, result: String, vote_record: Array) -> void:
+	# Dedupe: SenateDirector can re-emit on the same bill (re-tally,
+	# retrigger). If we already recorded this bill_id, skip the append.
+	var bill_id: String = str(bill.get("bill_id", ""))
+	if bill_id != "" and bill_id in _senate_resolved_ids:
+		return
+	if bill_id != "":
+		_senate_resolved_ids.append(bill_id)
+		# Cap dedupe memory so long runs don't grow unbounded.
+		if _senate_resolved_ids.size() > 64:
+			_senate_resolved_ids = _senate_resolved_ids.slice(-32)
 	_last_vote_record = vote_record
 	_active_bill = {}
 	_hooks_revealed = false
@@ -685,17 +1306,21 @@ func _on_bill_resolved(bill: Dictionary, result: String, vote_record: Array) -> 
 
 	var color_result := COL_HOT if result == "PASS" else COL_COOL
 	var title: String = str(bill.get("title", "Untitled Bill"))
-
-	var lines := PackedStringArray()
-	lines.append("[color=#%s]%s[/color]   %d–%d–%d   [color=#%s]margin %+d[/color]" % [
+	var resolved_block: String = "[color=#%s]%s[/color]  [color=#%s]%s[/color]   %d–%d–%d   [color=#%s]margin %+d[/color]\n[b][color=#%s]%s[/color][/b]" % [
+		_hex(COL_DIM),
+		_format_game_time(),
 		_hex(color_result),
 		result,
 		yes, no, abstain,
 		_hex(COL_DIM),
 		margin,
-	])
-	lines.append("[b][color=#%s]%s[/color][/b]" % [_hex(COL_FG), title])
-	_senate_text.text = "\n".join(lines)
+		_hex(COL_FG),
+		title,
+	]
+	_senate_recent.push_front(resolved_block)
+	if _senate_recent.size() > SENATE_RECENT_MAX:
+		_senate_recent.resize(SENATE_RECENT_MAX)
+	_refresh_senate_panel()
 
 	if _pol_visible:
 		_refresh_politicians()
@@ -1750,7 +2375,9 @@ func _build_goal_choice_modal() -> void:
 	_goal_choice_root.anchor_right = 1.0
 	_goal_choice_root.anchor_bottom = 1.0
 	_goal_choice_root.visible = false
-	_goal_choice_root.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	# Tree isn't paused during run-start (world generation runs behind
+	# the modal). Default INHERIT process_mode is what we want so the
+	# BEGIN button receives clicks.
 	_goal_choice_root.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_goal_choice_root)
 
@@ -1874,12 +2501,14 @@ func hide_goal_choice_modal() -> void:
 
 # Player clicked BEGIN. Victory path defaults to "ANY" (any condition
 # fires) because the player no longer picks a committed path — actions
-# determine the ending. Close the modal so the year starts.
+# determine the ending. Close the win-conditions modal and raise the
+# full-screen loading overlay; Main hides it when the landscape spawns.
 func _on_run_acknowledged() -> void:
 	var pm = get_node_or_null("/root/PlayerManager")
 	if pm:
 		pm.chosen_victory_path = "ANY"
 	hide_goal_choice_modal()
+	show_loading_overlay("> building the year — this takes a few seconds…")
 
 
 # -------------------------------------------------------------

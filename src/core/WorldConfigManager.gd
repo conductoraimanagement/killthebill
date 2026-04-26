@@ -176,7 +176,8 @@ func rehydrate_oligarch(o_dict: Dictionary) -> OligarchData:
 		o.ambition_last_advance = last_adv.duplicate(true)
 	var abandoned = o_dict.get("abandoned_ambitions", [])
 	if abandoned is Array:
-		o.abandoned_ambitions = Array(abandoned, TYPE_STRING, &"", null)
+		# Godot 4.6: 4-arg Array() constructor removed. Use assign().
+		o.abandoned_ambitions.assign(abandoned)
 	return o
 
 

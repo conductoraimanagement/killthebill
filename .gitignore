@@ -29,3 +29,7 @@ Thumbs.db
 
 # Agent configs
 .agents/
+
+# Local LLM provider secrets (API keys, model overrides).
+# Never commit.
+user_secrets.cfg
